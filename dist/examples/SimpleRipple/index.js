@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,Symbol.toStringTag,{value:"Module"});const e=require("../../SimpleRippleScene--B1BrlxP.js");exports.SimpleRipple=e.SimpleRipple;exports.rippleRenderShader=e.rippleRenderShader;exports.rippleSimulationShader=e.rippleSimulationShader;exports.rippleVertexShader=e.rippleVertexShader;
