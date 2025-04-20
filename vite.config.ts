@@ -19,7 +19,7 @@ export default defineConfig({
                 'react',
                 'react-dom', 
                 'react/jsx-runtime',
-                /^react\/.*/  // Regex to match all React subpaths
+                /^react\/.*/
             ],
             output: {
                 globals: {
