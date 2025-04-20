@@ -8,7 +8,7 @@ export declare const rippleVertexShader = "\n  attribute vec2 a_position;\n  var
 
 export declare const SimpleRipple: default_2.FC<SimpleRippleProps>;
 
-declare interface SimpleRippleProps {
+export declare interface SimpleRippleProps {
     damping?: number;
     mouseForce?: number;
     color1?: Vec3;

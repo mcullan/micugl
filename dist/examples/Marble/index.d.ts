@@ -1,2 +1,2 @@
-export { Marble } from './MarbleScene';
+export * from './MarbleScene';
 export * from './marbleShaders';

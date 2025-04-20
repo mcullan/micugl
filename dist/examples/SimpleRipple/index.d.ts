@@ -1,2 +1,2 @@
 export * from './rippleShaders';
-export { SimpleRipple } from './SimpleRippleScene';
+export * from './SimpleRippleScene';
