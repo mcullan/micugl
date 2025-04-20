@@ -1,0 +1,48 @@
+{
+  "name": "micugl",
+  "version": "0.0.1",
+  "description": "Micu gl - Small React shader library",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./examples": {
+      "import": "./dist/examples/index.mjs",
+      "require": "./dist/examples/index.js",
+      "types": "./dist/examples/index.d.ts"
+    },
+    "./examples/Marble": {
+      "import": "./dist/examples/Marble/index.mjs",
+      "require": "./dist/examples/Marble/index.js",
+      "types": "./dist/examples/Marble/index.d.ts"
+    },
+    "./examples/SimpleRipple": {
+      "import": "./dist/examples/SimpleRipple/index.mjs",
+      "require": "./dist/examples/SimpleRipple/index.js",
+      "types": "./dist/examples/SimpleRipple/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^4.0.0",
+    "vite-plugin-dts": "^3.0.0"
+  }
+}
