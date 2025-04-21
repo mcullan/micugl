@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import type { CSSProperties} from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type {
     FramebufferOptions,
@@ -13,21 +14,21 @@ interface PingPongShaderEngineProps {
     passes: RenderPass[];
     framebuffers?: Record<string, FramebufferOptions>;
     className?: string;
-    style?: React.CSSProperties;
+    style?: CSSProperties;
     useDevicePixelRatio?: boolean;
 }
 
 const DEFAULT_CLASS_NAME = '';
-const DEFAULT_STYLE: React.CSSProperties = {};
+const DEFAULT_STYLE: CSSProperties = {};
 
-export const PingPongShaderEngine: React.FC<PingPongShaderEngineProps> = ({
+export const PingPongShaderEngine = ({
     programConfigs,
     passes,
     framebuffers,
     className = DEFAULT_CLASS_NAME,
     style = DEFAULT_STYLE,
     useDevicePixelRatio = true
-}) => {
+}: PingPongShaderEngineProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
     const passSystemRef = useRef<Passes | null>(null);

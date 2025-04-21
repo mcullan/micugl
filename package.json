@@ -6,26 +6,47 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "*": ["dist/*"],
+      "types": ["dist/types.d.ts"]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.js"
+    },
     "./examples": {
       "types": "./dist/examples/index.d.ts",
       "import": "./dist/examples/index.mjs",
       "require": "./dist/examples/index.js"
     },
-    "./examples/Marble": {
-      "types": "./dist/examples/Marble/index.d.ts",
-      "import": "./dist/examples/Marble/index.mjs",
-      "require": "./dist/examples/Marble/index.js"
+    "./examples/Marble/MarbleScene": {
+      "types": "./dist/examples/Marble/MarbleScene.d.ts",
+      "import": "./dist/examples/Marble/MarbleScene.mjs",
+      "require": "./dist/examples/Marble/MarbleScene.js"
     },
-    "./examples/SimpleRipple": {
-      "types": "./dist/examples/SimpleRipple/index.d.ts",
-      "import": "./dist/examples/SimpleRipple/index.mjs",
-      "require": "./dist/examples/SimpleRipple/index.js"
+    "./examples/Marble/marbleShaders": {
+      "types": "./dist/examples/Marble/marbleShaders.d.ts",
+      "import": "./dist/examples/Marble/marbleShaders.mjs",
+      "require": "./dist/examples/Marble/marbleShaders.js"
+    },
+    "./examples/SimpleRipple/SimpleRippleScene": {
+      "types": "./dist/examples/SimpleRipple/SimpleRippleScene.d.ts",
+      "import": "./dist/examples/SimpleRipple/SimpleRippleScene.mjs",
+      "require": "./dist/examples/SimpleRipple/SimpleRippleScene.js"
+    },
+    "./examples/SimpleRipple/rippleShaders": {
+      "types": "./dist/examples/SimpleRipple/rippleShaders.d.ts",
+      "import": "./dist/examples/SimpleRipple/rippleShaders.mjs",
+      "require": "./dist/examples/SimpleRipple/rippleShaders.js"
     }
   },
   "files": [
