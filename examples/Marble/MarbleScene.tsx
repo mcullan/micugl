@@ -1,4 +1,4 @@
-import React from 'react';
+import type { CSSProperties } from 'react';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import { vec3 } from '@/core/lib/vectorUtils';
@@ -6,6 +6,7 @@ import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent
 import { useDarkMode } from '@/react/hooks/useDarkMode';
 
 import { marbleFragmentShader, marbleVertexShader } from './marbleShaders';
+
 type Vec3 = [number, number, number];
 
 const COLOR_START: Vec3 = [0.8, 0.8, 0.9];
@@ -29,10 +30,10 @@ export interface MarbleProps {
     veinFrequency?: number;
     veinWidth?: number;
     className?: string;
-    style?: React.CSSProperties;
+    style?: CSSProperties;
 }
 
-export const Marble: React.FC<MarbleProps> = ({
+export const Marble = ({
     marbleScale = 3.0,
     tileScale = 1.0,
     turbulence = 0.5,
@@ -47,7 +48,7 @@ export const Marble: React.FC<MarbleProps> = ({
     veinColorDark = VEIN_COLOR_DARK,
     className = '',
     style
-}) => {
+}: MarbleProps) => {
     const isDarkMode = useDarkMode();
 
     const shaderConfig = createShaderConfig({

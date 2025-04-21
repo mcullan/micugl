@@ -1,4 +1,4 @@
-import React from 'react';
+import type { CSSProperties } from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
 import { ShaderEngine } from '@/react';
@@ -10,7 +10,7 @@ export interface BaseShaderProps {
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
     className?: string;
-    style?: React.CSSProperties;
+    style?: CSSProperties;
     renderOptions?: {
         clear?: boolean;
         clearColor?: [number, number, number, number];
@@ -22,14 +22,14 @@ const RENDER_OPTIONS: RenderOptions = {
     clearColor: [0, 0, 0, 1]
 };
 
-export const BaseShaderComponent: React.FC<BaseShaderProps> = ({
+export const BaseShaderComponent = ({
     programId,
     shaderConfig,
     uniforms,
     className = '',
     style,
     renderOptions = RENDER_OPTIONS
-}) => {
+}: BaseShaderProps) => {
     const programConfigs = { [programId]: shaderConfig };
     const uniformUpdaters = useUniformUpdaters(programId, uniforms);
 

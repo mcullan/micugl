@@ -1,3 +1,5 @@
+export { createTypedFloat32Array,mat2, mat3, mat4, vec2, vec3, vec4 } from './lib/vectorUtils';
+export { createShaderConfig } from '@/core/lib/createShaderConfig'; 
 export { FBOManager } from '@/core/managers/FBOManager';
 export { WebGLManager } from '@/core/managers/WebGLManager';
 export { Passes } from '@/core/systems/Passes';

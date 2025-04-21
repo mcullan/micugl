@@ -1,4 +1,4 @@
-import React from 'react';
+import type { CSSProperties } from 'react';
 
 import type { FramebufferOptions, RenderOptions, RenderPass,ShaderProgramConfig } from '@/core';
 import { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
@@ -15,7 +15,7 @@ export interface BasePingPongShaderProps {
     secondaryUniforms?: Record<string, UniformParam>;
     framebufferOptions?: FramebufferOptions;
     className?: string;
-    style?: React.CSSProperties;
+    style?: CSSProperties;
     customPasses?: RenderPass[];
     renderOptions?: {
         clear?: boolean;
@@ -27,7 +27,7 @@ const RENDER_OPTIONS: RenderOptions = {
     clear: true,
     clearColor: [0, 0, 0, 1]
 };
-export const BasePingPongShaderComponent: React.FC<BasePingPongShaderProps> = ({
+export const BasePingPongShaderComponent = ({
     programId,
     shaderConfig,
     secondaryProgramId,
@@ -40,7 +40,7 @@ export const BasePingPongShaderComponent: React.FC<BasePingPongShaderProps> = ({
     style,
     customPasses,
     renderOptions = RENDER_OPTIONS
-}) => {
+}: BasePingPongShaderProps) => {
     const actualSecondaryProgramId = secondaryProgramId ?? `${programId}-secondary`;
     const programConfigs: Record<string, ShaderProgramConfig> = {
         [programId]: shaderConfig

@@ -1,44 +1,67 @@
-export {
+export { 
+    createShaderConfig,
+    createTypedFloat32Array, 
     FBOManager,
+    mat2, 
+    mat3, 
+    mat4,
     Passes,
     Postprocessing,
-    WebGLManager} from './core';
-export { createShaderConfig } from './core/lib/createShaderConfig';
+    vec2,
+    vec3,
+    vec4,
+    WebGLManager
+} from './core';
 export {
     BasePingPongShaderComponent,
     BaseShaderComponent,
+    createCommonUpdaters, 
+    createUniformUpdater, 
+    createUniformUpdaters,
     PingPongShaderEngine,
-    ShaderEngine} from './react/components';
-export {
+    ShaderEngine,
     useDarkMode,
     usePingPongPasses,
     useUniformUpdaters
-} from './react/hooks';
-export {
-    createCommonUpdaters,
-    createUniformUpdater,
-    createUniformUpdaters} from './react/lib/createUniformUpdater';
+} from './react';
 export type {
     AttributeConfig,
+    AttributeType,
     BufferData,
+    Float32Array2,
+    Float32Array3,
+    Float32Array4,
+    Float32Array9,
+    Float32Array16,
     FramebufferOptions,
     FramebufferResources,
+    Mat2,
+    Mat3,
+    Mat4,
     PingPongState,
     RenderOptions,
     RenderPass,
+    RenderPassUniformUpdateFn,
+    RenderPassUniformValue,
     ShaderAttributeLocations,
     ShaderProgramConfig,
     ShaderRenderCallback,
     ShaderResources,
     ShaderUniformLocations,
+    TextureBinding,
     TextureOptions,
+    TypedFloat32Array,
     UniformConfig,
     UniformParam,
+    UniformParamMap,
     UniformType,
-    UniformTypeMap as UniformTypeMap,
+    UniformTypeMap,
     UniformUpdateFn,
     UniformUpdaterDef,
     UniformValue,
+    Vec2,
+    Vec3,
+    Vec4,
     WebGLExtensionName,
-    WebGLExtensionTypes,
+    WebGLExtensionTypes
 } from './types';

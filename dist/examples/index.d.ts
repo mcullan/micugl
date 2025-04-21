@@ -1,4 +1,4 @@
-export * from './Marble';
-export type { MarbleProps } from './Marble';
-export * from './SimpleRipple';
-export type { SimpleRippleProps } from './SimpleRipple';
+export { Marble, type MarbleProps } from './Marble/MarbleScene';
+export { marbleFragmentShader, marbleVertexShader } from './Marble/marbleShaders';
+export { Ripple, type RippleProps } from './Ripple/RippleScene';
+export { rippleRenderShader, rippleSimulationShader, rippleVertexShader } from './Ripple/rippleShaders';

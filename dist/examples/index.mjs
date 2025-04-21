@@ -1,11 +1,13 @@
-import { M as a, a as p, m as l } from "../MarbleScene-DmZt4s6L.mjs";
-import { S, b as i, a as s, r as d } from "../SimpleRippleScene-Ba-EPdTJ.mjs";
+import { Marble as p } from "./Marble/MarbleScene.mjs";
+import { marbleFragmentShader as o, marbleVertexShader as l } from "./Marble/marbleShaders.mjs";
+import { Ripple as t } from "./Ripple/RippleScene.mjs";
+import { rippleRenderShader as i, rippleSimulationShader as x, rippleVertexShader as S } from "./Ripple/rippleShaders.mjs";
 export {
-  a as Marble,
-  S as SimpleRipple,
-  p as marbleFragmentShader,
+  p as Marble,
+  t as Ripple,
+  o as marbleFragmentShader,
   l as marbleVertexShader,
   i as rippleRenderShader,
-  s as rippleSimulationShader,
-  d as rippleVertexShader
+  x as rippleSimulationShader,
+  S as rippleVertexShader
 };

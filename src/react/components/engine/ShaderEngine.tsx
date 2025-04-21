@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
 
 import type {
     RenderOptions,
@@ -15,7 +15,7 @@ interface ShaderEngineProps {
     renderCallback: ShaderRenderCallback;
     renderOptions?: RenderOptions;
     className?: string;
-    style?: React.CSSProperties;
+    style?: CSSProperties;
     uniformUpdaters?: Record<string, {
         name: string;
         type: UniformType;
@@ -27,14 +27,14 @@ interface ShaderEngineProps {
 
 const DEFAULT_RENDER_OPTIONS: RenderOptions = {};
 const DEFAULT_CLASS_NAME = '';
-const DEFAULT_STYLE: React.CSSProperties = {};
+const DEFAULT_STYLE: CSSProperties = {};
 const DEFAULT_UNIFORM_UPDATERS: Record<string, {
     name: string;
     type: UniformType;
     updateFn: UniformUpdateFn<UniformType>;
 }[]> = {};
 
-export const ShaderEngine: React.FC<ShaderEngineProps> = ({
+export const ShaderEngine = ({
     programConfigs,
     renderCallback,
     renderOptions = DEFAULT_RENDER_OPTIONS,
@@ -43,7 +43,7 @@ export const ShaderEngine: React.FC<ShaderEngineProps> = ({
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
     useDevicePixelRatio = true
-}) => {
+}: ShaderEngineProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
     const activeProgram = useRef<string | null>(null);

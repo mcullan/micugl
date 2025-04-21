@@ -7,9 +7,12 @@ export default defineConfig({
         lib: {
             entry: {
                 index: resolve(__dirname, 'src/index.ts'),
+                types: resolve(__dirname, 'src/types-entry.ts'),
                 'examples/index': resolve(__dirname, 'examples/index.ts'),
-                'examples/Marble/index': resolve(__dirname, 'examples/Marble/index.ts'),
-                'examples/SimpleRipple/index': resolve(__dirname, 'examples/SimpleRipple/index.ts')
+                'examples/Marble/MarbleScene': resolve(__dirname, 'examples/Marble/MarbleScene.tsx'),
+                'examples/Marble/marbleShaders': resolve(__dirname, 'examples/Marble/marbleShaders.ts'),
+                'examples/Ripple/RippleScene': resolve(__dirname, 'examples/Ripple/RippleScene.tsx'),
+                'examples/Ripple/rippleShaders': resolve(__dirname, 'examples/Ripple/rippleShaders.ts')
             },
             formats: ['es', 'cjs'],
             fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'mjs' : 'js'}`
@@ -22,16 +25,22 @@ export default defineConfig({
                 /^react\/.*/
             ],
             output: {
+                exports: 'named',
                 globals: {
                     react: 'React',
                     'react-dom': 'ReactDOM'
-                }
+                },
+                preserveModules: true,
+                preserveModulesRoot: '.'
             }
         }
     },
     plugins: [dts({
         include: ['src/**', 'examples/**'],
-        rollupTypes: true
+        rollupTypes: true,
+        staticImport: true,
+        insertTypesEntry: true,
+        copyDtsFiles: true
     })],
     resolve: {
         alias: {
