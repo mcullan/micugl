@@ -4,9 +4,9 @@ import type {
     FramebufferOptions,
     RenderPass,
     ShaderProgramConfig
-} from '_shaders/core';
-import { WebGLManager } from '_shaders/core/managers/WebGLManager';
-import { Passes } from '_shaders/core/systems/Passes';
+} from '@/core';
+import { WebGLManager } from '@/core/managers/WebGLManager';
+import { Passes } from '@/core/systems/Passes';
 
 interface PingPongShaderEngineProps {
     programConfigs: Record<string, ShaderProgramConfig>;

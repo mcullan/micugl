@@ -1,4 +1,4 @@
-import type { UniformType, UniformUpdaterDef, UniformValue } from '_shaders/types';
+import type { UniformType, UniformUpdaterDef, UniformValue } from '@/types';
 
 
 export function createUniformUpdater<T extends UniformType>(

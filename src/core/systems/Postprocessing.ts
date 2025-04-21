@@ -1,5 +1,5 @@
-import type { WebGLManager } from '_shaders/core/managers/WebGLManager';
-import type { FramebufferOptions, RenderPass, ShaderProgramConfig, UniformParam, UniformType, UniformTypeToValueMap, UniformUpdateFn } from '_shaders/types';
+import type { WebGLManager } from '@/core/managers/WebGLManager';
+import type { FramebufferOptions, RenderPass, ShaderProgramConfig, UniformParam, UniformType, UniformTypeToValueMap, UniformUpdateFn } from '@/types';
 
 export interface PostProcessEffect {
   id: string;

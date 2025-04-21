@@ -11,10 +11,20 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "_shaders/*": ["src/*"],
-      "_shader-examples/*": ["examples/*"],
+      "@/*": [
+        "src/*"
+      ]
     }
   },
-  "include": ["src/**/*", "examples/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "examples/**/*.ts",
+    "examples/**/*.tsx",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

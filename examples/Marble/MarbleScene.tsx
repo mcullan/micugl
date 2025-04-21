@@ -1,7 +1,8 @@
-import { createShaderConfig } from '_shaders/core/lib/createShaderConfig';
-import { BaseShaderComponent } from '_shaders/react/components/base/BaseShaderComponent';
-import { useDarkMode } from '_shaders/react/hooks/useDarkMode';
 import React from 'react';
+
+import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
+import { useDarkMode } from '@/react/hooks/useDarkMode';
 
 import { marbleFragmentShader, marbleVertexShader } from './marbleShaders';
 type Vec3 = [number, number, number];

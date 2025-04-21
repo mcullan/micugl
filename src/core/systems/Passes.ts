@@ -1,5 +1,5 @@
-import type { RenderPass } from '_shaders/core';
-import type { WebGLManager } from '_shaders/core';
+import type { RenderPass } from '@/core';
+import type { WebGLManager } from '@/core';
 
 export class Passes {
     private webglManager: WebGLManager;

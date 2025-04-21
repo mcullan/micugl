@@ -1,9 +1,9 @@
 import React from 'react';
 
-import type { FramebufferOptions, RenderOptions, RenderPass,ShaderProgramConfig } from '_shaders/core';
-import { PingPongShaderEngine } from '_shaders/react/components/engine/PingPongShaderEngine';
-import { usePingPongPasses } from '_shaders/react/hooks/usePingPongPasses';
-import type { UniformParam } from '_shaders/types';
+import type { FramebufferOptions, RenderOptions, RenderPass,ShaderProgramConfig } from '@/core';
+import { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
+import { usePingPongPasses } from '@/react/hooks/usePingPongPasses';
+import type { UniformParam } from '@/types';
 
 export interface BasePingPongShaderProps {
     programId: string;

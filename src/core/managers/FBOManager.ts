@@ -1,4 +1,4 @@
-import type { FramebufferOptions, FramebufferResources, TextureOptions } from '_shaders/core';
+import type { FramebufferOptions, FramebufferResources, TextureOptions } from '@/core';
 
 export class FBOManager {
     private gl: WebGLRenderingContext;
