@@ -1,5 +1,8 @@
 name: Release
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -37,7 +40,7 @@ jobs:
         run: bun run build
       
       - name: Create GitHub Release
-        if: ${{ !inputs.dry_run && github.event_name == 'push' }}
+        if: ${{ !inputs.dry_run && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -47,7 +50,7 @@ jobs:
         run: echo "SKIPPING GITHUB RELEASE in dry run mode"
       
       - name: Publish to npm
-        if: ${{ !inputs.dry_run && github.event_name == 'push' }}
+        if: ${{ !inputs.dry_run && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         run: bunx npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
