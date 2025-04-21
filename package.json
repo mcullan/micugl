@@ -1,66 +1,26 @@
 {
   "name": "micugl",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Micu gl - Small React shader library",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
-  "typesVersions": {
-    "*": {
-      "*": [
-        "dist/*"
-      ],
-      "types": [
-        "dist/types.d.ts"
-      ]
-    }
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./types": {
-      "types": "./dist/types.d.ts",
-      "import": "./dist/types.mjs",
-      "require": "./dist/types.js"
-    },
     "./core": {
       "types": "./dist/core/index.d.ts",
-      "import": "./dist/core/index.mjs",
-      "require": "./dist/core/index.js"
+      "import": "./dist/core.mjs",
+      "require": "./dist/core.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
-      "import": "./dist/react/index.mjs",
-      "require": "./dist/react/index.js"
-    },
-    "./examples": {
-      "types": "./dist/examples/index.d.ts",
-      "import": "./dist/examples/index.mjs",
-      "require": "./dist/examples/index.js"
-    },
-    "./examples/Marble/MarbleScene": {
-      "types": "./dist/examples/Marble/MarbleScene.d.ts",
-      "import": "./dist/examples/Marble/MarbleScene.mjs",
-      "require": "./dist/examples/Marble/MarbleScene.js"
-    },
-    "./examples/Marble/marbleShaders": {
-      "types": "./dist/examples/Marble/marbleShaders.d.ts",
-      "import": "./dist/examples/Marble/marbleShaders.mjs",
-      "require": "./dist/examples/Marble/marbleShaders.js"
-    },
-    "./examples/Ripple/RippleScene": {
-      "types": "./dist/examples/Ripple/RippleScene.d.ts",
-      "import": "./dist/examples/Ripple/RippleScene.mjs",
-      "require": "./dist/examples/Ripple/RippleScene.js"
-    },
-    "./examples/Ripple/rippleShaders": {
-      "types": "./dist/examples/Ripple/rippleShaders.d.ts",
-      "import": "./dist/examples/Ripple/rippleShaders.mjs",
-      "require": "./dist/examples/Ripple/rippleShaders.js"
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
     }
   },
   "files": [
@@ -73,7 +33,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
+    "react": "^18.0.0 || ^19.0.0 || ^19.1.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {

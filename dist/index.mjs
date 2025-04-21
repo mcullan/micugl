@@ -1,17 +1,17 @@
-import { createTypedFloat32Array as o, mat2 as t, mat3 as a, mat4 as m, vec2 as n, vec3 as p, vec4 as f } from "./src/core/lib/vectorUtils.mjs";
-import { createShaderConfig as x } from "./src/core/lib/createShaderConfig.mjs";
-import { FBOManager as d } from "./src/core/managers/FBOManager.mjs";
-import { WebGLManager as c } from "./src/core/managers/WebGLManager.mjs";
-import { Passes as U } from "./src/core/systems/Passes.mjs";
-import { Postprocessing as S } from "./src/core/systems/Postprocessing.mjs";
-import { BasePingPongShaderComponent as u } from "./src/react/components/base/BasePingPongShaderComponent.mjs";
-import { BaseShaderComponent as B } from "./src/react/components/base/BaseShaderComponent.mjs";
-import { PingPongShaderEngine as y } from "./src/react/components/engine/PingPongShaderEngine.mjs";
-import { ShaderEngine as F } from "./src/react/components/engine/ShaderEngine.mjs";
-import { useDarkMode as k } from "./src/react/hooks/useDarkMode.mjs";
-import { usePingPongPasses as A } from "./src/react/hooks/usePingPongPasses.mjs";
-import { useUniformUpdaters as G } from "./src/react/hooks/useUniformUpdaters.mjs";
-import { createCommonUpdaters as O, createUniformUpdater as T, createUniformUpdaters as W } from "./src/react/lib/createUniformUpdater.mjs";
+import { createTypedFloat32Array as o, mat2 as t, mat3 as a, mat4 as m, vec2 as n, vec3 as p, vec4 as f } from "./core/lib/vectorUtils.mjs";
+import { createShaderConfig as x } from "./core/lib/createShaderConfig.mjs";
+import { FBOManager as d } from "./core/managers/FBOManager.mjs";
+import { WebGLManager as c } from "./core/managers/WebGLManager.mjs";
+import { Passes as U } from "./core/systems/Passes.mjs";
+import { Postprocessing as S } from "./core/systems/Postprocessing.mjs";
+import { BasePingPongShaderComponent as u } from "./react/components/base/BasePingPongShaderComponent.mjs";
+import { BaseShaderComponent as B } from "./react/components/base/BaseShaderComponent.mjs";
+import { PingPongShaderEngine as y } from "./react/components/engine/PingPongShaderEngine.mjs";
+import { ShaderEngine as F } from "./react/components/engine/ShaderEngine.mjs";
+import { useDarkMode as k } from "./react/hooks/useDarkMode.mjs";
+import { usePingPongPasses as A } from "./react/hooks/usePingPongPasses.mjs";
+import { useUniformUpdaters as G } from "./react/hooks/useUniformUpdaters.mjs";
+import { createCommonUpdaters as O, createUniformUpdater as T, createUniformUpdaters as W } from "./react/lib/createUniformUpdater.mjs";
 export {
   u as BasePingPongShaderComponent,
   B as BaseShaderComponent,
