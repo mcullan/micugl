@@ -3,7 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in dry-run mode (no actual publish)"
+        type: boolean
+        default: true
 
 jobs:
   release:
@@ -13,29 +19,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '23'
-          cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
-      
+          bun-version: latest
+
       - name: Install dependencies
-        run: npm ci
-      
+        run: bun install
+
       - name: Typecheck
-        run: npm run typecheck
-        
+        run: bun run typecheck
+
       - name: Lint
-        run: npm run lint
-      
+        run: bun run lint
+
       - name: Build
-        run: npm run build
-      
+        run: bun run build
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-      
+        with:
+          generate_release_notes: true
+
       - name: Publish to npm
-        run: npm publish
+        run: |
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "DRY RUN: Would publish to npm"
+            bunx npm publish --dry-run
+          else
+            bunx npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
