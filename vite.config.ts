@@ -8,6 +8,8 @@ export default defineConfig({
             entry: {
                 index: resolve(__dirname, 'src/index.ts'),
                 types: resolve(__dirname, 'src/types-entry.ts'),
+                'core/index': resolve(__dirname, 'src/core/index.ts'),
+                'react/index': resolve(__dirname, 'src/react/index.ts'),
                 'examples/index': resolve(__dirname, 'examples/index.ts'),
                 'examples/Marble/MarbleScene': resolve(__dirname, 'examples/Marble/MarbleScene.tsx'),
                 'examples/Marble/marbleShaders': resolve(__dirname, 'examples/Marble/marbleShaders.ts'),

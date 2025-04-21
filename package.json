@@ -52,15 +52,15 @@
       "import": "./dist/examples/Marble/marbleShaders.mjs",
       "require": "./dist/examples/Marble/marbleShaders.js"
     },
-    "./examples/SimpleRipple/SimpleRippleScene": {
-      "types": "./dist/examples/SimpleRipple/SimpleRippleScene.d.ts",
-      "import": "./dist/examples/SimpleRipple/SimpleRippleScene.mjs",
-      "require": "./dist/examples/SimpleRipple/SimpleRippleScene.js"
+    "./examples/Ripple/RippleScene": {
+      "types": "./dist/examples/Ripple/RippleScene.d.ts",
+      "import": "./dist/examples/Ripple/RippleScene.mjs",
+      "require": "./dist/examples/Ripple/RippleScene.js"
     },
-    "./examples/SimpleRipple/rippleShaders": {
-      "types": "./dist/examples/SimpleRipple/rippleShaders.d.ts",
-      "import": "./dist/examples/SimpleRipple/rippleShaders.mjs",
-      "require": "./dist/examples/SimpleRipple/rippleShaders.js"
+    "./examples/Ripple/rippleShaders": {
+      "types": "./dist/examples/Ripple/rippleShaders.d.ts",
+      "import": "./dist/examples/Ripple/rippleShaders.mjs",
+      "require": "./dist/examples/Ripple/rippleShaders.js"
     }
   },
   "files": [
