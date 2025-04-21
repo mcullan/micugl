@@ -184,7 +184,7 @@ export type UniformValue<T extends UniformType> =
   UniformTypeMap[T] 
   | UniformUpdateFn<T>;
 
-export interface UniformUpdaterDef<T extends UniformType> {
+export interface UniformUpdaterDef<T extends UniformType = UniformType> {
   name: string;
   type: T;
   updateFn: UniformUpdateFn<T>;
