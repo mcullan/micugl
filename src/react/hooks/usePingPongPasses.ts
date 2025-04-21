@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
-import type { FramebufferOptions, RenderPass,UniformParam} from '@/types';
+import type { FramebufferOptions, RenderPass, UniformParam } from '@/types';
 
 interface PingPongPassesOptions {
     programId: string;

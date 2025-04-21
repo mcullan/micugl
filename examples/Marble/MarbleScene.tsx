@@ -84,7 +84,6 @@ export const Marble: React.FC<MarbleProps> = ({
                 colorStart: {
                     type: 'vec3',
                     value: toF32(isDarkMode ? colorStartDark : colorStart)
-                    // value: toF32(isDarkMode ? colorStartDark : colorStart)
                 },
                 colorEnd: {
                     type: 'vec3',

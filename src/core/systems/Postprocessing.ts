@@ -1,5 +1,5 @@
 import type { WebGLManager } from '@/core/managers/WebGLManager';
-import type { FramebufferOptions, RenderPass, ShaderProgramConfig, UniformParam, UniformType, UniformTypeToValueMap, UniformUpdateFn } from '@/types';
+import type { FramebufferOptions, RenderPass, RenderPassUniformValue, ShaderProgramConfig, UniformParam, UniformType, UniformTypeToValueMap, UniformValue } from '@/types';
 
 export interface PostProcessEffect {
   id: string;
@@ -15,6 +15,19 @@ export interface PostProcessChain {
   inputFramebufferId: string;
   outputFramebufferId: string | null;
   intermediateFramebufferIds: string[];
+}
+
+function adaptToRenderPassUniform<T extends UniformType>(
+    paramValue: UniformValue<T>
+): RenderPassUniformValue {
+    if (typeof paramValue !== 'function') {
+        return paramValue as UniformTypeToValueMap[UniformType];
+    }
+    
+    // Create a function with the required RenderPassUniformValue signature
+    return (time: number, width: number, height: number): UniformTypeToValueMap[UniformType] => {
+        return paramValue(time, width, height) as UniformTypeToValueMap[UniformType];
+    };
 }
 
 export class Postprocessing {
@@ -76,7 +89,6 @@ export class Postprocessing {
             effects.push(effect);
         }
 
-        // Create intermediate framebuffers
         const intermediateFramebufferIds: string[] = [];
         for (let i = 0; i < effects.length - 1; i++) {
             const fbId = `${chainId}-intermediate-${i}`;
@@ -100,7 +112,6 @@ export class Postprocessing {
             return;
         }
 
-        // Clean up intermediate framebuffers
         chain.intermediateFramebufferIds.forEach(fbId => {
             this.webglManager.fbo.destroy(fbId);
         });
@@ -118,9 +129,8 @@ export class Postprocessing {
         const enabledEffects = chain.effects.filter(effect => effect.enabled);
 
         if (enabledEffects.length === 0) {
-            // If no effects are enabled, create a pass that copies input to output
             return [{
-                programId: 'copy-shader', // Assuming you have a simple copy shader
+                programId: 'copy-shader',
                 inputTextures: [{
                     id: chain.inputFramebufferId,
                     textureUnit: 0,
@@ -131,42 +141,32 @@ export class Postprocessing {
             }];
         }
 
-        // Process each enabled effect
         enabledEffects.forEach((effect, index) => {
             const isFirst = index === 0;
             const isLast = index === enabledEffects.length - 1;
-      
+  
             const inputId = isFirst 
                 ? chain.inputFramebufferId 
                 : chain.intermediateFramebufferIds[index - 1];
-      
+  
             const outputId = isLast 
                 ? chain.outputFramebufferId 
                 : chain.intermediateFramebufferIds[index];
-      
-            // Create uniform values for this pass
+  
             const passUniforms: Record<string, { 
-        type: UniformType; 
-        value: UniformTypeToValueMap[UniformType] | ((time: number, width: number, height: number) => UniformTypeToValueMap[UniformType]);
-      }> = {};
-      
+                type: UniformType; 
+                value: RenderPassUniformValue;
+            }> = {};
+  
             Object.entries(effect.uniforms).forEach(([name, param]) => {
                 const uniformName = name.startsWith('u_') ? name : `u_${name}`;
-        
-                // Type assertion to handle the specific uniform type
-                const typedParam = param;
-        
+    
                 passUniforms[uniformName] = {
-                    type: typedParam.type,
-                    value: typeof typedParam.value === 'function'
-                        ? (t: number, w: number, h: number) => {
-                            const fn = typedParam.value as UniformUpdateFn<typeof typedParam.type>;
-                            return fn(t, w, h) as UniformTypeToValueMap[typeof typedParam.type];
-                        }
-                        : typedParam.value
+                    type: param.type,
+                    value: adaptToRenderPassUniform(param.value)
                 };
             });
-      
+  
             passes.push({
                 programId: effect.programId,
                 inputTextures: [{
@@ -199,9 +199,9 @@ export class Postprocessing {
                 this.webglManager.fbo.bindTexture(texture.id, texture.textureUnit);
                 this.webglManager.setUniform(
                     pass.programId,
-          `u_texture${texture.textureUnit}`,
-          texture.textureUnit,
-          'sampler2D'
+                    `u_texture${texture.textureUnit}`,
+                    texture.textureUnit,
+                    'sampler2D'
                 );
             });
       

@@ -5,7 +5,6 @@ import type {
     ShaderProgramConfig,
     ShaderRenderCallback,
     ShaderResources,
-    UniformConfig,
     UniformType,
     UniformUpdateFn,
 } from '@/core';
@@ -19,7 +18,7 @@ interface ShaderEngineProps {
     style?: React.CSSProperties;
     uniformUpdaters?: Record<string, {
         name: string;
-        type: UniformConfig['type'];
+        type: UniformType;
         updateFn: UniformUpdateFn<UniformType>;
     }[]>;
     useFastPath?: boolean;
@@ -31,7 +30,7 @@ const DEFAULT_CLASS_NAME = '';
 const DEFAULT_STYLE: React.CSSProperties = {};
 const DEFAULT_UNIFORM_UPDATERS: Record<string, {
     name: string;
-    type: UniformConfig['type'];
+    type: UniformType;
     updateFn: UniformUpdateFn<UniformType>;
 }[]> = {};
 

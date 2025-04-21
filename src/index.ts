@@ -34,7 +34,6 @@ export type {
     TextureOptions,
     UniformConfig,
     UniformParam,
-    UniformParamMap,
     UniformType,
     UniformTypeMap,
     UniformTypeToValueMap,
