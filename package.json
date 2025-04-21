@@ -1,6 +1,6 @@
 {
   "name": "micugl",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Micu gl - Small React shader library",
   "type": "module",
   "main": "dist/index.js",
@@ -8,8 +8,12 @@
   "types": "dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "*": ["dist/*"],
-      "types": ["dist/types.d.ts"]
+      "*": [
+        "dist/*"
+      ],
+      "types": [
+        "dist/types.d.ts"
+      ]
     }
   },
   "exports": {
