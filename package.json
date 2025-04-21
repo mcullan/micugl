@@ -1,6 +1,6 @@
 {
   "name": "micugl",
-  "version": "0.0.10",
+  "version": "0.0.9",
   "description": "Micu gl - Small React shader library",
   "type": "module",
   "main": "dist/index.js",
