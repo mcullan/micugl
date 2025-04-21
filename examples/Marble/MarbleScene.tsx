@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { vec3 } from '@/core/lib/vectorUtils';
 import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
 import { useDarkMode } from '@/react/hooks/useDarkMode';
 
@@ -49,10 +50,6 @@ export const Marble: React.FC<MarbleProps> = ({
 }) => {
     const isDarkMode = useDarkMode();
 
-    const toF32 = (arr: number[]): (() => Float32Array) => (
-        () => new Float32Array(arr)
-    );
-
     const shaderConfig = createShaderConfig({
         vertexShader: marbleVertexShader,
         fragmentShader: marbleFragmentShader,
@@ -83,16 +80,15 @@ export const Marble: React.FC<MarbleProps> = ({
                 veinWidth: { value: veinWidth, type: 'float' },
                 colorStart: {
                     type: 'vec3',
-                    value: toF32(isDarkMode ? colorStartDark : colorStart)
-                    // value: toF32(isDarkMode ? colorStartDark : colorStart)
+                    value: vec3(isDarkMode ? colorStartDark : colorStart)
                 },
                 colorEnd: {
                     type: 'vec3',
-                    value: toF32(isDarkMode ? colorEndDark : colorEnd)
+                    value: vec3(isDarkMode ? colorEndDark : colorEnd)
                 },
                 veinColor: {
                     type: 'vec3',
-                    value: toF32(isDarkMode ? veinColorDark : veinColor)
+                    value: vec3(isDarkMode ? veinColorDark : veinColor)
                 }
             }}
         />

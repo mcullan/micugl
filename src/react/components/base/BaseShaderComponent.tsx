@@ -2,8 +2,8 @@ import React from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
 import { ShaderEngine } from '@/react';
-import {useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
-import type { UniformParam} from '@/types';
+import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
+import type { UniformParam } from '@/types';
 
 export interface BaseShaderProps {
     programId: string;

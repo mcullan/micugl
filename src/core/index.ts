@@ -18,7 +18,6 @@ export type {
     TextureOptions,
     UniformConfig,
     UniformType,
-    UniformTypeToValueMap,
     UniformUpdateFn,
     WebGLExtensionName,
     WebGLExtensionTypes
