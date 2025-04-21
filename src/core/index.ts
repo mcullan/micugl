@@ -18,7 +18,7 @@ export type {
     TextureOptions,
     UniformConfig,
     UniformType,
-    UniformTypeToValueMap,
+    UniformInputValueMap as UniformTypeToValueMap,
     UniformUpdateFn,
     WebGLExtensionName,
     WebGLExtensionTypes

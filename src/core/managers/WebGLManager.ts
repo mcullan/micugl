@@ -12,6 +12,7 @@ import type {
     WebGLExtensionTypes
 } from '@/core';
 import { FBOManager } from '@/core';
+import type { TypedFloat32Array } from '@/types';
 
 declare global {
     interface WebGLRenderingContext {
@@ -209,43 +210,6 @@ export class WebGLManager {
         let updateFunction: UniformUpdateFn<UniformType>;
 
         switch (type) {
-            case 'float':
-                updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as number;
-                    gl.uniform1f(location, value);
-                    return value;
-                };
-                break;
-            case 'vec2':
-                updateFunction = (time, width, height) => {
-                    let value = updateFn(time, width, height) as Float32Array | [number, number];
-                    if (Array.isArray(value)) {
-                        value = new Float32Array(value);
-                    }
-                    gl.uniform2fv(location, value);
-                    return value;
-                };
-                break;
-            case 'vec3':
-                updateFunction = (time, width, height) => {
-                    let value = updateFn(time, width, height) as Float32Array | [number, number, number]; 
-                    if (Array.isArray(value)) {
-                        value = new Float32Array(value);
-                    }
-                    gl.uniform3fv(location, value);
-                    return value;
-                };
-                break;
-            case 'vec4':
-                updateFunction = (time, width, height) => {
-                    let value = updateFn(time, width, height) as Float32Array | [number, number, number, number];
-                    if (Array.isArray(value)) {
-                        value = new Float32Array(value);
-                    }
-                    gl.uniform4fv(location, value);
-                    return value;
-                };
-                break;
             case 'int':
                 updateFunction = (time, width, height) => {
                     const value = updateFn(time, width, height) as number;
@@ -253,33 +217,10 @@ export class WebGLManager {
                     return value;
                 };
                 break;
-            case 'mat2':
+            case 'float':
                 updateFunction = (time, width, height) => {
-                    let value = updateFn(time, width, height) as Float32Array | [number, number, number, number];
-                    if (Array.isArray(value)) {
-                        value = new Float32Array(value);
-                    }
-                    gl.uniformMatrix2fv(location, false, value);
-                    return value;
-                };
-                break;
-            case 'mat3':
-                updateFunction = (time, width, height) => {
-                    let value = updateFn(time, width, height) as Float32Array | [number, number, number, number, number, number, number, number, number];
-                    if (Array.isArray(value)) {
-                        value = new Float32Array(value);
-                    }
-                    gl.uniformMatrix3fv(location, false, value);
-                    return value;
-                };
-                break;
-            case 'mat4':
-                updateFunction = (time, width, height) => {
-                    let value = updateFn(time, width, height) as Float32Array | [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
-                    if (Array.isArray(value)) {
-                        value = new Float32Array(value);
-                    }
-                    gl.uniformMatrix4fv(location, false, value);
+                    const value = updateFn(time, width, height) as number;
+                    gl.uniform1f(location, value);
                     return value;
                 };
                 break;
@@ -290,6 +231,51 @@ export class WebGLManager {
                     return value;
                 };
                 break;
+
+            case 'vec2':
+                updateFunction = (time, width, height) => {
+                    const value = updateFn(time, width, height) as TypedFloat32Array<2>;
+                    gl.uniform2fv(location, value);
+                    return value;
+                };
+                break;
+            case 'vec3':
+                updateFunction = (time, width, height) => {
+                    const value = updateFn(time, width, height) as TypedFloat32Array<3>;
+                    gl.uniform3fv(location, value);
+                    return value;
+                };
+                break;
+            case 'vec4':
+                updateFunction = (time, width, height) => {
+                    const value = updateFn(time, width, height) as TypedFloat32Array<4>;
+                    gl.uniform4fv(location, value);
+                    return value;
+                };
+                break;
+
+            case 'mat2':
+                updateFunction = (time, width, height) => {
+                    const value = updateFn(time, width, height) as TypedFloat32Array<4>;
+                    gl.uniformMatrix2fv(location, false, value);
+                    return value;
+                };
+                break;
+            case 'mat3':
+                updateFunction = (time, width, height) => {
+                    const value = updateFn(time, width, height) as TypedFloat32Array<9>;
+                    gl.uniformMatrix3fv(location, false, value);
+                    return value;
+                };
+                break;
+            case 'mat4':
+                updateFunction = (time, width, height) => {
+                    const value = updateFn(time, width, height) as TypedFloat32Array<16>;
+                    gl.uniformMatrix4fv(location, false, value);
+                    return value;
+                };
+                break;
+            
             default:
                 throw new Error(`Unsupported uniform type: ${type}`);
         }

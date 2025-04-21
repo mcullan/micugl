@@ -116,8 +116,8 @@ export interface TextureBinding {
 }
 
 export type RenderPassUniformValue = 
-  UniformTypeToValueMap[UniformType] | 
-  ((time: number, width: number, height: number) => UniformTypeToValueMap[UniformType]);
+  UniformGLValueMap[UniformType] | 
+  ((time: number, width: number, height: number) => UniformGLValueMap[UniformType]);
 
 export interface RenderPass {
   programId: string;
@@ -161,32 +161,22 @@ export interface UniformConfig {
   type: UniformType;
 }
 
-export interface UniformTypeMap {
+export interface UniformGLValueMap {
   'float': number;
-  'vec2': Float32Array;
-  'vec3': Float32Array;
-  'vec4': Float32Array;
   'int': number;
-  'mat2': Float32Array;
-  'mat3': Float32Array;
-  'mat4': Float32Array;
   'sampler2D': number;
-}
-
-export interface UniformTypeToValueMap {
-  'int': number;
-  'float': number;
-  'sampler2D': number;
-  'vec2': Vec2 | Float32Array;
-  'vec3': Vec3 | Float32Array;
-  'vec4': Vec4 | Float32Array;
-  'mat2': Mat2 | Float32Array;
-  'mat3': Mat3 | Float32Array;
-  'mat4': Mat4 | Float32Array;
+  'vec2': Float32Array2;
+  'vec3': Float32Array3;
+  'vec4': Float32Array4;
+  'mat2': Float32Array4;
+  'mat3': Float32Array9;
+  'mat4': Float32Array16;
 }
 
 export type UniformUpdateFn<T extends UniformType> = 
-  (time?: number, width?: number, height?: number) => UniformTypeMap[T];
+  (time?: number, width?: number, height?: number) => UniformGLValueMap[T];
+
+export type UniformValue<T extends UniformType> = UniformGLValueMap[T] | UniformUpdateFn<T>;
 
 export interface UniformUpdaterDef<T extends UniformType> {
   name: string;
@@ -194,17 +184,12 @@ export interface UniformUpdaterDef<T extends UniformType> {
   updateFn: UniformUpdateFn<T>;
 }
 
-export type UniformValue<T extends UniformType> = 
-  UniformTypeMap[T] | UniformUpdateFn<T>;
-
 export interface UniformParam<T extends UniformType = UniformType> {
   value: UniformValue<T>;
   type: T;
 }
 
-export type UniformParamMap = {
-  [K in UniformType]: UniformParam<K>;
-};
+export type UniformParamMap = { [K in UniformType]: UniformParam<K> };
 
 // ===================================================
 // JS -> Vector and Matrix
@@ -213,6 +198,7 @@ export type UniformParamMap = {
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
 export type Vec4 = [number, number, number, number];
+
 export type Mat2 = [
   number, number,
   number, number
@@ -228,3 +214,11 @@ export type Mat4 = [
   number, number, number, number,
   number, number, number, number
 ];
+
+export type TypedFloat32Array<N extends number> = Float32Array & { length: N };
+
+export type Float32Array2 = TypedFloat32Array<2>;
+export type Float32Array3 = TypedFloat32Array<3>;
+export type Float32Array4 = TypedFloat32Array<4>;
+export type Float32Array9 = TypedFloat32Array<9>;
+export type Float32Array16 = TypedFloat32Array<16>;

@@ -1,5 +1,5 @@
 import type { WebGLManager } from '@/core/managers/WebGLManager';
-import type { FramebufferOptions, RenderPass, RenderPassUniformValue, ShaderProgramConfig, UniformParam, UniformType, UniformTypeToValueMap, UniformValue } from '@/types';
+import type { FramebufferOptions, RenderPass, RenderPassUniformValue, ShaderProgramConfig, UniformParam, UniformType } from '@/types';
 
 export interface PostProcessEffect {
   id: string;
@@ -15,19 +15,6 @@ export interface PostProcessChain {
   inputFramebufferId: string;
   outputFramebufferId: string | null;
   intermediateFramebufferIds: string[];
-}
-
-function adaptToRenderPassUniform<T extends UniformType>(
-    paramValue: UniformValue<T>
-): RenderPassUniformValue {
-    if (typeof paramValue !== 'function') {
-        return paramValue as UniformTypeToValueMap[UniformType];
-    }
-    
-    // Create a function with the required RenderPassUniformValue signature
-    return (time: number, width: number, height: number): UniformTypeToValueMap[UniformType] => {
-        return paramValue(time, width, height) as UniformTypeToValueMap[UniformType];
-    };
 }
 
 export class Postprocessing {
@@ -163,7 +150,7 @@ export class Postprocessing {
     
                 passUniforms[uniformName] = {
                     type: param.type,
-                    value: adaptToRenderPassUniform(param.value)
+                    value: param.value
                 };
             });
   
