@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run in dry-run mode (no actual publish)"
+        description: 'Run in dry-run mode (no actual publish)'
         type: boolean
         default: true
 
@@ -23,31 +23,37 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
+      
       - name: Install dependencies
         run: bun install
-
+      
       - name: Typecheck
         run: bun run typecheck
-
+        
       - name: Lint
         run: bun run lint
-
+      
       - name: Build
         run: bun run build
-
+      
       - name: Create GitHub Release
+        if: ${{ !inputs.dry_run && github.event_name == 'push' }}
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-
+      
+      - name: Dry Run - Skip GitHub Release
+        if: ${{ inputs.dry_run || github.event_name == 'workflow_dispatch' }}
+        run: echo "SKIPPING GITHUB RELEASE in dry run mode"
+      
       - name: Publish to npm
-        run: |
-          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
-            echo "DRY RUN: Would publish to npm"
-            bunx npm publish --dry-run
-          else
-            bunx npm publish
-          fi
+        if: ${{ !inputs.dry_run && github.event_name == 'push' }}
+        run: bunx npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          
+      - name: Dry Run - Simulate npm Publish
+        if: ${{ inputs.dry_run || github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "DRY RUN: Would publish package to npm"
+          bunx npm publish --dry-run
