@@ -22,14 +22,14 @@ const RENDER_OPTIONS: RenderOptions = {
     clearColor: [0, 0, 0, 1]
 };
 
-export const BaseShaderComponent: React.FC<BaseShaderProps> = ({
+export const BaseShaderComponent = ({
     programId,
     shaderConfig,
     uniforms,
     className = '',
     style,
     renderOptions = RENDER_OPTIONS
-}) => {
+}: BaseShaderProps) => {
     const programConfigs = { [programId]: shaderConfig };
     const uniformUpdaters = useUniformUpdaters(programId, uniforms);
 

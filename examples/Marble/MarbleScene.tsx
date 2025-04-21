@@ -33,7 +33,7 @@ export interface MarbleProps {
     style?: CSSProperties;
 }
 
-export const Marble: React.FC<MarbleProps> = ({
+export const Marble = ({
     marbleScale = 3.0,
     tileScale = 1.0,
     turbulence = 0.5,
@@ -48,7 +48,7 @@ export const Marble: React.FC<MarbleProps> = ({
     veinColorDark = VEIN_COLOR_DARK,
     className = '',
     style
-}) => {
+}: MarbleProps) => {
     const isDarkMode = useDarkMode();
 
     const shaderConfig = createShaderConfig({

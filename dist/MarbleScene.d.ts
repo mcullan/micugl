@@ -1,6 +1,7 @@
-import { default as default_2 } from 'react';
+import { CSSProperties } from 'react';
+import { JSX } from 'react/jsx-runtime';
 
-declare const Marble: default_2.FC<MarbleProps>;
+declare const Marble: ({ marbleScale, tileScale, turbulence, swirl, veinFrequency, veinWidth, colorStart, colorEnd, veinColor, colorStartDark, colorEndDark, veinColorDark, className, style }: MarbleProps) => JSX.Element;
 export { Marble }
 export default Marble;
 
@@ -18,7 +19,7 @@ export declare interface MarbleProps {
     veinFrequency?: number;
     veinWidth?: number;
     className?: string;
-    style?: default_2.CSSProperties;
+    style?: CSSProperties;
 }
 
 declare type Vec3 = [number, number, number];

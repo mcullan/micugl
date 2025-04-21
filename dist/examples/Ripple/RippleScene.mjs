@@ -1,5 +1,5 @@
 import { jsx as w } from "react/jsx-runtime";
-import D, { useRef as v } from "react";
+import { useRef as v, useEffect as D } from "react";
 import { createShaderConfig as h } from "../../src/core/lib/createShaderConfig.mjs";
 import { vec3 as p, vec2 as M } from "../../src/core/lib/vectorUtils.mjs";
 import { BasePingPongShaderComponent as O } from "../../src/react/components/base/BasePingPongShaderComponent.mjs";
@@ -31,7 +31,7 @@ const I = [0.1, 0.3, 0.1], N = [0.3, 0.2, 0.4], G = ({
       u_color2: "vec3"
     }
   });
-  return D.useEffect(() => {
+  return D(() => {
     const s = (e) => {
       const t = e.target.getBoundingClientRect(), o = (e.clientX - t.left) / t.width, r = 1 - (e.clientY - t.top) / t.height;
       c.current = [o, r];

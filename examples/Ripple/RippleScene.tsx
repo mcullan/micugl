@@ -1,5 +1,5 @@
-import type { CSSProperties} from 'react';
-import { useRef } from 'react';
+import type { CSSProperties } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import { vec2, vec3 } from '@/core/lib/vectorUtils';
@@ -26,7 +26,7 @@ export interface RippleProps {
 const COLOR_1: Vec3 = [0.1, 0.3, 0.1];
 const COLOR_2: Vec3 = [0.3, 0.2, 0.4];
 
-export const Ripple: React.FC<RippleProps> = ({
+export const Ripple = ({
     damping = 0.99,
     mouseForce = 0.5,
     color1 = COLOR_1,
@@ -34,7 +34,7 @@ export const Ripple: React.FC<RippleProps> = ({
     iterations = 2,
     className = '',
     style
-}) => {
+}: RippleProps) => {
     const mousePos = useRef<[number, number]>([0.5, 0.5]);
     const isMouseDown = useRef(false);
 
@@ -59,7 +59,7 @@ export const Ripple: React.FC<RippleProps> = ({
         }
     });
 
-    React.useEffect(() => {
+    useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             const canvas = e.target as HTMLCanvasElement;
             const rect = canvas.getBoundingClientRect();

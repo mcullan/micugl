@@ -1,6 +1,7 @@
-import { default as default_2 } from 'react';
+import { CSSProperties } from 'react';
+import { JSX } from 'react/jsx-runtime';
 
-declare const Ripple: default_2.FC<RippleProps>;
+declare const Ripple: ({ damping, mouseForce, color1, color2, iterations, className, style }: RippleProps) => JSX.Element;
 export { Ripple }
 export default Ripple;
 
@@ -11,7 +12,7 @@ export declare interface RippleProps {
     color2?: Vec3;
     iterations?: number;
     className?: string;
-    style?: default_2.CSSProperties;
+    style?: CSSProperties;
 }
 
 declare type Vec3 = [number, number, number];
