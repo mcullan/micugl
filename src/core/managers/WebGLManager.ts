@@ -6,13 +6,12 @@ import type {
     ShaderResources,
     ShaderUniformLocations,
     UniformType,
-    UniformTypeToValueMap,
     UniformUpdateFn,
     WebGLExtensionName,
     WebGLExtensionTypes
 } from '@/core';
 import { FBOManager } from '@/core';
-import type { TypedFloat32Array } from '@/types';
+import type { TypedFloat32Array, UniformTypeMap } from '@/types';
 
 declare global {
     interface WebGLRenderingContext {
@@ -351,7 +350,7 @@ export class WebGLManager {
     setUniform<T extends UniformType>(
         programId: string, 
         uniformName: string, 
-        value: UniformTypeToValueMap[T], 
+        value: UniformTypeMap[T], 
         type: T
     ): void {
         const gl = this.gl;

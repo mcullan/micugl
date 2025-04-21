@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { vec2, vec3 } from '@/core/lib/vectorUtils';
 import { BasePingPongShaderComponent } from '@/react/components/base/BasePingPongShaderComponent';
 
 import { rippleRenderShader, rippleSimulationShader, rippleVertexShader } from './rippleShaders';
@@ -17,8 +18,9 @@ export interface SimpleRippleProps {
     style?: React.CSSProperties;
 }
 
-const COLOR_1 = [0.1, 0.3, 0.1];
-const COLOR_2 = [0.3, 0.2, 0.4];
+const COLOR_1: Vec3 = [0.1, 0.3, 0.1];
+const COLOR_2: Vec3 = [0.3, 0.2, 0.4];
+
 export const SimpleRipple: React.FC<SimpleRippleProps> = ({
     damping = 0.99,
     mouseForce = 0.5,
@@ -137,7 +139,7 @@ export const SimpleRipple: React.FC<SimpleRippleProps> = ({
             uniforms={{
                 u_mouse: {
                     type: 'vec2',
-                    value: () => new Float32Array(mousePos.current)
+                    value: vec2(mousePos.current)
                 },
                 u_mouseForce: {
                     type: 'float',
@@ -151,11 +153,11 @@ export const SimpleRipple: React.FC<SimpleRippleProps> = ({
             secondaryUniforms={{
                 u_color1: {
                     type: 'vec3',
-                    value: new Float32Array(color1)
+                    value: vec3(color1)
                 },
                 u_color2: {
                     type: 'vec3',
-                    value: new Float32Array(color2)
+                    value: vec3(color2)
                 }
             }}
         />

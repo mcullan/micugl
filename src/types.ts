@@ -33,6 +33,50 @@ export type AttributeType =
 // ===================================================
 // Core WebGL
 // ===================================================
+
+export interface RenderOptions {
+  clear?: boolean;
+  clearColor?: Vec4;
+}
+
+export type ShaderUniformLocations = Record<string, WebGLUniformLocation | null>;
+export type ShaderAttributeLocations = Record<string, number>;
+
+export interface UniformConfig {
+  name: string;
+  type: UniformType;
+}
+
+export interface AttributeConfig {
+  name: string;
+  size: number;
+  type: AttributeType;
+  normalized: boolean;
+  stride: number;
+  offset: number;
+  instanced?: boolean;
+}
+
+export interface ShaderResources {
+  program: WebGLProgram;
+  uniforms: ShaderUniformLocations;
+  attributes: ShaderAttributeLocations;
+  buffers: Record<string, BufferData>;
+}
+
+export interface ShaderProgramConfig {
+  vertexShader: string;
+  fragmentShader: string;
+  uniforms: UniformConfig[];
+  attributes?: AttributeConfig[];
+}
+
+export type ShaderRenderCallback = (
+  time: number,
+  resources: ShaderResources, 
+  gl: WebGLRenderingContext
+) => void;
+
 export interface WebGLExtensionTypes {
   'OES_texture_float': OES_texture_float;
   'OES_texture_float_linear': OES_texture_float_linear;
@@ -42,47 +86,10 @@ export interface WebGLExtensionTypes {
 }
 
 export type WebGLExtensionName = Extract<keyof WebGLExtensionTypes, string>;
-export type ShaderUniformLocations = Record<string, WebGLUniformLocation | null>;
-export type ShaderAttributeLocations = Record<string, number>;
-
-
-export interface ShaderResources {
-  program: WebGLProgram;
-  uniforms: ShaderUniformLocations;
-  attributes: ShaderAttributeLocations;
-  buffers: Record<string, BufferData>;
-}
-
-export type ShaderRenderCallback = (
-  time: number,
-  resources: ShaderResources, 
-  gl: WebGLRenderingContext
-) => void;
-
-
-export interface ShaderProgramConfig {
-  vertexShader: string;
-  fragmentShader: string;
-  uniforms: UniformConfig[];
-  attributes?: AttributeConfig[];
-}
-
-export interface RenderOptions {
-  clear?: boolean;
-  clearColor?: Vec4;
-}
 
 // ===================================================
-// Framebuffer and Texture
+// Textures and Framebuffers
 // ===================================================
-
-export interface FramebufferResources {
-  framebuffer: WebGLFramebuffer;
-  textures: WebGLTexture[];
-  currentTextureIndex: number;
-  width: number;
-  height: number;
-}
 
 export interface TextureOptions {
   width: number;
@@ -95,6 +102,14 @@ export interface TextureOptions {
   wrapS?: number;
   wrapT?: number;
   generateMipmap?: boolean;
+}
+
+export interface FramebufferResources {
+  framebuffer: WebGLFramebuffer;
+  textures: WebGLTexture[];
+  currentTextureIndex: number;
+  width: number;
+  height: number;
 }
 
 export interface FramebufferOptions {
@@ -115,9 +130,15 @@ export interface TextureBinding {
   bindingType: 'read' | 'write' | 'readwrite';
 }
 
+export type RenderPassUniformUpdateFn = (
+  time: number,
+  width: number,
+  height: number
+) => UniformTypeMap[UniformType];
+
 export type RenderPassUniformValue = 
-  UniformGLValueMap[UniformType] | 
-  ((time: number, width: number, height: number) => UniformGLValueMap[UniformType]);
+  UniformTypeMap[UniformType] 
+  | RenderPassUniformUpdateFn;
 
 export interface RenderPass {
   programId: string;
@@ -137,31 +158,10 @@ export interface PingPongState {
 }
 
 // ===================================================
-// Attributes
+// Uniform Updaters
 // ===================================================
 
-
-export interface AttributeConfig {
-  name: string;
-  size: number;
-  type: AttributeType;
-  normalized: boolean;
-  stride: number;
-  offset: number;
-  instanced?: boolean;
-}
-
-
-// ===================================================
-// Uniforms
-// ===================================================
-
-export interface UniformConfig {
-  name: string;
-  type: UniformType;
-}
-
-export interface UniformGLValueMap {
+export interface UniformTypeMap {
   'float': number;
   'int': number;
   'sampler2D': number;
@@ -174,9 +174,15 @@ export interface UniformGLValueMap {
 }
 
 export type UniformUpdateFn<T extends UniformType> = 
-  (time?: number, width?: number, height?: number) => UniformGLValueMap[T];
+  (
+    time?: number,
+    width?: number,
+    height?: number
+  ) => UniformTypeMap[T];
 
-export type UniformValue<T extends UniformType> = UniformGLValueMap[T] | UniformUpdateFn<T>;
+export type UniformValue<T extends UniformType> = 
+  UniformTypeMap[T] 
+  | UniformUpdateFn<T>;
 
 export interface UniformUpdaterDef<T extends UniformType> {
   name: string;

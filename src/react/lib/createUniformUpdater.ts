@@ -1,3 +1,4 @@
+import { vec2 } from '@/core/lib/vectorUtils';
 import type { UniformType, UniformUpdaterDef, UniformValue } from '@/types';
 
 export function createUniformUpdater<T extends UniformType>(
@@ -27,7 +28,7 @@ export function createCommonUpdaters(): UniformUpdaterDef<UniformType>[] {
         createUniformUpdater('u_time', 'float', (time?: number) => (time ?? 0) * 0.001),
         createUniformUpdater('u_resolution', 'vec2', 
             (_time?: number, width?: number, height?: number) => 
-                new Float32Array([width ?? 0, height ?? 0])
+                vec2([width ?? 0, height ?? 0])
         )
     ];
 }
