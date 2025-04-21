@@ -35,8 +35,7 @@ export default defineConfig({
     })],
     resolve: {
         alias: {
-            '_shaders': resolve(__dirname, 'src'),
-            '_shader-examples': resolve(__dirname, 'examples'),
+            '@': resolve(__dirname, 'src'),
         }
     }
 });

@@ -1,7 +1,7 @@
-export { FBOManager } from '_shaders/core/managers/FBOManager';
-export { WebGLManager } from '_shaders/core/managers/WebGLManager';
-export { Passes } from '_shaders/core/systems/Passes';
-export { Postprocessing } from '_shaders/core/systems/Postprocessing';
+export { FBOManager } from '@/core/managers/FBOManager';
+export { WebGLManager } from '@/core/managers/WebGLManager';
+export { Passes } from '@/core/systems/Passes';
+export { Postprocessing } from '@/core/systems/Postprocessing';
 export type {
     AttributeConfig,
     BufferData,
@@ -22,4 +22,4 @@ export type {
     UniformUpdateFn,
     WebGLExtensionName,
     WebGLExtensionTypes
-} from '_shaders/types';
+} from '@/types';

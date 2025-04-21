@@ -1,4 +1,4 @@
-import type { ShaderProgramConfig, UniformType } from '_shaders/core';
+import type { ShaderProgramConfig, UniformType } from '@/core';
 
 export interface ShaderConfigOptions {
   vertexShader: string;

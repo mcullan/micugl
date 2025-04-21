@@ -1,6 +1,7 @@
-import { createShaderConfig } from '_shaders/core/lib/createShaderConfig';
-import { BasePingPongShaderComponent } from '_shaders/react/components/base/BasePingPongShaderComponent';
 import React, { useRef } from 'react';
+
+import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { BasePingPongShaderComponent } from '@/react/components/base/BasePingPongShaderComponent';
 
 import { rippleRenderShader, rippleSimulationShader, rippleVertexShader } from './rippleShaders';
 

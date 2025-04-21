@@ -8,8 +8,8 @@ import type {
     UniformConfig,
     UniformType,
     UniformUpdateFn,
-} from '_shaders/core';
-import { WebGLManager } from '_shaders/core/managers/WebGLManager';
+} from '@/core';
+import { WebGLManager } from '@/core/managers/WebGLManager';
 
 interface ShaderEngineProps {
     programConfigs: Record<string, ShaderProgramConfig>;

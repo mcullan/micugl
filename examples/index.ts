@@ -1,4 +1,4 @@
-export * from './Marble';
 export type { MarbleProps } from './Marble';
-export * from './SimpleRipple';
+export * from './Marble';
 export type { SimpleRippleProps} from './SimpleRipple';
+export * from './SimpleRipple';

@@ -1,4 +1,4 @@
-export { BasePingPongShaderComponent,BaseShaderComponent } from '_shaders/react/components';
-export { PingPongShaderEngine } from '_shaders/react/components/engine/PingPongShaderEngine';
-export { ShaderEngine } from '_shaders/react/components/engine/ShaderEngine';
-export { useDarkMode, usePingPongPasses,useUniformUpdaters } from '_shaders/react/hooks';
+export { BasePingPongShaderComponent,BaseShaderComponent } from '@/react/components';
+export { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
+export { ShaderEngine } from '@/react/components/engine/ShaderEngine';
+export { useDarkMode, usePingPongPasses,useUniformUpdaters } from '@/react/hooks';

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
-import {  createCommonUpdaters, createUniformUpdater } from '_shaders/react/lib/createUniformUpdater';
-import type { UniformParam, UniformType, UniformUpdaterDef } from '_shaders/types';
+import {  createCommonUpdaters, createUniformUpdater } from '@/react/lib/createUniformUpdater';
+import type { UniformParam, UniformType, UniformUpdaterDef } from '@/types';
 
 export const useUniformUpdaters = (
     programId: string,

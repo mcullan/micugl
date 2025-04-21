@@ -10,8 +10,8 @@ import type {
     UniformUpdateFn,
     WebGLExtensionName,
     WebGLExtensionTypes
-} from '_shaders/core';
-import { FBOManager } from '_shaders/core';
+} from '@/core';
+import { FBOManager } from '@/core';
 
 declare global {
     interface WebGLRenderingContext {
