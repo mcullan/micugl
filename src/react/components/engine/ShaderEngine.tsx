@@ -113,75 +113,44 @@ export const ShaderEngine = ({
 
     useEffect(() => {
         if (!canvasRef.current) return;
+        const manager = new WebGLManager(canvasRef.current);
+        managerRef.current = manager;
 
-        try {
-            const manager = new WebGLManager(canvasRef.current);
-            managerRef.current = manager;
+        handleResize();
+        const [[pid, cfg]] = Object.entries(programConfigs);
+        manager.createProgram(pid, cfg);
+        manager.createBuffer(pid, 'a_position', new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+        manager.setAttributeOnce(pid, 'a_position', {
+            name: 'a_position', size: 2, type: 'FLOAT',
+            normalized: false, stride: 0, offset: 0
+        });
+        activeProgram.current = pid;
 
-            handleResize();
+        startTimeRef.current = performance.now();
+        animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
+        window.addEventListener('resize', handleResize);
 
-            const programEntries = Object.entries(programConfigs);
-            if (programEntries.length > 0) {
-                const [firstProgramId, firstProgramConfig] = programEntries[0];
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            manager.destroyAll();
+        };
+    }, [programConfigs, handleResize]);
 
-                manager.createProgram(firstProgramId, firstProgramConfig);
+    useEffect(() => {
+        const manager = managerRef.current;
+        const pid = activeProgram.current;
+        if (!manager || !pid) return;
 
-                manager.createBuffer(
-                    firstProgramId,
-                    'a_position',
-                    new Float32Array([
-                        -1.0, -1.0,
-                        1.0, -1.0,
-                        -1.0, 1.0,
-                        1.0, 1.0,
-                    ])
-                );
+        const ups = uniformUpdaters[pid];
 
-                activeProgram.current = firstProgramId;
-
-                manager.setAttributeOnce(firstProgramId, 'a_position', {
-                    name: 'a_position',
-                    size: 2,
-                    type: 'FLOAT',
-                    normalized: false,
-                    stride: 0,
-                    offset: 0
-                });
-
-                const programUpdaters = uniformUpdaters[firstProgramId];
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                if (programUpdaters) {
-                    programUpdaters.forEach(updater => {
-                        manager.registerUniformUpdater(
-                            firstProgramId,
-                            updater.name,
-                            updater.type,
-                            updater.updateFn
-                        );
-                    });
-                }
-            }
-
-            startTimeRef.current = performance.now();
-            animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
-
-            window.addEventListener('resize', handleResize);
-
-            return () => {
-                window.removeEventListener('resize', handleResize);
-                if (animationFrameRef.current) {
-                    cancelAnimationFrame(animationFrameRef.current);
-                }
-                if (managerRef.current) {
-                    managerRef.current.destroyAll();
-                }
-            };
-        } catch (error) {
-            console.error('Failed to initialize WebGL:', error);
-            return () => { void 1 };
-        }
-    }, [programConfigs, uniformUpdaters, handleResize]);
-
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (!ups) return;
+        ups.forEach(u => {
+            manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
+        });
+    }, [uniformUpdaters]);
+    
     return (
         <canvas
             ref={canvasRef}

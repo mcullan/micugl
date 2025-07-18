@@ -5,4 +5,4 @@ export declare function createUniformUpdaters<T extends UniformType>(configs: {
     type: T;
     value: UniformValue<T>;
 }[]): UniformUpdaterDef<T>[];
-export declare function createCommonUpdaters(): UniformUpdaterDef<UniformType>[];
+export declare function createCommonUpdaters(): UniformUpdaterDef[];
