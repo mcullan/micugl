@@ -23,7 +23,7 @@ export function createUniformUpdaters<T extends UniformType>(
     );
 }
 
-export function createCommonUpdaters(): UniformUpdaterDef<UniformType>[] {
+export function createCommonUpdaters(): UniformUpdaterDef[] {
     return [
         createUniformUpdater('u_time', 'float', (time?: number) => (time ?? 0) * 0.001),
         createUniformUpdater('u_resolution', 'vec2', 
