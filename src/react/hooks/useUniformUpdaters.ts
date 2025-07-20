@@ -5,10 +5,16 @@ import type {  UniformParam, UniformUpdaterDef } from '@/types';
 
 export const useUniformUpdaters = (
     programId: string,
-    uniforms: Record<string, UniformParam>
+    uniforms: Record<string, UniformParam>,
+    options?: { skipDefaultUniforms?: boolean }
 ) => {
     return useMemo(() => {
-        const updaters: UniformUpdaterDef[] = createCommonUpdaters();
+        
+        const skip = options?.skipDefaultUniforms ?? false;
+        const updaters: UniformUpdaterDef[] = skip ? [] : createCommonUpdaters().filter(u =>
+            (u.name === 'u_time' && !('u_time' in uniforms)) 
+            ||(u.name === 'u_resolution' && !('u_resolution' in uniforms))
+        );
 
         Object.entries(uniforms).forEach(([name, param]) => {
             const uniformName = name.startsWith('u_') ? name : `u_${name}`;
@@ -16,5 +22,5 @@ export const useUniformUpdaters = (
         });
 
         return { [programId]: updaters };
-    }, [programId, uniforms]);
+    }, [programId, uniforms, options?.skipDefaultUniforms]);
 };

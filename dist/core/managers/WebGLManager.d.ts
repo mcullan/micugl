@@ -21,7 +21,7 @@ export declare class WebGLManager {
     updateBuffer(programId: string, attributeName: string, data: Float32Array | Uint8Array | Uint16Array): void;
     registerUniformUpdater<T extends UniformType>(programId: string, uniformName: string, type: T, updateFn: UniformUpdateFn<T>): void;
     updateUniforms(programId: string, time: number): void;
-    setSize(width: number, height: number, useDevicePixelRatio?: boolean): void;
+    setSize(width: number, height: number, dpr?: number): void;
     prepareRender(programId: string, options?: RenderOptions): void;
     fastRender(programId: string, time: number, clear?: boolean): void;
     setUniform<T extends UniformType>(programId: string, uniformName: string, value: UniformTypeMap[T], type: T): void;

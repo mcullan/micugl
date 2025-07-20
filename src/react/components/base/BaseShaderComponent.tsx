@@ -9,6 +9,10 @@ export interface BaseShaderProps {
     programId: string;
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
+    skipDefaultUniforms?: boolean;
+    width?: number;
+    height?: number;
+    pixelRatio?: number;
     className?: string;
     style?: CSSProperties;
     renderOptions?: {
@@ -26,12 +30,16 @@ export const BaseShaderComponent = ({
     programId,
     shaderConfig,
     uniforms,
+    skipDefaultUniforms = false,
+    width,
+    height,
+    pixelRatio,
     className = '',
     style,
     renderOptions = RENDER_OPTIONS
 }: BaseShaderProps) => {
     const programConfigs = { [programId]: shaderConfig };
-    const uniformUpdaters = useUniformUpdaters(programId, uniforms);
+    const uniformUpdaters = useUniformUpdaters(programId, uniforms, { skipDefaultUniforms });
 
     const renderCallback: ShaderRenderCallback = (_time, _resources, gl) => {
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -42,6 +50,9 @@ export const BaseShaderComponent = ({
             programConfigs={programConfigs}
             renderCallback={renderCallback}
             uniformUpdaters={uniformUpdaters}
+            width={width}
+            height={height}
+            pixelRatio={pixelRatio}
             className={className}
             style={style}
             useFastPath={true}

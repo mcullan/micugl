@@ -296,10 +296,8 @@ export class WebGLManager {
             updateFn(time, width, height);
         });
     }
-
-    setSize(width: number, height: number, useDevicePixelRatio = true): void {
+    setSize(width: number, height: number, dpr = 1): void {
         const canvas = this.gl.canvas as HTMLCanvasElement;
-        const dpr = useDevicePixelRatio ? (window.devicePixelRatio || 1) : 1;
 
         const scaledWidth = Math.floor(width * dpr);
         const scaledHeight = Math.floor(height * dpr);

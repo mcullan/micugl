@@ -1,34 +1,41 @@
-import { jsx as i } from "react/jsx-runtime";
+import { jsx as u } from "react/jsx-runtime";
 import "react";
-import { useUniformUpdaters as p } from "../../hooks/useUniformUpdaters.mjs";
-import { ShaderEngine as u } from "../engine/ShaderEngine.mjs";
-const d = {
+import { useUniformUpdaters as d } from "../../hooks/useUniformUpdaters.mjs";
+import { ShaderEngine as C } from "../engine/ShaderEngine.mjs";
+const E = {
   clear: !0,
   clearColor: [0, 0, 0, 1]
-}, h = ({
+}, U = ({
   programId: r,
   shaderConfig: o,
   uniforms: t,
-  className: s = "",
-  style: a,
-  renderOptions: n = d
+  skipDefaultUniforms: s = !1,
+  width: a,
+  height: n,
+  pixelRatio: m,
+  className: c = "",
+  style: i,
+  renderOptions: p = E
 }) => {
-  const m = { [r]: o }, c = p(r, t);
-  return /* @__PURE__ */ i(
-    u,
+  const f = { [r]: o }, l = d(r, t, { skipDefaultUniforms: s });
+  return /* @__PURE__ */ u(
+    C,
     {
-      programConfigs: m,
-      renderCallback: (l, C, e) => {
+      programConfigs: f,
+      renderCallback: (S, _, e) => {
         e.drawArrays(e.TRIANGLE_STRIP, 0, 4);
       },
-      uniformUpdaters: c,
-      className: s,
-      style: a,
+      uniformUpdaters: l,
+      width: a,
+      height: n,
+      pixelRatio: m,
+      className: c,
+      style: i,
       useFastPath: !0,
-      renderOptions: n
+      renderOptions: p
     }
   );
 };
 export {
-  h as BaseShaderComponent
+  U as BaseShaderComponent
 };

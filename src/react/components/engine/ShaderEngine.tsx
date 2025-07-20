@@ -16,6 +16,8 @@ interface ShaderEngineProps {
     renderOptions?: RenderOptions;
     className?: string;
     style?: CSSProperties;
+    width?: number;
+    height?: number;
     uniformUpdaters?: Record<string, {
         name: string;
         type: UniformType;
@@ -23,6 +25,7 @@ interface ShaderEngineProps {
     }[]>;
     useFastPath?: boolean;
     useDevicePixelRatio?: boolean;
+    pixelRatio?: number;
 }
 
 const DEFAULT_RENDER_OPTIONS: RenderOptions = {};
@@ -40,9 +43,12 @@ export const ShaderEngine = ({
     renderOptions = DEFAULT_RENDER_OPTIONS,
     className = DEFAULT_CLASS_NAME,
     style = DEFAULT_STYLE,
+    width,
+    height,
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
-    useDevicePixelRatio = true
+    useDevicePixelRatio = true,
+    pixelRatio
 }: ShaderEngineProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
@@ -105,12 +111,15 @@ export const ShaderEngine = ({
     const handleResize = useCallback(() => {
         if (!canvasRef.current || !managerRef.current) return;
 
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        const renderWidth = width ?? window.innerWidth;
+        const renderHeight = height ?? window.innerHeight;
 
-        managerRef.current.setSize(width, height, useDevicePixelRatio);
-    }, [useDevicePixelRatio]);
+        const dpr = pixelRatio ?? (useDevicePixelRatio ? window.devicePixelRatio : 1);
 
+        // Sets canvas.width, canvas.height, canvas.style.* and gl.viewport
+        managerRef.current.setSize(renderWidth, renderHeight, dpr);
+    }, [useDevicePixelRatio, pixelRatio, width, height]);
+    
     useEffect(() => {
         if (!canvasRef.current) return;
         const manager = new WebGLManager(canvasRef.current);
@@ -150,7 +159,7 @@ export const ShaderEngine = ({
             manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
         });
     }, [uniformUpdaters]);
-    
+
     return (
         <canvas
             ref={canvasRef}

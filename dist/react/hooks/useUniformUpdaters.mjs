@@ -1,12 +1,14 @@
-import { useMemo as c } from "react";
-import { createCommonUpdaters as n, createUniformUpdater as p } from "../lib/createUniformUpdater.mjs";
-const a = (e, r) => c(() => {
-  const o = n();
-  return Object.entries(r).forEach(([t, s]) => {
-    const u = t.startsWith("u_") ? t : `u_${t}`;
-    o.push(p(u, s.type, s.value));
-  }), { [e]: o };
-}, [e, r]);
+import { useMemo as f } from "react";
+import { createCommonUpdaters as c, createUniformUpdater as i } from "../lib/createUniformUpdater.mjs";
+const n = (u, t, e) => f(() => {
+  const a = (e == null ? void 0 : e.skipDefaultUniforms) ?? !1 ? [] : c().filter(
+    (r) => r.name === "u_time" && !("u_time" in t) || r.name === "u_resolution" && !("u_resolution" in t)
+  );
+  return Object.entries(t).forEach(([r, m]) => {
+    const s = r.startsWith("u_") ? r : `u_${r}`;
+    a.push(i(s, m.type, m.value));
+  }), { [u]: a };
+}, [u, t, e == null ? void 0 : e.skipDefaultUniforms]);
 export {
-  a as useUniformUpdaters
+  n as useUniformUpdaters
 };
