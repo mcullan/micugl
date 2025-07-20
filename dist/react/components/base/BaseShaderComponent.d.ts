@@ -5,6 +5,10 @@ export interface BaseShaderProps {
     programId: string;
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
+    skipDefaultUniforms?: boolean;
+    width?: number;
+    height?: number;
+    pixelRatio?: number;
     className?: string;
     style?: CSSProperties;
     renderOptions?: {
@@ -12,4 +16,4 @@ export interface BaseShaderProps {
         clearColor?: [number, number, number, number];
     };
 }
-export declare const BaseShaderComponent: ({ programId, shaderConfig, uniforms, className, style, renderOptions }: BaseShaderProps) => import("react/jsx-runtime").JSX.Element;
+export declare const BaseShaderComponent: ({ programId, shaderConfig, uniforms, skipDefaultUniforms, width, height, pixelRatio, className, style, renderOptions }: BaseShaderProps) => import("react/jsx-runtime").JSX.Element;

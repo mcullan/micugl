@@ -1,15 +1,15 @@
 var w = Object.defineProperty;
-var b = (m, e, o) => e in m ? w(m, e, { enumerable: !0, configurable: !0, writable: !0, value: o }) : m[e] = o;
-var d = (m, e, o) => b(m, typeof e != "symbol" ? e + "" : e, o);
+var b = (d, e, o) => e in d ? w(d, e, { enumerable: !0, configurable: !0, writable: !0, value: o }) : d[e] = o;
+var m = (d, e, o) => b(d, typeof e != "symbol" ? e + "" : e, o);
 import { FBOManager as E } from "./FBOManager.mjs";
 class A {
   constructor(e, o) {
-    d(this, "gl");
-    d(this, "fboManager");
-    d(this, "resources", /* @__PURE__ */ new Map());
-    d(this, "compileCache", /* @__PURE__ */ new Map());
-    d(this, "uniformUpdateFns", /* @__PURE__ */ new Map());
-    d(this, "extensions", /* @__PURE__ */ new Map());
+    m(this, "gl");
+    m(this, "fboManager");
+    m(this, "resources", /* @__PURE__ */ new Map());
+    m(this, "compileCache", /* @__PURE__ */ new Map());
+    m(this, "uniformUpdateFns", /* @__PURE__ */ new Map());
+    m(this, "extensions", /* @__PURE__ */ new Map());
     const t = {
       alpha: !1,
       depth: !1,
@@ -169,9 +169,9 @@ class A {
       n(o, s, i);
     });
   }
-  setSize(e, o, t = !0) {
-    const r = this.gl.canvas, s = t && window.devicePixelRatio || 1, i = Math.floor(e * s), n = Math.floor(o * s);
-    (r.width !== i || r.height !== n) && (r.width = i, r.height = n, r.style.width = `${e}px`, r.style.height = `${o}px`, this.gl.viewport(0, 0, i, n));
+  setSize(e, o, t = 1) {
+    const r = this.gl.canvas, s = Math.floor(e * t), i = Math.floor(o * t);
+    (r.width !== s || r.height !== i) && (r.width = s, r.height = i, r.style.width = `${e}px`, r.style.height = `${o}px`, this.gl.viewport(0, 0, s, i));
   }
   prepareRender(e, o = {}) {
     const { clear: t = !0, clearColor: r = [0, 0, 0, 1] } = o, s = this.gl, i = this.resources.get(e);

@@ -6,6 +6,8 @@ interface ShaderEngineProps {
     renderOptions?: RenderOptions;
     className?: string;
     style?: CSSProperties;
+    width?: number;
+    height?: number;
     uniformUpdaters?: Record<string, {
         name: string;
         type: UniformType;
@@ -13,6 +15,7 @@ interface ShaderEngineProps {
     }[]>;
     useFastPath?: boolean;
     useDevicePixelRatio?: boolean;
+    pixelRatio?: number;
 }
-export declare const ShaderEngine: ({ programConfigs, renderCallback, renderOptions, className, style, uniformUpdaters, useFastPath, useDevicePixelRatio }: ShaderEngineProps) => import("react/jsx-runtime").JSX.Element;
+export declare const ShaderEngine: ({ programConfigs, renderCallback, renderOptions, className, style, width, height, uniformUpdaters, useFastPath, useDevicePixelRatio, pixelRatio }: ShaderEngineProps) => import("react/jsx-runtime").JSX.Element;
 export {};
