@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import { PerformanceTest } from './PerformanceTest';
 
 export const App = () => {
@@ -20,7 +21,8 @@ export const App = () => {
                 <h1 style={{ fontSize: '16px', fontWeight: 600 }}>micugl Performance Test</h1>
                 
                 <button 
-                    onClick={() => setShowTest(s => !s)}
+                    type='button'
+                    onClick={() => { setShowTest(s => !s) }}
                     style={{
                         padding: '6px 12px',
                         background: showTest ? '#e94560' : '#0f3460',
@@ -36,17 +38,18 @@ export const App = () => {
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     Iterations:
                     <input 
-                        type="range" 
-                        min="1" 
-                        max="16" 
+                        type='range' 
+                        min='1' 
+                        max='16' 
                         value={iterations}
-                        onChange={e => setIterations(Number(e.target.value))}
+                        onChange={e => { setIterations(Number(e.target.value)) }}
                     />
                     <span style={{ minWidth: '20px' }}>{iterations}</span>
                 </label>
 
                 <button 
-                    onClick={() => setTriggerRerender(n => n + 1)}
+                    type='button'
+                    onClick={() => { setTriggerRerender(n => n + 1) }}
                     style={{
                         padding: '6px 12px',
                         background: '#0f3460',

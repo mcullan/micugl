@@ -79,7 +79,7 @@ const metrics: PerformanceMetrics = {
     shaderRenderCount: 0
 };
 
-(window as any).__micuglMetrics = metrics;
+(window as unknown as { __micuglMetrics: PerformanceMetrics }).__micuglMetrics = metrics;
 
 const MetricsDisplay = () => {
     const [displayMetrics, setDisplayMetrics] = useState<PerformanceMetrics>({ ...metrics });
@@ -88,7 +88,7 @@ const MetricsDisplay = () => {
         const interval = setInterval(() => {
             setDisplayMetrics({ ...metrics });
         }, 500);
-        return () => clearInterval(interval);
+        return () => { clearInterval(interval) };
     }, []);
 
     return (
