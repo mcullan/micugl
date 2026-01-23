@@ -12,10 +12,9 @@ interface PingPongPassesOptions {
     };
     customPasses?: RenderPass[];
 }
-export declare const usePingPongPasses: ({ programId, secondaryProgramId, iterations, uniforms, secondaryUniforms, framebufferOptions, renderOptions, customPasses }: PingPongPassesOptions) => {
+interface PingPongPassesResult {
     passes: RenderPass[];
-    framebuffers: {
-        [x: string]: FramebufferOptions;
-    };
-};
+    framebuffers: Record<string, FramebufferOptions>;
+}
+export declare const usePingPongPasses: ({ programId, secondaryProgramId, iterations, uniforms, secondaryUniforms, framebufferOptions, renderOptions, customPasses }: PingPongPassesOptions) => PingPongPassesResult;
 export {};
