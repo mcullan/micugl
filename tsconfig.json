@@ -24,7 +24,7 @@
       "micugl/*": ["dist/*"]
     }
   },
-  "include": ["src/**/*", "examples/**/*"],
+  "include": ["src/**/*", "examples/**/*", "demo/**/*"],
   "exclude": ["node_modules", "dist"],
   "references": [
     {
