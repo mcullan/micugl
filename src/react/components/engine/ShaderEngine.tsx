@@ -111,13 +111,14 @@ export const ShaderEngine = ({
     const handleResize = useCallback(() => {
         if (!canvasRef.current || !managerRef.current) return;
 
-        const renderWidth = width ?? window.innerWidth;
-        const renderHeight = height ?? window.innerHeight;
-
+        const displayWidth = width ?? window.innerWidth;
+        const displayHeight = height ?? window.innerHeight;
         const dpr = pixelRatio ?? (useDevicePixelRatio ? window.devicePixelRatio : 1);
 
-        // Sets canvas.width, canvas.height, canvas.style.* and gl.viewport
-        managerRef.current.setSize(renderWidth, renderHeight, dpr);
+        const renderWidth = Math.floor(displayWidth * dpr);
+        const renderHeight = Math.floor(displayHeight * dpr);
+
+        managerRef.current.setSize(renderWidth, renderHeight, displayWidth, displayHeight);
     }, [useDevicePixelRatio, pixelRatio, width, height]);
     
     useEffect(() => {

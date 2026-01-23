@@ -296,20 +296,25 @@ export class WebGLManager {
             updateFn(time, width, height);
         });
     }
-    setSize(width: number, height: number, dpr = 1): void {
+    setSize(
+        renderWidth: number,
+        renderHeight: number,
+        displayWidth?: number,
+        displayHeight?: number
+    ): void {
         const canvas = this.gl.canvas as HTMLCanvasElement;
 
-        const scaledWidth = Math.floor(width * dpr);
-        const scaledHeight = Math.floor(height * dpr);
+        const actualDisplayWidth = displayWidth ?? renderWidth;
+        const actualDisplayHeight = displayHeight ?? renderHeight;
 
-        if (canvas.width !== scaledWidth || canvas.height !== scaledHeight) {
-            canvas.width = scaledWidth;
-            canvas.height = scaledHeight;
-            canvas.style.width = `${width}px`;
-            canvas.style.height = `${height}px`;
-
-            this.gl.viewport(0, 0, scaledWidth, scaledHeight);
+        if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+            canvas.width = renderWidth;
+            canvas.height = renderHeight;
+            this.gl.viewport(0, 0, renderWidth, renderHeight);
         }
+
+        canvas.style.width = `${actualDisplayWidth}px`;
+        canvas.style.height = `${actualDisplayHeight}px`;
     }
 
     prepareRender(programId: string, options: RenderOptions = {}): void {
