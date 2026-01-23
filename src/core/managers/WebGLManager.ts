@@ -231,49 +231,97 @@ export class WebGLManager {
                 };
                 break;
 
-            case 'vec2':
+            case 'vec2': {
+                const buffer = new Float32Array(2);
                 updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as TypedFloat32Array<2>;
-                    gl.uniform2fv(location, value);
-                    return value;
+                    const value = updateFn(time, width, height) as TypedFloat32Array<2> | number[];
+                    if (Array.isArray(value)) {
+                        buffer[0] = value[0];
+                        buffer[1] = value[1];
+                        gl.uniform2fv(location, buffer);
+                    } else {
+                        gl.uniform2fv(location, value);
+                    }
+                    return buffer as TypedFloat32Array<2>;
                 };
                 break;
-            case 'vec3':
+            }
+            case 'vec3': {
+                const buffer = new Float32Array(3);
                 updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as TypedFloat32Array<3>;
-                    gl.uniform3fv(location, value);
-                    return value;
+                    const value = updateFn(time, width, height) as TypedFloat32Array<3> | number[];
+                    if (Array.isArray(value)) {
+                        buffer[0] = value[0];
+                        buffer[1] = value[1];
+                        buffer[2] = value[2];
+                        gl.uniform3fv(location, buffer);
+                    } else {
+                        gl.uniform3fv(location, value);
+                    }
+                    return buffer as TypedFloat32Array<3>;
                 };
                 break;
-            case 'vec4':
+            }
+            case 'vec4': {
+                const buffer = new Float32Array(4);
                 updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as TypedFloat32Array<4>;
-                    gl.uniform4fv(location, value);
-                    return value;
+                    const value = updateFn(time, width, height) as TypedFloat32Array<4> | number[];
+                    if (Array.isArray(value)) {
+                        buffer[0] = value[0];
+                        buffer[1] = value[1];
+                        buffer[2] = value[2];
+                        buffer[3] = value[3];
+                        gl.uniform4fv(location, buffer);
+                    } else {
+                        gl.uniform4fv(location, value);
+                    }
+                    return buffer as TypedFloat32Array<4>;
                 };
                 break;
+            }
 
-            case 'mat2':
+            case 'mat2': {
+                const buffer = new Float32Array(4);
                 updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as TypedFloat32Array<4>;
-                    gl.uniformMatrix2fv(location, false, value);
-                    return value;
+                    const value = updateFn(time, width, height) as TypedFloat32Array<4> | number[];
+                    if (Array.isArray(value)) {
+                        for (let i = 0; i < 4; i++) buffer[i] = value[i];
+                        gl.uniformMatrix2fv(location, false, buffer);
+                    } else {
+                        gl.uniformMatrix2fv(location, false, value);
+                    }
+                    return buffer as TypedFloat32Array<4>;
                 };
                 break;
-            case 'mat3':
+            }
+            case 'mat3': {
+                const buffer = new Float32Array(9);
                 updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as TypedFloat32Array<9>;
-                    gl.uniformMatrix3fv(location, false, value);
-                    return value;
+                    const value = updateFn(time, width, height) as TypedFloat32Array<9> | number[];
+                    if (Array.isArray(value)) {
+                        for (let i = 0; i < 9; i++) buffer[i] = value[i];
+                        gl.uniformMatrix3fv(location, false, buffer);
+                    } else {
+                        gl.uniformMatrix3fv(location, false, value);
+                    }
+                    return buffer as TypedFloat32Array<9>;
                 };
                 break;
-            case 'mat4':
+            }
+            case 'mat4': {
+                const buffer = new Float32Array(16);
                 updateFunction = (time, width, height) => {
-                    const value = updateFn(time, width, height) as TypedFloat32Array<16>;
-                    gl.uniformMatrix4fv(location, false, value);
-                    return value;
+                    const value = updateFn(time, width, height) as TypedFloat32Array<16> | number[];
+                    if (Array.isArray(value)) {
+                        for (let i = 0; i < 16; i++) buffer[i] = value[i];
+                        gl.uniformMatrix4fv(location, false, buffer);
+                    } else {
+                        gl.uniformMatrix4fv(location, false, value);
+                    }
+                    return buffer as TypedFloat32Array<16>;
                 };
                 break;
+            }
             
             default:
                 throw new Error(`Unsupported uniform type: ${type}`);

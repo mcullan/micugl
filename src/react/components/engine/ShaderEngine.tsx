@@ -136,6 +136,13 @@ export const ShaderEngine = ({
         });
         activeProgram.current = pid;
 
+        const ups = uniformUpdaters[pid];
+        if (ups) {
+            ups.forEach(u => {
+                manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
+            });
+        }
+
         startTimeRef.current = performance.now();
         animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
         window.addEventListener('resize', handleResize);
@@ -145,7 +152,7 @@ export const ShaderEngine = ({
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
             manager.destroyAll();
         };
-    }, [programConfigs, handleResize]);
+    }, [programConfigs, handleResize, uniformUpdaters]);
 
     useEffect(() => {
         const manager = managerRef.current;
