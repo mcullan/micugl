@@ -1,21 +1,21 @@
-import { jsx as y } from "react/jsx-runtime";
-import { useRef as s, useCallback as I, useEffect as g } from "react";
-import { WebGLManager as z } from "../../../core/managers/WebGLManager.mjs";
-const N = {}, b = "", D = {}, P = {}, M = ({
-  programConfigs: E,
-  renderCallback: T,
-  renderOptions: a = N,
-  className: U = b,
-  style: v = D,
-  width: w,
-  height: L,
-  uniformUpdaters: _ = P,
+import { jsx as U } from "react/jsx-runtime";
+import { useRef as s, useCallback as S, useEffect as E } from "react";
+import { WebGLManager as v } from "../../../core/managers/WebGLManager.mjs";
+const z = {}, N = "", b = {}, D = {}, q = ({
+  programConfigs: T,
+  renderCallback: w,
+  renderOptions: a = z,
+  className: I = N,
+  style: h = b,
+  width: L,
+  height: F,
+  uniformUpdaters: f = D,
   useFastPath: A = !1,
-  useDevicePixelRatio: F = !0,
-  pixelRatio: S
+  useDevicePixelRatio: _ = !0,
+  pixelRatio: y
 }) => {
-  const f = s(null), o = s(null), m = s(null), i = s(null), R = s(0), d = s((n) => {
-    const e = o.current, r = m.current;
+  const m = s(null), o = s(null), d = s(null), i = s(null), R = s(0), l = s((n) => {
+    const e = o.current, r = d.current;
     if (!e || !r) return;
     const t = n - R.current, c = e.context;
     if (A)
@@ -23,15 +23,15 @@ const N = {}, b = "", D = {}, P = {}, M = ({
     else {
       const u = e.resources.get(r);
       if (!u) return;
-      e.prepareRender(r, a), p(t, u, c);
+      e.prepareRender(r, a), g(t, u, c);
     }
-    i.current = requestAnimationFrame(d.current);
-  }), p = I((n, e, r) => {
-    T(n, e, r);
-  }, [T]);
-  g(() => {
-    d.current = (n) => {
-      const e = o.current, r = m.current;
+    i.current = requestAnimationFrame(l.current);
+  }), g = S((n, e, r) => {
+    w(n, e, r);
+  }, [w]);
+  E(() => {
+    l.current = (n) => {
+      const e = o.current, r = d.current;
       if (!e || !r) return;
       const t = n - R.current, c = e.context;
       if (A)
@@ -39,47 +39,51 @@ const N = {}, b = "", D = {}, P = {}, M = ({
       else {
         const u = e.resources.get(r);
         if (!u) return;
-        e.prepareRender(r, a), p(t, u, c);
+        e.prepareRender(r, a), g(t, u, c);
       }
-      i.current = requestAnimationFrame(d.current);
+      i.current = requestAnimationFrame(l.current);
     };
-  }, [a, A, p]);
-  const l = I(() => {
-    if (!f.current || !o.current) return;
-    const n = w ?? window.innerWidth, e = L ?? window.innerHeight, r = S ?? (F ? window.devicePixelRatio : 1);
-    o.current.setSize(n, e, r);
-  }, [F, S, w, L]);
-  return g(() => {
-    if (!f.current) return;
-    const n = new z(f.current);
-    o.current = n, l();
-    const [[e, r]] = Object.entries(E);
-    return n.createProgram(e, r), n.createBuffer(e, "a_position", new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1])), n.setAttributeOnce(e, "a_position", {
+  }, [a, A, g]);
+  const p = S(() => {
+    if (!m.current || !o.current) return;
+    const n = L ?? window.innerWidth, e = F ?? window.innerHeight, r = y ?? (_ ? window.devicePixelRatio : 1), t = Math.floor(n * r), c = Math.floor(e * r);
+    o.current.setSize(t, c, n, e);
+  }, [_, y, L, F]);
+  return E(() => {
+    if (!m.current) return;
+    const n = new v(m.current);
+    o.current = n, p();
+    const [[e, r]] = Object.entries(T);
+    n.createProgram(e, r), n.createBuffer(e, "a_position", new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1])), n.setAttributeOnce(e, "a_position", {
       name: "a_position",
       size: 2,
       type: "FLOAT",
       normalized: !1,
       stride: 0,
       offset: 0
-    }), m.current = e, R.current = performance.now(), i.current = requestAnimationFrame(d.current), window.addEventListener("resize", l), () => {
-      window.removeEventListener("resize", l), i.current && cancelAnimationFrame(i.current), n.destroyAll();
+    }), d.current = e;
+    const t = f[e];
+    return t && t.forEach((c) => {
+      n.registerUniformUpdater(e, c.name, c.type, c.updateFn);
+    }), R.current = performance.now(), i.current = requestAnimationFrame(l.current), window.addEventListener("resize", p), () => {
+      window.removeEventListener("resize", p), i.current && cancelAnimationFrame(i.current), n.destroyAll();
     };
-  }, [E, l]), g(() => {
-    const n = o.current, e = m.current;
+  }, [T, p, f]), E(() => {
+    const n = o.current, e = d.current;
     if (!n || !e) return;
-    const r = _[e];
+    const r = f[e];
     r && r.forEach((t) => {
       n.registerUniformUpdater(e, t.name, t.type, t.updateFn);
     });
-  }, [_]), /* @__PURE__ */ y(
+  }, [f]), /* @__PURE__ */ U(
     "canvas",
     {
-      ref: f,
-      className: U,
-      style: v
+      ref: m,
+      className: I,
+      style: h
     }
   );
 };
 export {
-  M as ShaderEngine
+  q as ShaderEngine
 };

@@ -1,68 +1,80 @@
-import { jsx as p } from "react/jsx-runtime";
-import { useRef as i, useCallback as y, useEffect as E } from "react";
-import { WebGLManager as z } from "../../../core/managers/WebGLManager.mjs";
-import { Passes as A } from "../../../core/systems/Passes.mjs";
-const v = "", P = {}, O = ({
-  programConfigs: h,
-  passes: s,
+import { jsx as x } from "react/jsx-runtime";
+import { useRef as s, useCallback as W, useEffect as F } from "react";
+import { WebGLManager as k } from "../../../core/managers/WebGLManager.mjs";
+import { Passes as H } from "../../../core/systems/Passes.mjs";
+const I = "", O = {};
+function z(a) {
+  return a.map(
+    (t) => `${t.programId}|${t.outputFramebuffer ?? "screen"}|${t.inputTextures.map((o) => o.id).join(",")}`
+  ).join("||");
+}
+const C = ({
+  programConfigs: a,
+  passes: t,
   framebuffers: o,
-  className: b = v,
-  style: F = P,
-  useDevicePixelRatio: d = !0
+  className: L = I,
+  style: M = O,
+  width: w,
+  height: h,
+  renderWidth: g,
+  renderHeight: p,
+  useDevicePixelRatio: y = !0,
+  pixelRatio: E
 }) => {
-  const a = i(null), c = i(null), f = i(null), u = i(null), l = i(0), w = i((e) => {
-    const t = c.current, r = f.current;
-    if (!t || !r) return;
-    const n = e - l.current;
-    r.execute(n), u.current = requestAnimationFrame(w.current);
-  }), m = y(() => {
-    if (!a.current || !c.current) return;
-    const e = window.innerWidth, t = window.innerHeight;
-    c.current.setSize(e, t, d);
-    const r = c.current, n = r.context.canvas;
-    Object.entries(o ?? []).forEach(([L, g]) => {
-      const R = g.width || n.width, S = g.height || n.height;
-      r.fbo.resizeFramebuffer(L, R, S);
+  const u = s(null), c = s(null), m = s(null), d = s(null), R = s(0), l = s(""), _ = s((e) => {
+    const r = c.current, n = m.current;
+    if (!r || !n) return;
+    const i = e - R.current;
+    n.execute(i), d.current = requestAnimationFrame(_.current);
+  }), f = W(() => {
+    if (!u.current || !c.current) return;
+    const e = w ?? window.innerWidth, r = h ?? window.innerHeight, n = E ?? (y ? window.devicePixelRatio : 1), i = g ?? Math.floor(e * n), P = p ?? Math.floor(r * n);
+    c.current.setSize(i, P, e, r);
+    const b = c.current, S = b.context.canvas;
+    Object.entries(o ?? {}).forEach(([v, A]) => {
+      const j = A.width || S.width, T = A.height || S.height;
+      b.fbo.resizeFramebuffer(v, j, T);
     });
-  }, [o, d]);
-  return E(() => {
-    if (a.current)
-      try {
-        const e = new z(a.current);
-        c.current = e, Object.entries(h).forEach(([r, n]) => {
-          e.createProgram(r, n);
-        }), Object.entries(o ?? []).forEach(([r, n]) => {
-          e.fbo.createFramebuffer(r, n);
-        });
-        const t = new A(e);
-        return f.current = t, s.forEach((r) => {
-          t.addPass(r);
-        }), t.initializeResources(), m(), l.current = performance.now(), u.current = requestAnimationFrame(w.current), window.addEventListener("resize", m), () => {
-          window.removeEventListener("resize", m), u.current && cancelAnimationFrame(u.current), c.current && c.current.destroyAll();
-        };
-      } catch (e) {
-        return console.error("Failed to initialize WebGL:", e), () => {
-        };
-      }
-  }, [h, s, o, m]), E(() => {
-    const e = f.current;
-    e && (e.clearPasses(), s.forEach((t) => {
-      e.addPass(t);
-    }), e.initializeResources());
-  }, [s]), /* @__PURE__ */ p(
+  }, [o, w, h, g, p, y, E]);
+  return F(() => {
+    if (!u.current) return;
+    const e = new k(u.current);
+    c.current = e, Object.entries(a).forEach(([n, i]) => {
+      e.createProgram(n, i);
+    }), Object.entries(o ?? {}).forEach(([n, i]) => {
+      e.fbo.createFramebuffer(n, i);
+    });
+    const r = new H(e);
+    return m.current = r, t.forEach((n) => {
+      r.addPass(n);
+    }), l.current = z(t), r.initializeResources(), f(), R.current = performance.now(), d.current = requestAnimationFrame(_.current), window.addEventListener("resize", f), () => {
+      window.removeEventListener("resize", f), d.current && cancelAnimationFrame(d.current), c.current && c.current.destroyAll();
+    };
+  }, [a, o, f]), F(() => {
+    const e = m.current;
+    if (!e) return;
+    const r = z(t);
+    if (r === l.current) {
+      typeof window < "u" && window.__micuglMetrics && window.__micuglMetrics.engineSkippedInits++;
+      return;
+    }
+    l.current = r, typeof window < "u" && window.__micuglMetrics && window.__micuglMetrics.engineActualInits++, e.clearPasses(), t.forEach((n) => {
+      e.addPass(n);
+    }), e.initializeResources();
+  }, [t]), /* @__PURE__ */ x(
     "canvas",
     {
-      ref: a,
-      className: b,
+      ref: u,
+      className: L,
       style: {
         width: "100%",
         height: "100%",
         display: "block",
-        ...F
+        ...M
       }
     }
   );
 };
 export {
-  O as PingPongShaderEngine
+  C as PingPongShaderEngine
 };

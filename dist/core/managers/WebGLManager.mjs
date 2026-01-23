@@ -1,15 +1,15 @@
-var w = Object.defineProperty;
-var b = (d, e, o) => e in d ? w(d, e, { enumerable: !0, configurable: !0, writable: !0, value: o }) : d[e] = o;
-var m = (d, e, o) => b(d, typeof e != "symbol" ? e + "" : e, o);
+var b = Object.defineProperty;
+var A = (d, e, o) => e in d ? b(d, e, { enumerable: !0, configurable: !0, writable: !0, value: o }) : d[e] = o;
+var w = (d, e, o) => A(d, typeof e != "symbol" ? e + "" : e, o);
 import { FBOManager as E } from "./FBOManager.mjs";
-class A {
+class x {
   constructor(e, o) {
-    m(this, "gl");
-    m(this, "fboManager");
-    m(this, "resources", /* @__PURE__ */ new Map());
-    m(this, "compileCache", /* @__PURE__ */ new Map());
-    m(this, "uniformUpdateFns", /* @__PURE__ */ new Map());
-    m(this, "extensions", /* @__PURE__ */ new Map());
+    w(this, "gl");
+    w(this, "fboManager");
+    w(this, "resources", /* @__PURE__ */ new Map());
+    w(this, "compileCache", /* @__PURE__ */ new Map());
+    w(this, "uniformUpdateFns", /* @__PURE__ */ new Map());
+    w(this, "extensions", /* @__PURE__ */ new Map());
     const t = {
       alpha: !1,
       depth: !1,
@@ -29,27 +29,27 @@ class A {
     return this.extensions.set(e, o), o;
   }
   createProgram(e, o) {
-    const { vertexShader: t, fragmentShader: r, uniforms: s, attributes: i } = o, n = this.gl, h = this.getOrCompileShader("vertex:" + t, n.VERTEX_SHADER, t), l = this.getOrCompileShader("fragment:" + r, n.FRAGMENT_SHADER, r), f = n.createProgram();
-    if (!f)
+    const { vertexShader: t, fragmentShader: r, uniforms: s, attributes: f } = o, n = this.gl, u = this.getOrCompileShader("vertex:" + t, n.VERTEX_SHADER, t), m = this.getOrCompileShader("fragment:" + r, n.FRAGMENT_SHADER, r), i = n.createProgram();
+    if (!i)
       throw new Error("Failed to create WebGL program");
-    if (n.attachShader(f, h), n.attachShader(f, l), n.linkProgram(f), !n.getProgramParameter(f, n.LINK_STATUS)) {
-      const g = n.getProgramInfoLog(f);
-      throw n.deleteProgram(f), new Error(`Could not link shader program: ${g}`);
+    if (n.attachShader(i, u), n.attachShader(i, m), n.linkProgram(i), !n.getProgramParameter(i, n.LINK_STATUS)) {
+      const a = n.getProgramInfoLog(i);
+      throw n.deleteProgram(i), new Error(`Could not link shader program: ${a}`);
     }
-    const c = {};
-    for (const g of s)
-      c[g.name] = n.getUniformLocation(f, g.name);
-    const u = {};
-    if (i)
-      for (const g of i)
-        u[g.name] = n.getAttribLocation(f, g.name);
-    const a = {
-      program: f,
-      uniforms: c,
-      attributes: u,
+    const l = {};
+    for (const a of s)
+      l[a.name] = n.getUniformLocation(i, a.name);
+    const h = {};
+    if (f)
+      for (const a of f)
+        h[a.name] = n.getAttribLocation(i, a.name);
+    const c = {
+      program: i,
+      uniforms: l,
+      attributes: h,
       buffers: {}
     };
-    return this.resources.set(e, a), this.uniformUpdateFns.set(e, /* @__PURE__ */ new Map()), a;
+    return this.resources.set(e, c), this.uniformUpdateFns.set(e, /* @__PURE__ */ new Map()), c;
   }
   getOrCompileShader(e, o, t) {
     if (this.compileCache.has(e)) {
@@ -74,110 +74,137 @@ class A {
     const r = this.gl, s = this.resources.get(e);
     if (!s)
       throw new Error(`Program with id ${e} not found`);
-    const i = r.createBuffer();
-    if (!i)
+    const f = r.createBuffer();
+    if (!f)
       throw new Error("Failed to create buffer");
-    return r.bindBuffer(r.ARRAY_BUFFER, i), r.bufferData(r.ARRAY_BUFFER, t, r.STATIC_DRAW), s.buffers[o] = { buffer: i, data: t }, i;
+    return r.bindBuffer(r.ARRAY_BUFFER, f), r.bufferData(r.ARRAY_BUFFER, t, r.STATIC_DRAW), s.buffers[o] = { buffer: f, data: t }, f;
   }
   updateBuffer(e, o, t) {
     const r = this.gl, s = this.resources.get(e);
     if (!s)
       throw new Error(`Program with id ${e} not found`);
-    const i = s.buffers[o];
-    if (!i)
+    const f = s.buffers[o];
+    if (!f)
       throw new Error(`Buffer for attribute ${o} not found`);
-    r.bindBuffer(r.ARRAY_BUFFER, i.buffer), r.bufferData(r.ARRAY_BUFFER, t, r.STATIC_DRAW), i.data = t;
+    r.bindBuffer(r.ARRAY_BUFFER, f.buffer), r.bufferData(r.ARRAY_BUFFER, t, r.STATIC_DRAW), f.data = t;
   }
   registerUniformUpdater(e, o, t, r) {
     const s = this.resources.get(e);
     if (!s)
       throw new Error(`Program with id ${e} not found`);
-    const i = this.uniformUpdateFns.get(e);
-    if (!i)
+    const f = this.uniformUpdateFns.get(e);
+    if (!f)
       throw new Error(`Program uniforms for id ${e} not found`);
     const n = s.uniforms[o];
     if (n === null)
       return;
-    const h = this.gl;
-    let l;
+    const u = this.gl;
+    let m;
     switch (t) {
       case "int":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniform1i(n, a), a;
+        m = (i, l, h) => {
+          const c = r(i, l, h);
+          return u.uniform1i(n, c), c;
         };
         break;
       case "float":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniform1f(n, a), a;
+        m = (i, l, h) => {
+          const c = r(i, l, h);
+          return u.uniform1f(n, c), c;
         };
         break;
       case "sampler2D":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniform1i(n, a), a;
+        m = (i, l, h) => {
+          const c = r(i, l, h);
+          return u.uniform1i(n, c), c;
         };
         break;
-      case "vec2":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniform2fv(n, a), a;
+      case "vec2": {
+        const i = new Float32Array(2);
+        m = (l, h, c) => {
+          const a = r(l, h, c);
+          return Array.isArray(a) ? (i[0] = a[0], i[1] = a[1], u.uniform2fv(n, i)) : u.uniform2fv(n, a), i;
         };
         break;
-      case "vec3":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniform3fv(n, a), a;
+      }
+      case "vec3": {
+        const i = new Float32Array(3);
+        m = (l, h, c) => {
+          const a = r(l, h, c);
+          return Array.isArray(a) ? (i[0] = a[0], i[1] = a[1], i[2] = a[2], u.uniform3fv(n, i)) : u.uniform3fv(n, a), i;
         };
         break;
-      case "vec4":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniform4fv(n, a), a;
+      }
+      case "vec4": {
+        const i = new Float32Array(4);
+        m = (l, h, c) => {
+          const a = r(l, h, c);
+          return Array.isArray(a) ? (i[0] = a[0], i[1] = a[1], i[2] = a[2], i[3] = a[3], u.uniform4fv(n, i)) : u.uniform4fv(n, a), i;
         };
         break;
-      case "mat2":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniformMatrix2fv(n, !1, a), a;
+      }
+      case "mat2": {
+        const i = new Float32Array(4);
+        m = (l, h, c) => {
+          const a = r(l, h, c);
+          if (Array.isArray(a)) {
+            for (let g = 0; g < 4; g++) i[g] = a[g];
+            u.uniformMatrix2fv(n, !1, i);
+          } else
+            u.uniformMatrix2fv(n, !1, a);
+          return i;
         };
         break;
-      case "mat3":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniformMatrix3fv(n, !1, a), a;
+      }
+      case "mat3": {
+        const i = new Float32Array(9);
+        m = (l, h, c) => {
+          const a = r(l, h, c);
+          if (Array.isArray(a)) {
+            for (let g = 0; g < 9; g++) i[g] = a[g];
+            u.uniformMatrix3fv(n, !1, i);
+          } else
+            u.uniformMatrix3fv(n, !1, a);
+          return i;
         };
         break;
-      case "mat4":
-        l = (f, c, u) => {
-          const a = r(f, c, u);
-          return h.uniformMatrix4fv(n, !1, a), a;
+      }
+      case "mat4": {
+        const i = new Float32Array(16);
+        m = (l, h, c) => {
+          const a = r(l, h, c);
+          if (Array.isArray(a)) {
+            for (let g = 0; g < 16; g++) i[g] = a[g];
+            u.uniformMatrix4fv(n, !1, i);
+          } else
+            u.uniformMatrix4fv(n, !1, a);
+          return i;
         };
         break;
+      }
       default:
         throw new Error(`Unsupported uniform type: ${t}`);
     }
-    i.set(o, l);
+    f.set(o, m);
   }
   updateUniforms(e, o) {
     const t = this.uniformUpdateFns.get(e);
     if (!t)
       return;
-    const r = this.gl.canvas, s = r.width, i = r.height;
+    const r = this.gl.canvas, s = r.width, f = r.height;
     t.forEach((n) => {
-      n(o, s, i);
+      n(o, s, f);
     });
   }
-  setSize(e, o, t = 1) {
-    const r = this.gl.canvas, s = Math.floor(e * t), i = Math.floor(o * t);
-    (r.width !== s || r.height !== i) && (r.width = s, r.height = i, r.style.width = `${e}px`, r.style.height = `${o}px`, this.gl.viewport(0, 0, s, i));
+  setSize(e, o, t, r) {
+    const s = this.gl.canvas, f = t ?? e, n = r ?? o;
+    (s.width !== e || s.height !== o) && (s.width = e, s.height = o, this.gl.viewport(0, 0, e, o)), s.style.width = `${f}px`, s.style.height = `${n}px`;
   }
   prepareRender(e, o = {}) {
-    const { clear: t = !0, clearColor: r = [0, 0, 0, 1] } = o, s = this.gl, i = this.resources.get(e);
-    if (!i)
+    const { clear: t = !0, clearColor: r = [0, 0, 0, 1] } = o, s = this.gl, f = this.resources.get(e);
+    if (!f)
       throw new Error(`Program with id ${e} not found`);
-    s.useProgram(i.program), t && (s.clearColor(...r), s.clear(s.COLOR_BUFFER_BIT));
+    s.useProgram(f.program), t && (s.clearColor(...r), s.clear(s.COLOR_BUFFER_BIT));
   }
   fastRender(e, o, t = !0) {
     const r = this.gl, s = this.resources.get(e);
@@ -186,12 +213,12 @@ class A {
     r.useProgram(s.program), t && r.clear(r.COLOR_BUFFER_BIT), this.updateUniforms(e, o);
   }
   setUniform(e, o, t, r) {
-    const s = this.gl, i = this.resources.get(e);
-    if (!i)
+    const s = this.gl, f = this.resources.get(e);
+    if (!f)
       throw new Error(`Program with id ${e} not found`);
-    const n = i.uniforms[o];
+    const n = f.uniforms[o];
     if (n !== null)
-      switch (s.useProgram(i.program), r) {
+      switch (s.useProgram(f.program), r) {
         case "float":
           s.uniform1f(n, t);
           break;
@@ -227,27 +254,27 @@ class A {
     const r = this.gl, s = this.resources.get(e);
     if (!s)
       throw new Error(`Program with id ${e} not found`);
-    const i = s.attributes[o];
-    if (i === -1) {
+    const f = s.attributes[o];
+    if (f === -1) {
       console.warn(`Attribute ${o} not found or is unused`);
       return;
     }
     const n = s.buffers[o];
     if (!n)
       throw new Error(`Buffer for attribute ${o} not found`);
-    if (r.bindBuffer(r.ARRAY_BUFFER, n.buffer), r.enableVertexAttribArray(i), r.vertexAttribPointer(
-      i,
+    if (r.bindBuffer(r.ARRAY_BUFFER, n.buffer), r.enableVertexAttribArray(f), r.vertexAttribPointer(
+      f,
       t.size,
       r[t.type],
       t.normalized,
       t.stride,
       t.offset
     ), t.instanced) {
-      const h = this.getExtension("ANGLE_instanced_arrays");
-      if (h != null && h.vertexAttribDivisorANGLE)
-        h.vertexAttribDivisorANGLE(i, 1);
+      const u = this.getExtension("ANGLE_instanced_arrays");
+      if (u != null && u.vertexAttribDivisorANGLE)
+        u.vertexAttribDivisorANGLE(f, 1);
       else if (r.vertexAttribDivisor)
-        r.vertexAttribDivisor(i, 1);
+        r.vertexAttribDivisor(f, 1);
       else
         throw new Error("Instanced rendering not supported");
     }
@@ -277,5 +304,5 @@ class A {
   }
 }
 export {
-  A as WebGLManager
+  x as WebGLManager
 };
