@@ -147,5 +147,17 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': 'off',
     },
+  },
+  {
+    files: ['bench/**/*.{ts,tsx}', 'playwright.config.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      }
+    },
+    rules: {
+      'no-restricted-imports': 'off',
+    },
   }
 );
