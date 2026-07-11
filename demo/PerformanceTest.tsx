@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { createShaderConfig } from '../src/core/lib/createShaderConfig';
+import { GL_FLOAT, GL_LINEAR } from '../src/core/lib/glConstants';
 import { vec3 } from '../src/core/lib/vectorUtils';
 import { PingPongShaderEngine } from '../src/react/components/engine/PingPongShaderEngine';
 import { usePingPongPasses } from '../src/react/hooks/usePingPongPasses';
@@ -142,10 +143,11 @@ const ShaderScene = memo(({ iterations }: { iterations: number }) => {
         framebufferOptions: {
             width: 0,
             height: 0,
-            textureCount: 2,
+            textureCount: 1,
             textureOptions: {
-                minFilter: WebGLRenderingContext.LINEAR,
-                magFilter: WebGLRenderingContext.LINEAR
+                type: GL_FLOAT,
+                minFilter: GL_LINEAR,
+                magFilter: GL_LINEAR
             }
         }
     });

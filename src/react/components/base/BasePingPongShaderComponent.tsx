@@ -15,6 +15,7 @@ export interface BasePingPongShaderProps {
     uniforms: Record<string, UniformParam>;
     secondaryUniforms?: Record<string, UniformParam>;
     framebufferOptions?: FramebufferOptions;
+    framebuffers?: Record<string, FramebufferOptions>;
     className?: string;
     style?: CSSProperties;
     customPasses?: RenderPass[];
@@ -38,6 +39,7 @@ const BasePingPongShaderComponentImpl = ({
     uniforms,
     secondaryUniforms,
     framebufferOptions,
+    framebuffers: framebuffersOverride,
     className = '',
     style,
     customPasses,
@@ -61,7 +63,8 @@ const BasePingPongShaderComponentImpl = ({
         secondaryUniforms,
         framebufferOptions,
         renderOptions,
-        customPasses
+        customPasses,
+        framebuffers: framebuffersOverride
     });
 
     return (

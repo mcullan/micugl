@@ -1,10 +1,13 @@
 import type { RenderPass } from '@/core';
 import type { WebGLManager } from '@/core';
+import type { CompiledPass } from '@/core/lib/passPlanning';
+import { compilePass } from '@/core/lib/passPlanning';
 
 export class Passes {
     private webglManager: WebGLManager;
     private passes: RenderPass[] = [];
     private pingPongIds = new Set<string>();
+    private compiled: CompiledPass[] | null = null;
 
     constructor(webglManager: WebGLManager) {
         this.webglManager = webglManager;
@@ -12,96 +15,84 @@ export class Passes {
 
     addPass(pass: RenderPass): void {
         this.passes.push(pass);
-    
+
         if (pass.outputFramebuffer) {
             this.pingPongIds.add(pass.outputFramebuffer);
         }
-    
+
         pass.inputTextures.forEach(texture => {
             if (texture.bindingType === 'readwrite') {
                 this.pingPongIds.add(texture.id);
             }
         });
+
+        this.compiled = null;
     }
 
     clearPasses(): void {
         this.passes = [];
         this.pingPongIds.clear();
+        this.compiled = null;
+    }
+
+    private compilePasses(): CompiledPass[] {
+        const isPingPong = (id: string): boolean => this.pingPongIds.has(id);
+        return this.passes.map(pass => compilePass(pass, isPingPong));
     }
 
     execute(time: number): void {
         const gl = this.webglManager.context;
         const fbo = this.webglManager.fbo;
-    
-        for (const pass of this.passes) {
-            if (pass.outputFramebuffer) {
-                if (this.pingPongIds.has(pass.outputFramebuffer)) {
-                    const { write } = fbo.getPingPongIndices(pass.outputFramebuffer);
-                    fbo.bindFramebuffer(pass.outputFramebuffer, write);
+
+        this.compiled ??= this.compilePasses();
+
+        for (const pass of this.compiled) {
+            if (pass.outputFramebuffer !== null) {
+                if (pass.outputIsPingPong) {
+                    fbo.bindFramebuffer(pass.outputFramebuffer, fbo.getWriteIndex(pass.outputFramebuffer));
                 } else {
                     fbo.bindFramebuffer(pass.outputFramebuffer);
                 }
             } else {
                 fbo.bindFramebuffer(null);
             }
-      
+
             this.webglManager.prepareRender(pass.programId, pass.renderOptions);
-      
-            pass.inputTextures.forEach(texture => {
-                let textureIndex = texture.bindingType === 'read' ? 0 : 1;
-        
-                if (this.pingPongIds.has(texture.id)) {
-                    const { read, write } = fbo.getPingPongIndices(texture.id);
-                    textureIndex = texture.bindingType === 'read' || texture.bindingType === 'readwrite' 
-                        ? read : write;
+
+            for (const input of pass.inputs) {
+                let textureIndex = input.staticIndex;
+                if (input.isPingPong) {
+                    textureIndex = input.pingPongUseReadIndex
+                        ? fbo.getReadIndex(input.id)
+                        : fbo.getWriteIndex(input.id);
                 }
-        
-                fbo.bindTexture(texture.id, texture.textureUnit, textureIndex);
-        
-                this.webglManager.setUniform(
-                    pass.programId,
-          `u_${texture.id}`,
-          texture.textureUnit,
-          'sampler2D'
-                );
-            });
-      
+
+                fbo.bindTexture(input.id, input.textureUnit, textureIndex);
+                this.webglManager.setUniform(pass.programId, input.samplerName, input.textureUnit, 'sampler2D');
+            }
+
             this.webglManager.updateUniforms(pass.programId, time);
-      
-            if (pass.uniforms) {
-                Object.entries(pass.uniforms).forEach(([name, uniform]) => {
-                    const value = typeof uniform.value === 'function'
-                        ? uniform.value(time, gl.canvas.width, gl.canvas.height)
-                        : uniform.value;
-          
-                    this.webglManager.setUniform(
-                        pass.programId, 
-                        name, 
-                        value, 
-                        uniform.type
-                    );
-                });
+
+            for (const uniform of pass.uniforms) {
+                const value = typeof uniform.value === 'function'
+                    ? uniform.value(time, gl.canvas.width, gl.canvas.height)
+                    : uniform.value;
+
+                this.webglManager.setUniform(pass.programId, uniform.name, value, uniform.type);
             }
-      
+
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      
-            if (pass.outputFramebuffer && this.pingPongIds.has(pass.outputFramebuffer)) {
-                fbo.swapTextures(pass.outputFramebuffer);
+
+            for (const id of pass.swapIds) {
+                fbo.swapTextures(id);
             }
-      
-            pass.inputTextures.forEach(texture => {
-                if (texture.bindingType === 'readwrite' && this.pingPongIds.has(texture.id)) {
-                    fbo.swapTextures(texture.id);
-                }
-            });
         }
     }
-  
+
     initializeResources(): void {
         for (const pass of this.passes) {
             const resources = this.webglManager.resources.get(pass.programId);
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            if (resources && !resources.buffers.a_position) {
+            if (resources && !('a_position' in resources.buffers)) {
                 this.webglManager.createBuffer(
                     pass.programId,
                     'a_position',
@@ -112,7 +103,7 @@ export class Passes {
                         1.0, 1.0,
                     ])
                 );
-        
+
                 this.webglManager.setAttributeOnce(pass.programId, 'a_position', {
                     name: 'a_position',
                     size: 2,

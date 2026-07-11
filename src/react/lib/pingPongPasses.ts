@@ -1,3 +1,4 @@
+import { GL_FLOAT, GL_LINEAR } from '@/core/lib/glConstants';
 import type {
     FramebufferOptions,
     RenderPass,
@@ -16,15 +17,14 @@ export interface PingPongPassesResult {
     framebuffers: Record<string, FramebufferOptions>;
 }
 
-const LINEAR = 9729;
-
 export const DEFAULT_FRAMEBUFFER_OPTIONS: FramebufferOptions = {
     width: 0,
     height: 0,
-    textureCount: 2,
+    textureCount: 1,
     textureOptions: {
-        minFilter: LINEAR,
-        magFilter: LINEAR
+        type: GL_FLOAT,
+        minFilter: GL_LINEAR,
+        magFilter: GL_LINEAR
     }
 };
 
@@ -64,18 +64,19 @@ export function buildPasses(
     secondaryUniforms: Record<string, UniformUpdaterDef[]>,
     framebufferOptions: FramebufferOptions,
     renderOptions: PingPongRenderOptions,
-    customPasses: RenderPass[] | undefined
+    customPasses: RenderPass[] | undefined,
+    framebuffersOverride?: Record<string, FramebufferOptions>
 ): PingPongPassesResult {
+    if (customPasses) {
+        return { passes: customPasses, framebuffers: framebuffersOverride ?? {} };
+    }
+
     const fbIdA = `${programId}-fb-a`;
     const fbIdB = `${programId}-fb-b`;
     const framebuffers = {
         [fbIdA]: framebufferOptions,
         [fbIdB]: framebufferOptions
     };
-
-    if (customPasses) {
-        return { passes: customPasses, framebuffers };
-    }
 
     const passes: RenderPass[] = [{
         programId,
@@ -100,7 +101,7 @@ export function buildPasses(
 
         passes.push({
             programId: currentProgramId,
-            inputTextures: [{ id: sourceId, textureUnit: 0, bindingType: 'read' }],
+            inputTextures: [{ id: sourceId, textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
             outputFramebuffer: targetId,
             uniforms: passUniformsFrom(updaters),
             renderOptions
@@ -116,7 +117,7 @@ export function buildPasses(
 
     passes.push({
         programId: finalProgramId,
-        inputTextures: [{ id: lastTarget, textureUnit: 0, bindingType: 'read' }],
+        inputTextures: [{ id: lastTarget, textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
         outputFramebuffer: null,
         uniforms: passUniformsFrom(finalUpdaters),
         renderOptions

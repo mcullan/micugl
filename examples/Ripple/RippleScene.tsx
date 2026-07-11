@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useRef } from 'react';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { GL_FLOAT, GL_LINEAR } from '@/core/lib/glConstants';
 import { vec2, vec3 } from '@/core/lib/vectorUtils';
 import { BasePingPongShaderComponent } from '@/react/components/base/BasePingPongShaderComponent';
 
@@ -135,10 +136,11 @@ export const Ripple = ({
             framebufferOptions={{
                 width: 0,
                 height: 0,
-                textureCount: 2,
+                textureCount: 1,
                 textureOptions: {
-                    minFilter: WebGLRenderingContext.LINEAR,
-                    magFilter: WebGLRenderingContext.LINEAR
+                    type: GL_FLOAT,
+                    minFilter: GL_LINEAR,
+                    magFilter: GL_LINEAR
                 }
             }}
             uniforms={{

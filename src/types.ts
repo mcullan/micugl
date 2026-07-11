@@ -101,7 +101,16 @@ export interface TextureOptions {
   magFilter?: number;
   wrapS?: number;
   wrapT?: number;
-  generateMipmap?: boolean;
+}
+
+export interface ResolvedTextureOptions {
+  internalFormat: number;
+  format: number;
+  type: number;
+  minFilter: number;
+  magFilter: number;
+  wrapS: number;
+  wrapT: number;
 }
 
 export interface FramebufferResources {
@@ -110,6 +119,8 @@ export interface FramebufferResources {
   currentTextureIndex: number;
   width: number;
   height: number;
+  textureOptions: ResolvedTextureOptions;
+  lastBoundTextureIndex: number;
 }
 
 export interface FramebufferOptions {
@@ -128,6 +139,7 @@ export interface TextureBinding {
   id: string;
   textureUnit: number;
   bindingType: 'read' | 'write' | 'readwrite';
+  samplerName?: string;
 }
 
 export type RenderPassUniformUpdateFn = (

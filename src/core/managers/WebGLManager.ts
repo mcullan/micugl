@@ -28,6 +28,7 @@ export class WebGLManager {
     private compileCache = new Map<string, WebGLShader>();
     private uniformUpdateFns = new Map<string, Map<string, UniformUpdateFn<UniformType>>>();
     private extensions = new Map<string, any>();
+    private currentProgram: WebGLProgram | null = null;
 
     constructor(canvas: HTMLCanvasElement, options?: WebGLContextAttributes) {
         const defaultOptions: WebGLContextAttributes = {
@@ -267,11 +268,18 @@ export class WebGLManager {
         if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
             canvas.width = renderWidth;
             canvas.height = renderHeight;
-            this.gl.viewport(0, 0, renderWidth, renderHeight);
+            this.fboManager.setCanvasViewport(renderWidth, renderHeight);
         }
 
         canvas.style.width = `${actualDisplayWidth}px`;
         canvas.style.height = `${actualDisplayHeight}px`;
+    }
+
+    private useProgram(program: WebGLProgram): void {
+        if (this.currentProgram !== program) {
+            this.gl.useProgram(program);
+            this.currentProgram = program;
+        }
     }
 
     prepareRender(programId: string, options: RenderOptions = {}): void {
@@ -283,7 +291,7 @@ export class WebGLManager {
             throw new Error(`Program with id ${programId} not found`);
         }
 
-        gl.useProgram(resources.program);
+        this.useProgram(resources.program);
 
         if (clear) {
             gl.clearColor(...clearColor);
@@ -298,7 +306,7 @@ export class WebGLManager {
         if (!resources) {
             throw new Error(`Program with id ${programId} not found`);
         }
-        gl.useProgram(resources.program);
+        this.useProgram(resources.program);
 
         if (clear) {
             gl.clear(gl.COLOR_BUFFER_BIT);
@@ -321,12 +329,12 @@ export class WebGLManager {
         }
   
         const location = resources.uniforms[uniformName];
-        if (location === null) {
+        if (!location) {
             return;
         }
-  
-        gl.useProgram(resources.program);
-  
+
+        this.useProgram(resources.program);
+
         switch (type) {
             case 'float':
                 gl.uniform1f(location, value as number);
@@ -420,6 +428,10 @@ export class WebGLManager {
             gl.deleteBuffer(buffer);
         });
 
+        if (this.currentProgram === resources.program) {
+            this.currentProgram = null;
+        }
+
         gl.deleteProgram(resources.program);
         this.resources.delete(programId);
         this.uniformUpdateFns.delete(programId);
@@ -430,7 +442,11 @@ export class WebGLManager {
             this.destroy(id);
         }
 
+        this.compileCache.forEach(shader => {
+            this.gl.deleteShader(shader);
+        });
         this.compileCache.clear();
+        this.currentProgram = null;
         this.fboManager.destroyAll();
     }
 
