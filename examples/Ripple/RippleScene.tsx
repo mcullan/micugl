@@ -144,7 +144,7 @@ export const Ripple = ({
             uniforms={{
                 u_mouse: {
                     type: 'vec2',
-                    value: vec2(mousePos.current)
+                    value: () => vec2(mousePos.current)
                 },
                 u_mouseForce: {
                     type: 'float',

@@ -27,24 +27,6 @@ interface PingPongShaderEngineProps {
 const DEFAULT_CLASS_NAME = '';
 const DEFAULT_STYLE: CSSProperties = {};
 
-interface EngineInitMetrics {
-    engineSkippedInits: number;
-    engineActualInits: number;
-}
-
-function readEngineMetrics(): EngineInitMetrics | undefined {
-    if (typeof window === 'undefined') {
-        return undefined;
-    }
-    return (window as unknown as { __micuglMetrics?: EngineInitMetrics }).__micuglMetrics;
-}
-
-function serializePasses(passes: RenderPass[]): string {
-    return passes.map(p =>
-        `${p.programId}|${p.outputFramebuffer ?? 'screen'}|${p.inputTextures.map(t => t.id).join(',')}`
-    ).join('||');
-}
-
 const PingPongShaderEngineComponent = ({
     programConfigs,
     passes,
@@ -65,7 +47,7 @@ const PingPongShaderEngineComponent = ({
     const passSystemRef = useRef<Passes | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const startTimeRef = useRef<number>(0);
-    const passesKeyRef = useRef<string>('');
+    const appliedPassesRef = useRef<RenderPass[] | null>(null);
 
     const renderLoopRef = useRef<(time: number) => void>((time: number) => {
         const manager = managerRef.current;
@@ -132,7 +114,7 @@ const PingPongShaderEngineComponent = ({
         initialPasses.forEach(pass => {
             passSystem.addPass(pass);
         });
-        passesKeyRef.current = serializePasses(initialPasses);
+        appliedPassesRef.current = initialPasses;
 
         passSystem.initializeResources();
 
@@ -168,19 +150,10 @@ const PingPongShaderEngineComponent = ({
         const passSystem = passSystemRef.current;
         if (!passSystem) return;
 
-        const metrics = readEngineMetrics();
-        const newKey = serializePasses(passes);
-        if (newKey === passesKeyRef.current) {
-            if (metrics) {
-                metrics.engineSkippedInits++;
-            }
+        if (passes === appliedPassesRef.current) {
             return;
         }
-        passesKeyRef.current = newKey;
-
-        if (metrics) {
-            metrics.engineActualInits++;
-        }
+        appliedPassesRef.current = passes;
 
         passSystem.clearPasses();
         passes.forEach(pass => {
