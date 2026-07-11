@@ -7,6 +7,7 @@ export interface GlCountersData {
     framebufferTexture2D: number;
     checkFramebufferStatus: number;
     useProgram: number;
+    uniformCalls: number;
     drawArrays: number;
     drawElements: number;
     bufferData: number;
@@ -49,6 +50,7 @@ export function installInstrumentation(): void {
         framebufferTexture2D: 0,
         checkFramebufferStatus: 0,
         useProgram: 0,
+        uniformCalls: 0,
         drawArrays: 0,
         drawElements: 0,
         bufferData: 0,
@@ -138,6 +140,9 @@ export function installInstrumentation(): void {
     wrap('framebufferTexture2D', () => { data.framebufferTexture2D += 1 });
     wrap('checkFramebufferStatus', () => { data.checkFramebufferStatus += 1 });
     wrap('useProgram', () => { data.useProgram += 1 });
+    for (const name of ['uniform1f', 'uniform1i', 'uniform2fv', 'uniform3fv', 'uniform4fv', 'uniformMatrix2fv', 'uniformMatrix3fv', 'uniformMatrix4fv']) {
+        wrap(name, () => { data.uniformCalls += 1 });
+    }
     wrap('drawArrays', () => { data.drawArrays += 1 });
     wrap('drawElements', () => { data.drawElements += 1 });
     wrap('bufferData', args => {
@@ -177,6 +182,7 @@ export function installInstrumentation(): void {
             data.framebufferTexture2D = 0;
             data.checkFramebufferStatus = 0;
             data.useProgram = 0;
+            data.uniformCalls = 0;
             data.drawArrays = 0;
             data.drawElements = 0;
             data.bufferData = 0;
