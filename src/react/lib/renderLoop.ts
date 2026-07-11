@@ -127,6 +127,18 @@ export class RenderLoop {
         return currentFrame(this.time);
     }
 
+    getFrameloop(): Frameloop {
+        return this.frameloop;
+    }
+
+    getSpeed(): number {
+        return this.time.speed;
+    }
+
+    isPaused(): boolean {
+        return this.paused();
+    }
+
     setSpeed(speed: number): void {
         const now = this.deps.now();
         const base = this.cold ? syncTime(this.time, now) : this.time;

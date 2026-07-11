@@ -26,6 +26,11 @@
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing.mjs",
       "require": "./dist/testing.js"
+    },
+    "./devtools": {
+      "types": "./dist/react/devtools/index.d.ts",
+      "import": "./dist/devtools.mjs",
+      "require": "./dist/devtools.js"
     }
   },
   "files": [

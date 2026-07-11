@@ -17,6 +17,8 @@ import type {
     UniformUpdateFn
 } from '@/core';
 import { WebGLManager } from '@/core/managers/WebGLManager';
+import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
+import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import {
@@ -69,6 +71,32 @@ const readNow = (): number => (typeof performance === 'object' ? performance.now
 const readDevicePixelRatio = (): number =>
     typeof window === 'object' ? window.devicePixelRatio : 1;
 
+let engineIdCounter = 0;
+
+const createEngineId = (): string => {
+    if (typeof crypto === 'object' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    engineIdCounter += 1;
+    return `shader-${engineIdCounter}`;
+};
+
+const emptyDebugState = (id: string): EngineDebugState => ({
+    kind: 'shader',
+    id,
+    canvas: { renderWidth: 0, renderHeight: 0, displayWidth: 0, displayHeight: 0 },
+    programIds: [],
+    framebufferIds: [],
+    capabilities: {
+        floatRenderable: false,
+        halfFloatRenderable: false,
+        floatLinearFilterable: false,
+        halfFloatLinearFilterable: false,
+        halfFloatType: 0
+    },
+    floatFilterDowngraded: false
+});
+
 const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     programConfigs,
     renderCallback,
@@ -90,6 +118,11 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
 }, ref) => {
     const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
     const contentKey = programConfigContentKey(keyProgramId, keyProgramConfig);
+
+    const engineIdRef = useRef<string>('');
+    if (!engineIdRef.current) {
+        engineIdRef.current = createEngineId();
+    }
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
@@ -234,6 +267,51 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             readyRef.current = true;
             applySizeRef.current();
             controllerRef.current?.start();
+
+            const managerWeak = new WeakRef(manager);
+            const engineId = engineIdRef.current;
+            let lastKnownState: EngineDebugState | null = null;
+
+            const handle: EngineHandle = {
+                id: engineId,
+                kind: 'shader',
+                getManager: () => managerWeak.deref() ?? null,
+                getState: () => {
+                    const currentManager = managerWeak.deref();
+                    if (!currentManager) {
+                        return lastKnownState ?? emptyDebugState(engineId);
+                    }
+                    try {
+                        const glCanvas = currentManager.context.canvas as HTMLCanvasElement;
+                        const state: EngineDebugState = {
+                            kind: 'shader',
+                            id: engineId,
+                            canvas: {
+                                renderWidth: glCanvas.width,
+                                renderHeight: glCanvas.height,
+                                displayWidth: glCanvas.clientWidth,
+                                displayHeight: glCanvas.clientHeight
+                            },
+                            programIds: Array.from(currentManager.resources.keys()),
+                            framebufferIds: currentManager.fbo.getFramebufferIds(),
+                            capabilities: currentManager.fbo.getCapabilities(),
+                            floatFilterDowngraded: currentManager.fbo.wasFloatFilterDowngraded(),
+                            frameloop: controllerRef.current?.getFrameloop(),
+                            paused: controllerRef.current?.isPaused(),
+                            speed: controllerRef.current?.getSpeed()
+                        };
+                        lastKnownState = state;
+                        return state;
+                    } catch {
+                        return lastKnownState ?? emptyDebugState(engineId);
+                    }
+                },
+                invalidate: () => { controllerRef.current?.invalidate() },
+                setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
+                getFrame: () => controllerRef.current?.getFrame() ?? 0,
+                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) }
+            };
+            emitEngineMount(handle);
         }
 
         return () => {
@@ -241,6 +319,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             controllerRef.current?.stop();
             manager.destroyAll();
             activeProgram.current = null;
+            emitEngineUnmount(engineIdRef.current);
         };
     }, [contentKey, epoch]);
 
