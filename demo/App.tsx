@@ -1,8 +1,17 @@
 import { useState } from 'react';
 
 import { PerformanceTest } from './PerformanceTest';
+import { getSceneComponent } from './scenes/registry';
 
 export const App = () => {
+    const Scene = getSceneComponent();
+    if (Scene) {
+        return <Scene />;
+    }
+    return <DefaultScene />;
+};
+
+const DefaultScene = () => {
     const [showTest, setShowTest] = useState(true);
     const [iterations, setIterations] = useState(4);
     const [triggerRerender, setTriggerRerender] = useState(0);

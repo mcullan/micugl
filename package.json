@@ -32,7 +32,9 @@
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bench": "playwright test --project=counters",
+    "bench:timing": "playwright test --project=timing"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0 || ^19.1.0",
@@ -40,6 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.14.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
