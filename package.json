@@ -21,14 +21,20 @@
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react.mjs",
       "require": "./dist/react.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing.mjs",
+      "require": "./dist/testing.js"
     }
   },
   "files": [
     "dist"
   ],
+  "sideEffects": false,
   "scripts": {
     "dev": "vite --config demo/vite.config.ts",
-    "build": "vite build",
+    "build": "vite build && node scripts/assertTreeshaken.mjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",
