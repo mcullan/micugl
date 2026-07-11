@@ -11,6 +11,7 @@ export interface BaseShaderProps extends RenderControlProps {
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
     skipDefaultUniforms?: boolean;
+    debug?: boolean;
     className?: string;
     style?: CSSProperties;
     renderOptions?: {
@@ -33,6 +34,7 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     shaderConfig,
     uniforms,
     skipDefaultUniforms = false,
+    debug = false,
     width,
     height,
     pixelRatio,
@@ -69,6 +71,7 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
             className={className}
             style={style}
             useFastPath={true}
+            debug={debug}
             renderOptions={renderOptions}
         />
     );

@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react';
 
+import { DevtoolsDebug } from './DevtoolsDebug';
 import { ManyCanvases } from './ManyCanvases';
+import { ManyCanvasesDevtools } from './ManyCanvasesDevtools';
 import { Offscreen } from './Offscreen';
 import { PingPongSim } from './PingPongSim';
 import { getQueryString } from './query';
@@ -12,7 +14,9 @@ export const scenes: Record<string, ComponentType> = {
     'pingpong-sim': PingPongSim,
     'static-idle': StaticIdle,
     'offscreen': Offscreen,
-    'many-canvases': ManyCanvases
+    'many-canvases': ManyCanvases,
+    'many-canvases-devtools': ManyCanvasesDevtools,
+    'devtools-debug': DevtoolsDebug
 };
 
 export const getSceneComponent = (): ComponentType | null => {

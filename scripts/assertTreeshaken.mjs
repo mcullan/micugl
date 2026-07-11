@@ -1,28 +1,72 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 
-const FORBIDDEN_SYMBOLS = ['installInstrumentation', 'createGLStub'];
-const TARGET_FILES = ['dist/index.mjs', 'dist/core.mjs', 'dist/react.mjs'];
+const distRoot = resolve(process.cwd(), process.argv[2] ?? 'dist');
+const ENTRIES = ['index.mjs', 'core.mjs', 'react.mjs'].map(name => resolve(distRoot, name));
 
-const failures = [];
+const FROM_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]/g;
+const BARE_IMPORT = /(?:^|[;\n])\s*import\s*['"]([^'"]+)['"]/g;
 
-for (const targetFile of TARGET_FILES) {
-    const path = resolve(process.cwd(), targetFile);
-    const contents = readFileSync(path, 'utf8');
-    for (const symbol of FORBIDDEN_SYMBOLS) {
-        if (contents.includes(symbol)) {
-            failures.push(`${targetFile} contains testing-only symbol "${symbol}"`);
+const resolveModule = (fromFile, specifier) => {
+    if (!specifier.startsWith('.')) {
+        return null;
+    }
+    const base = resolve(dirname(fromFile), specifier);
+    const candidates = [base, `${base}.mjs`, resolve(base, 'index.mjs')];
+    return candidates.find(candidate => existsSync(candidate)) ?? null;
+};
+
+const collectSpecifiers = source => {
+    const specifiers = [];
+    let match;
+    while ((match = FROM_SPECIFIER.exec(source)) !== null) {
+        specifiers.push(match[1]);
+    }
+    while ((match = BARE_IMPORT.exec(source)) !== null) {
+        specifiers.push(match[1]);
+    }
+    return specifiers;
+};
+
+const reachable = new Set();
+const queue = [...ENTRIES];
+
+while (queue.length > 0) {
+    const file = queue.pop();
+    if (reachable.has(file) || !existsSync(file)) {
+        continue;
+    }
+    reachable.add(file);
+    const source = readFileSync(file, 'utf8');
+    for (const specifier of collectSpecifiers(source)) {
+        const resolved = resolveModule(file, specifier);
+        if (resolved !== null && !reachable.has(resolved)) {
+            queue.push(resolved);
         }
     }
 }
 
+const DEVTOOLS_PREFIX = `react${sep}devtools${sep}`;
+const failures = [];
+
+for (const file of reachable) {
+    const rel = relative(distRoot, file);
+    if (rel.startsWith(DEVTOOLS_PREFIX) && !rel.endsWith(`${sep}beacon.mjs`)) {
+        failures.push(`devtools panel module reachable from a main bundle: ${rel}`);
+    }
+    if (rel === 'testing.mjs' || rel.startsWith(`testing${sep}`)) {
+        failures.push(`testing module reachable from a main bundle: ${rel}`);
+    }
+}
+
 if (failures.length > 0) {
-    console.error('assertTreeshaken: micugl/testing leaked into a main bundle:');
+    console.error('assertTreeshaken: static import graph of index/core/react leaked a dev-only module:');
     for (const failure of failures) {
         console.error(`  - ${failure}`);
     }
-    console.error('src/testing/** must never be imported by src/index.ts, src/core/index.ts, or src/react/index.ts.');
+    console.error('Only react/devtools/beacon.mjs may be statically reachable; the panel and testing');
+    console.error('chunks must be reached via dynamic import() or an explicit micugl/devtools import.');
     process.exit(1);
 }
 
-console.log('assertTreeshaken: main bundles are clean of testing-only symbols.');
+console.log(`assertTreeshaken: walked ${String(reachable.size)} modules from index/core/react; no devtools panel or testing module is statically reachable.`);

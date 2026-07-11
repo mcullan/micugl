@@ -19,7 +19,8 @@ const specs: SceneSpec[] = [
     { name: 'pingpong-sim', query: '/?scene=pingpong-sim&iterations=4', iterations: 4, assertDrawArrays: true },
     { name: 'static-idle', query: '/?scene=static-idle', iterations: null, assertDrawArrays: false },
     { name: 'offscreen', query: '/?scene=offscreen', iterations: null, assertDrawArrays: false },
-    { name: 'many-canvases', query: '/?scene=many-canvases', iterations: null, assertDrawArrays: true }
+    { name: 'many-canvases', query: '/?scene=many-canvases', iterations: null, assertDrawArrays: true },
+    { name: 'many-canvases-devtools', query: '/?scene=many-canvases-devtools', iterations: null, assertDrawArrays: true }
 ];
 
 const readMetrics = async (session: CDPSession): Promise<Map<string, number>> => {

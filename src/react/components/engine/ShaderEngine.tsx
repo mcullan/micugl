@@ -43,6 +43,7 @@ interface ShaderEngineProps extends RenderControlProps {
     style?: CSSProperties;
     uniformUpdaters?: Record<string, UniformUpdaterEntry[]>;
     useFastPath?: boolean;
+    debug?: boolean;
 }
 
 interface ObservedSize {
@@ -107,6 +108,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     height,
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
+    debug = false,
     useDevicePixelRatio,
     pixelRatio,
     frameloop = 'always',
@@ -405,6 +407,17 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         controller.setSpeed(speed);
         controller.setPauseWhenHidden(pauseWhenHidden);
     }, [frameloop, speed, pauseWhenHidden]);
+
+    useEffect(() => {
+        if (!debug) return;
+        let cancelled = false;
+        void import('@/react/devtools/attach').then(module => {
+            if (!cancelled) {
+                module.ensureDevtoolsMounted();
+            }
+        });
+        return () => { cancelled = true };
+    }, [debug]);
 
     useEffect(() => {
         const canvas = canvasRef.current;

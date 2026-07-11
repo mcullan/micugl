@@ -20,6 +20,7 @@ export interface BasePingPongShaderProps extends RenderControlProps {
     style?: CSSProperties;
     renderWidth?: number;
     renderHeight?: number;
+    debug?: boolean;
     customPasses?: RenderPass[];
     renderOptions?: {
         clear?: boolean;
@@ -48,6 +49,7 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
     height,
     renderWidth,
     renderHeight,
+    debug = false,
     pixelRatio,
     useDevicePixelRatio,
     frameloop,
@@ -93,6 +95,7 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
             height={height}
             renderWidth={renderWidth}
             renderHeight={renderHeight}
+            debug={debug}
             pixelRatio={pixelRatio}
             useDevicePixelRatio={useDevicePixelRatio}
             frameloop={frameloop}

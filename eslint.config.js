@@ -122,7 +122,7 @@ export default tseslint.config(
   },
   {
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/testing/**', 'src/**/*.test.{ts,tsx}'],
+    ignores: ['src/testing/**', 'src/react/devtools/**', 'src/**/*.test.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', {
         paths: [],
@@ -133,7 +133,7 @@ export default tseslint.config(
           },
           {
             group: ['@/testing', '@/testing/*', '**/testing/**'],
-            message: 'micugl/testing is dev/test-only and must stay out of library source; only src/testing/** and *.test.* files may import it.'
+            message: 'micugl/testing is dev/test-only and must stay out of library source; only src/testing/**, src/react/devtools/** and *.test.* files may import it.'
           }
         ]
       }]
