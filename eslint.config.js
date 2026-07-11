@@ -134,7 +134,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ['vite.config.ts', 'demo/**/*.{ts,tsx}'],
+    files: ['vite.config.ts', 'vitest.config.ts', 'demo/**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
         allowDefaultProject: true

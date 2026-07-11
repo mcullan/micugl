@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 
 import type {
     FramebufferOptions,
@@ -8,6 +8,7 @@ import type {
 } from '@/core';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
+import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 
 interface PingPongShaderEngineProps {
     programConfigs: Record<string, ShaderProgramConfig>;
@@ -26,13 +27,25 @@ interface PingPongShaderEngineProps {
 const DEFAULT_CLASS_NAME = '';
 const DEFAULT_STYLE: CSSProperties = {};
 
+interface EngineInitMetrics {
+    engineSkippedInits: number;
+    engineActualInits: number;
+}
+
+function readEngineMetrics(): EngineInitMetrics | undefined {
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+    return (window as unknown as { __micuglMetrics?: EngineInitMetrics }).__micuglMetrics;
+}
+
 function serializePasses(passes: RenderPass[]): string {
-    return passes.map(p => 
+    return passes.map(p =>
         `${p.programId}|${p.outputFramebuffer ?? 'screen'}|${p.inputTextures.map(t => t.id).join(',')}`
     ).join('||');
 }
 
-export const PingPongShaderEngine = ({
+const PingPongShaderEngineComponent = ({
     programConfigs,
     passes,
     framebuffers,
@@ -45,6 +58,8 @@ export const PingPongShaderEngine = ({
     useDevicePixelRatio = true,
     pixelRatio
 }: PingPongShaderEngineProps) => {
+    const contentKey = `${programConfigsContentKey(programConfigs)}\u0002${framebuffersContentKey(framebuffers)}`;
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
     const passSystemRef = useRef<Passes | null>(null);
@@ -65,6 +80,11 @@ export const PingPongShaderEngine = ({
         animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
     });
 
+    const initPropsRef = useRef({ programConfigs, framebuffers, passes });
+    useEffect(() => {
+        initPropsRef.current = { programConfigs, framebuffers, passes };
+    });
+
     const handleResize = useCallback(() => {
         if (!canvasRef.current || !managerRef.current) return;
 
@@ -75,18 +95,20 @@ export const PingPongShaderEngine = ({
         const actualRenderWidth = renderWidth ?? Math.floor(displayWidth * dpr);
         const actualRenderHeight = renderHeight ?? Math.floor(displayHeight * dpr);
 
-        managerRef.current.setSize(actualRenderWidth, actualRenderHeight, displayWidth, displayHeight);
-
         const manager = managerRef.current;
+        manager.setSize(actualRenderWidth, actualRenderHeight, displayWidth, displayHeight);
+
         const canvas = manager.context.canvas;
 
-        Object.entries(framebuffers ?? {}).forEach(([id, options]) => {
+        Object.entries(initPropsRef.current.framebuffers ?? {}).forEach(([id, options]) => {
             const fbWidth = options.width || canvas.width;
             const fbHeight = options.height || canvas.height;
 
             manager.fbo.resizeFramebuffer(id, fbWidth, fbHeight);
         });
-    }, [framebuffers, width, height, renderWidth, renderHeight, useDevicePixelRatio, pixelRatio]);
+    }, [width, height, renderWidth, renderHeight, useDevicePixelRatio, pixelRatio]);
+
+    const handleResizeRef = useRef(handleResize);
 
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -94,64 +116,70 @@ export const PingPongShaderEngine = ({
         const manager = new WebGLManager(canvasRef.current);
         managerRef.current = manager;
 
-        Object.entries(programConfigs).forEach(([id, config]) => {
+        const { programConfigs: configs, framebuffers: fbs, passes: initialPasses } = initPropsRef.current;
+
+        Object.entries(configs).forEach(([id, config]) => {
             manager.createProgram(id, config);
         });
 
-        Object.entries(framebuffers ?? {}).forEach(([id, options]) => {
+        Object.entries(fbs ?? {}).forEach(([id, options]) => {
             manager.fbo.createFramebuffer(id, options);
         });
 
         const passSystem = new Passes(manager);
         passSystemRef.current = passSystem;
 
-        passes.forEach(pass => {
+        initialPasses.forEach(pass => {
             passSystem.addPass(pass);
         });
-        passesKeyRef.current = serializePasses(passes);
+        passesKeyRef.current = serializePasses(initialPasses);
 
         passSystem.initializeResources();
 
-        handleResize();
+        handleResizeRef.current();
 
-        startTimeRef.current = performance.now();
+        if (startTimeRef.current === 0) {
+            startTimeRef.current = performance.now();
+        }
         animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
 
-        window.addEventListener('resize', handleResize);
+        const onWindowResize = () => { handleResizeRef.current() };
+        window.addEventListener('resize', onWindowResize);
 
         return () => {
-            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('resize', onWindowResize);
 
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
 
-            if (managerRef.current) {
-                managerRef.current.destroyAll();
-            }
+            manager.destroyAll();
+            managerRef.current = null;
+            passSystemRef.current = null;
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- passes handled in separate effect to avoid full re-init
-    }, [programConfigs, framebuffers, handleResize]);
+    }, [contentKey]);
+
+    useEffect(() => {
+        handleResizeRef.current = handleResize;
+        handleResize();
+    }, [handleResize]);
 
     useEffect(() => {
         const passSystem = passSystemRef.current;
         if (!passSystem) return;
 
+        const metrics = readEngineMetrics();
         const newKey = serializePasses(passes);
         if (newKey === passesKeyRef.current) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            if (typeof window !== 'undefined' && (window as any).__micuglMetrics) {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                (window as any).__micuglMetrics.engineSkippedInits++;
+            if (metrics) {
+                metrics.engineSkippedInits++;
             }
             return;
         }
         passesKeyRef.current = newKey;
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        if (typeof window !== 'undefined' && (window as any).__micuglMetrics) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            (window as any).__micuglMetrics.engineActualInits++;
+        if (metrics) {
+            metrics.engineActualInits++;
         }
 
         passSystem.clearPasses();
@@ -174,3 +202,5 @@ export const PingPongShaderEngine = ({
         />
     );
 };
+
+export const PingPongShaderEngine = memo(PingPongShaderEngineComponent);
