@@ -1,14 +1,20 @@
-import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
+import { type CSSProperties, memo, useCallback, useEffect, useRef } from 'react';
 
 import type {
     RenderOptions,
     ShaderProgramConfig,
     ShaderRenderCallback,
-    ShaderResources,
     UniformType,
     UniformUpdateFn,
 } from '@/core';
 import { WebGLManager } from '@/core/managers/WebGLManager';
+import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
+
+interface UniformUpdaterEntry {
+    name: string;
+    type: UniformType;
+    updateFn: UniformUpdateFn<UniformType>;
+}
 
 interface ShaderEngineProps {
     programConfigs: Record<string, ShaderProgramConfig>;
@@ -18,11 +24,7 @@ interface ShaderEngineProps {
     style?: CSSProperties;
     width?: number;
     height?: number;
-    uniformUpdaters?: Record<string, {
-        name: string;
-        type: UniformType;
-        updateFn: UniformUpdateFn<UniformType>;
-    }[]>;
+    uniformUpdaters?: Record<string, UniformUpdaterEntry[]>;
     useFastPath?: boolean;
     useDevicePixelRatio?: boolean;
     pixelRatio?: number;
@@ -31,13 +33,9 @@ interface ShaderEngineProps {
 const DEFAULT_RENDER_OPTIONS: RenderOptions = {};
 const DEFAULT_CLASS_NAME = '';
 const DEFAULT_STYLE: CSSProperties = {};
-const DEFAULT_UNIFORM_UPDATERS: Record<string, {
-    name: string;
-    type: UniformType;
-    updateFn: UniformUpdateFn<UniformType>;
-}[]> = {};
+const DEFAULT_UNIFORM_UPDATERS: Record<string, UniformUpdaterEntry[]> = {};
 
-export const ShaderEngine = ({
+const ShaderEngineComponent = ({
     programConfigs,
     renderCallback,
     renderOptions = DEFAULT_RENDER_OPTIONS,
@@ -50,38 +48,16 @@ export const ShaderEngine = ({
     useDevicePixelRatio = true,
     pixelRatio
 }: ShaderEngineProps) => {
+    const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
+    const contentKey = programConfigContentKey(keyProgramId, keyProgramConfig);
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
     const activeProgram = useRef<string | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const startTimeRef = useRef<number>(0);
 
-    const renderLoopRef = useRef<(time: number) => void>((time: number) => {
-        const manager = managerRef.current;
-        const programId = activeProgram.current;
-
-        if (!manager || !programId) return;
-
-        const elapsedTime = time - startTimeRef.current;
-        const gl = manager.context;
-
-        if (useFastPath) {
-            manager.fastRender(programId, elapsedTime, renderOptions.clear);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        } else {
-            const resources = manager.resources.get(programId);
-            if (!resources) return;
-
-            manager.prepareRender(programId, renderOptions);
-            stableRenderCallback(elapsedTime, resources, gl);
-        }
-
-        animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
-    });
-
-    const stableRenderCallback = useCallback((time: number, resources: ShaderResources, gl: WebGLRenderingContext) => {
-        renderCallback(time, resources, gl);
-    }, [renderCallback]);
+    const renderLoopRef = useRef<(time: number) => void>(() => undefined);
 
     useEffect(() => {
         renderLoopRef.current = (time: number) => {
@@ -101,12 +77,12 @@ export const ShaderEngine = ({
                 if (!resources) return;
 
                 manager.prepareRender(programId, renderOptions);
-                stableRenderCallback(elapsedTime, resources, gl);
+                renderCallback(elapsedTime, resources, gl);
             }
 
             animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
         };
-    }, [renderOptions, useFastPath, stableRenderCallback]);
+    }, [renderOptions, useFastPath, renderCallback]);
 
     const handleResize = useCallback(() => {
         if (!canvasRef.current || !managerRef.current) return;
@@ -120,14 +96,21 @@ export const ShaderEngine = ({
 
         managerRef.current.setSize(renderWidth, renderHeight, displayWidth, displayHeight);
     }, [useDevicePixelRatio, pixelRatio, width, height]);
-    
+
+    const handleResizeRef = useRef(handleResize);
+
+    const initPropsRef = useRef({ programConfigs, uniformUpdaters });
+    useEffect(() => {
+        initPropsRef.current = { programConfigs, uniformUpdaters };
+    });
+
     useEffect(() => {
         if (!canvasRef.current) return;
         const manager = new WebGLManager(canvasRef.current);
         managerRef.current = manager;
 
-        handleResize();
-        const [[pid, cfg]] = Object.entries(programConfigs);
+        handleResizeRef.current();
+        const [pid, cfg] = singleProgramEntry(initPropsRef.current.programConfigs);
         manager.createProgram(pid, cfg);
         manager.createBuffer(pid, 'a_position', new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
         manager.setAttributeOnce(pid, 'a_position', {
@@ -136,34 +119,40 @@ export const ShaderEngine = ({
         });
         activeProgram.current = pid;
 
-        const ups = uniformUpdaters[pid];
-        if (ups) {
-            ups.forEach(u => {
-                manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
-            });
-        }
+        const ups = initPropsRef.current.uniformUpdaters[pid] as UniformUpdaterEntry[] | undefined;
+        ups?.forEach(u => {
+            manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
+        });
 
-        startTimeRef.current = performance.now();
+        if (startTimeRef.current === 0) {
+            startTimeRef.current = performance.now();
+        }
         animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
-        window.addEventListener('resize', handleResize);
+
+        const onWindowResize = () => { handleResizeRef.current() };
+        window.addEventListener('resize', onWindowResize);
 
         return () => {
-            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('resize', onWindowResize);
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
             manager.destroyAll();
+            managerRef.current = null;
+            activeProgram.current = null;
         };
-    }, [programConfigs, handleResize, uniformUpdaters]);
+    }, [contentKey]);
+
+    useEffect(() => {
+        handleResizeRef.current = handleResize;
+        handleResize();
+    }, [handleResize]);
 
     useEffect(() => {
         const manager = managerRef.current;
         const pid = activeProgram.current;
         if (!manager || !pid) return;
 
-        const ups = uniformUpdaters[pid];
-
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (!ups) return;
-        ups.forEach(u => {
+        const ups = uniformUpdaters[pid] as UniformUpdaterEntry[] | undefined;
+        ups?.forEach(u => {
             manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
         });
     }, [uniformUpdaters]);
@@ -176,3 +165,5 @@ export const ShaderEngine = ({
         />
     );
 };
+
+export const ShaderEngine = memo(ShaderEngineComponent);
