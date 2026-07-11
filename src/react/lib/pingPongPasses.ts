@@ -1,0 +1,126 @@
+import type {
+    FramebufferOptions,
+    RenderPass,
+    RenderPassUniformValue,
+    UniformType,
+    UniformUpdaterDef
+} from '@/types';
+
+export interface PingPongRenderOptions {
+    clear?: boolean;
+    clearColor?: [number, number, number, number];
+}
+
+export interface PingPongPassesResult {
+    passes: RenderPass[];
+    framebuffers: Record<string, FramebufferOptions>;
+}
+
+const LINEAR = 9729;
+
+export const DEFAULT_FRAMEBUFFER_OPTIONS: FramebufferOptions = {
+    width: 0,
+    height: 0,
+    textureCount: 2,
+    textureOptions: {
+        minFilter: LINEAR,
+        magFilter: LINEAR
+    }
+};
+
+export const DEFAULT_RENDER_OPTIONS: PingPongRenderOptions = { clear: true };
+
+export function serializeFramebufferOptions(options: FramebufferOptions): string {
+    return JSON.stringify({
+        width: options.width,
+        height: options.height,
+        textureCount: options.textureCount ?? 2,
+        textureOptions: options.textureOptions ?? {}
+    });
+}
+
+export function serializeRenderOptions(options: PingPongRenderOptions): string {
+    return JSON.stringify({
+        clear: options.clear ?? true,
+        clearColor: options.clearColor ?? [0, 0, 0, 1]
+    });
+}
+
+function passUniformsFrom(
+    updaters: UniformUpdaterDef[]
+): Record<string, { type: UniformType; value: RenderPassUniformValue }> {
+    const result: Record<string, { type: UniformType; value: RenderPassUniformValue }> = {};
+    for (const updater of updaters) {
+        result[updater.name] = { type: updater.type, value: updater.updateFn };
+    }
+    return result;
+}
+
+export function buildPasses(
+    programId: string,
+    secondaryProgramId: string | undefined,
+    iterations: number,
+    primaryUniforms: Record<string, UniformUpdaterDef[]>,
+    secondaryUniforms: Record<string, UniformUpdaterDef[]>,
+    framebufferOptions: FramebufferOptions,
+    renderOptions: PingPongRenderOptions,
+    customPasses: RenderPass[] | undefined
+): PingPongPassesResult {
+    const fbIdA = `${programId}-fb-a`;
+    const fbIdB = `${programId}-fb-b`;
+    const framebuffers = {
+        [fbIdA]: framebufferOptions,
+        [fbIdB]: framebufferOptions
+    };
+
+    if (customPasses) {
+        return { passes: customPasses, framebuffers };
+    }
+
+    const passes: RenderPass[] = [{
+        programId,
+        inputTextures: [],
+        outputFramebuffer: fbIdA,
+        renderOptions
+    }];
+
+    let lastTarget = fbIdA;
+
+    for (let i = 0; i < iterations; i++) {
+        const sourceId = i % 2 === 0 ? fbIdA : fbIdB;
+        const targetId = i % 2 === 0 ? fbIdB : fbIdA;
+        lastTarget = targetId;
+
+        let currentProgramId = programId;
+        let updaters = primaryUniforms[programId];
+        if (secondaryProgramId !== undefined && i % 2 === 1) {
+            currentProgramId = secondaryProgramId;
+            updaters = secondaryUniforms[secondaryProgramId];
+        }
+
+        passes.push({
+            programId: currentProgramId,
+            inputTextures: [{ id: sourceId, textureUnit: 0, bindingType: 'read' }],
+            outputFramebuffer: targetId,
+            uniforms: passUniformsFrom(updaters),
+            renderOptions
+        });
+    }
+
+    let finalProgramId = programId;
+    let finalUpdaters = primaryUniforms[programId];
+    if (secondaryProgramId !== undefined) {
+        finalProgramId = secondaryProgramId;
+        finalUpdaters = secondaryUniforms[secondaryProgramId];
+    }
+
+    passes.push({
+        programId: finalProgramId,
+        inputTextures: [{ id: lastTarget, textureUnit: 0, bindingType: 'read' }],
+        outputFramebuffer: null,
+        uniforms: passUniformsFrom(finalUpdaters),
+        renderOptions
+    });
+
+    return { passes, framebuffers };
+}
