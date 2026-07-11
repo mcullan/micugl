@@ -20,6 +20,7 @@ interface PingPongPassesOptions {
     framebufferOptions?: FramebufferOptions;
     renderOptions?: PingPongRenderOptions;
     customPasses?: RenderPass[];
+    framebuffers?: Record<string, FramebufferOptions>;
 }
 
 const EMPTY_UNIFORMS: Record<string, UniformParam> = {};
@@ -32,7 +33,8 @@ export const usePingPongPasses = ({
     secondaryUniforms = EMPTY_UNIFORMS,
     framebufferOptions = DEFAULT_FRAMEBUFFER_OPTIONS,
     renderOptions = DEFAULT_RENDER_OPTIONS,
-    customPasses
+    customPasses,
+    framebuffers
 }: PingPongPassesOptions) => {
     const primaryUniforms = useUniformUpdaters(programId, uniforms);
     const secondaryUniformsConverted = useUniformUpdaters(
@@ -42,10 +44,14 @@ export const usePingPongPasses = ({
 
     const framebufferKey = serializeFramebufferOptions(framebufferOptions);
     const renderKey = serializeRenderOptions(renderOptions);
+    const overrideKey = framebuffers ? JSON.stringify(framebuffers) : '';
 
     return useMemo(() => {
         const framebufferOpts = JSON.parse(framebufferKey) as FramebufferOptions;
         const renderOpts = JSON.parse(renderKey) as PingPongRenderOptions;
+        const override = overrideKey
+            ? JSON.parse(overrideKey) as Record<string, FramebufferOptions>
+            : undefined;
         return buildPasses(
             programId,
             secondaryProgramId,
@@ -54,7 +60,8 @@ export const usePingPongPasses = ({
             secondaryUniformsConverted,
             framebufferOpts,
             renderOpts,
-            customPasses
+            customPasses,
+            override
         );
     }, [
         programId,
@@ -64,6 +71,7 @@ export const usePingPongPasses = ({
         secondaryUniformsConverted,
         framebufferKey,
         renderKey,
-        customPasses
+        customPasses,
+        overrideKey
     ]);
 };
