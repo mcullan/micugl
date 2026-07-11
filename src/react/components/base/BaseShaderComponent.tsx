@@ -1,19 +1,16 @@
 import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import { forwardRef, memo } from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
 import { ShaderEngine } from '@/react';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
-import type { UniformParam } from '@/types';
+import type { RenderControlProps, ShaderHandle, UniformParam } from '@/types';
 
-export interface BaseShaderProps {
+export interface BaseShaderProps extends RenderControlProps {
     programId: string;
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
     skipDefaultUniforms?: boolean;
-    width?: number;
-    height?: number;
-    pixelRatio?: number;
     className?: string;
     style?: CSSProperties;
     renderOptions?: {
@@ -31,7 +28,7 @@ const renderFullscreenQuad: ShaderRenderCallback = (_time, _resources, gl) => {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 };
 
-const BaseShaderComponentImpl = ({
+const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     programId,
     shaderConfig,
     uniforms,
@@ -39,27 +36,44 @@ const BaseShaderComponentImpl = ({
     width,
     height,
     pixelRatio,
+    useDevicePixelRatio,
+    frameloop,
+    speed,
+    pauseWhenHidden,
+    dpr,
+    maxPixelCount,
+    fit,
     className = '',
     style,
     renderOptions = RENDER_OPTIONS
-}: BaseShaderProps) => {
+}, ref) => {
     const programConfigs = { [programId]: shaderConfig };
     const uniformUpdaters = useUniformUpdaters(programId, uniforms, { skipDefaultUniforms });
 
     return (
         <ShaderEngine
+            ref={ref}
             programConfigs={programConfigs}
             renderCallback={renderFullscreenQuad}
             uniformUpdaters={uniformUpdaters}
             width={width}
             height={height}
             pixelRatio={pixelRatio}
+            useDevicePixelRatio={useDevicePixelRatio}
+            frameloop={frameloop}
+            speed={speed}
+            pauseWhenHidden={pauseWhenHidden}
+            dpr={dpr}
+            maxPixelCount={maxPixelCount}
+            fit={fit}
             className={className}
             style={style}
             useFastPath={true}
             renderOptions={renderOptions}
         />
     );
-};
+});
+
+BaseShaderComponentImpl.displayName = 'BaseShaderComponent';
 
 export const BaseShaderComponent = memo(BaseShaderComponentImpl);
