@@ -1,0 +1,176 @@
+{
+  "generatedAt": "2026-07-11T14:33:29.598Z",
+  "scenes": {
+    "many-canvases": {
+      "counters": {
+        "cdp": {
+          "taskDuration": 2.029097,
+          "threadTime": 0.394639
+        },
+        "config": {
+          "headless": true,
+          "iterations": null,
+          "measurementMs": 10000
+        },
+        "frameStats": {
+          "count": 1200,
+          "mean": 8.326166666666666,
+          "p50": 8.300000000000182,
+          "p95": 9.199999999999818
+        },
+        "glCounters": {
+          "bufferBytes": 0,
+          "bufferData": 0,
+          "checkFramebufferStatus": 0,
+          "compileShader": 0,
+          "contextsCreated": 8,
+          "drawArrays": 9616,
+          "drawElements": 0,
+          "framebufferTexture2D": 0,
+          "linkProgram": 0,
+          "texImage2D": 0,
+          "textureBytes": 0,
+          "uniformCalls": 9616,
+          "useProgram": 0
+        }
+      }
+    },
+    "offscreen": {
+      "counters": {
+        "cdp": {
+          "taskDuration": 2.634463,
+          "threadTime": 0.714646
+        },
+        "config": {
+          "headless": true,
+          "iterations": null,
+          "measurementMs": 10000
+        },
+        "frameStats": {
+          "count": 1199,
+          "mean": 8.329774812343619,
+          "p50": 8.300000000000182,
+          "p95": 8.700000000000728
+        },
+        "glCounters": {
+          "bufferBytes": 0,
+          "bufferData": 0,
+          "checkFramebufferStatus": 0,
+          "compileShader": 0,
+          "contextsCreated": 1,
+          "drawArrays": 1202,
+          "drawElements": 0,
+          "framebufferTexture2D": 0,
+          "linkProgram": 0,
+          "texImage2D": 0,
+          "textureBytes": 0,
+          "uniformCalls": 1202,
+          "useProgram": 0
+        }
+      }
+    },
+    "pingpong-sim": {
+      "counters": {
+        "cdp": {
+          "taskDuration": 10.05673,
+          "threadTime": 0.252706
+        },
+        "config": {
+          "headless": true,
+          "iterations": 4,
+          "measurementMs": 10000
+        },
+        "frameStats": {
+          "count": 579,
+          "mean": 17.2566493955095,
+          "p50": 16.699999999999818,
+          "p95": 25
+        },
+        "glCounters": {
+          "bufferBytes": 0,
+          "bufferData": 0,
+          "checkFramebufferStatus": 0,
+          "compileShader": 0,
+          "contextsCreated": 1,
+          "drawArrays": 3498,
+          "drawElements": 0,
+          "framebufferTexture2D": 2915,
+          "linkProgram": 0,
+          "texImage2D": 0,
+          "textureBytes": 0,
+          "uniformCalls": 8745,
+          "useProgram": 2332
+        }
+      }
+    },
+    "rerender-storm": {
+      "counters": {
+        "cdp": {
+          "taskDuration": 2.984756,
+          "threadTime": 0.7122870000000001
+        },
+        "config": {
+          "headless": true,
+          "iterations": null,
+          "measurementMs": 10000
+        },
+        "frameStats": {
+          "count": 1200,
+          "mean": 8.329749999999999,
+          "p50": 8.300000000000182,
+          "p95": 8.900000000000546
+        },
+        "glCounters": {
+          "bufferBytes": 0,
+          "bufferData": 0,
+          "checkFramebufferStatus": 0,
+          "compileShader": 0,
+          "contextsCreated": 1,
+          "drawArrays": 1201,
+          "drawElements": 0,
+          "framebufferTexture2D": 0,
+          "linkProgram": 0,
+          "texImage2D": 0,
+          "textureBytes": 0,
+          "uniformCalls": 1826,
+          "useProgram": 0
+        }
+      }
+    },
+    "static-idle": {
+      "counters": {
+        "cdp": {
+          "taskDuration": 2.136661,
+          "threadTime": 0.6210910000000001
+        },
+        "config": {
+          "headless": true,
+          "iterations": null,
+          "measurementMs": 10000
+        },
+        "frameStats": {
+          "count": 1200,
+          "mean": 8.333499999999999,
+          "p50": 8.300000000000182,
+          "p95": 9.099999999999909
+        },
+        "glCounters": {
+          "bufferBytes": 0,
+          "bufferData": 0,
+          "checkFramebufferStatus": 0,
+          "compileShader": 0,
+          "contextsCreated": 1,
+          "drawArrays": 1201,
+          "drawElements": 0,
+          "framebufferTexture2D": 0,
+          "linkProgram": 0,
+          "texImage2D": 0,
+          "textureBytes": 0,
+          "uniformCalls": 0,
+          "useProgram": 0
+        }
+      }
+    }
+  },
+  "sha": "baba84e13605848cb25601214e644a1670d9bbc1"
+}
