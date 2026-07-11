@@ -112,9 +112,28 @@ export default tseslint.config(
       'no-restricted-imports': ['error', {
         paths: [],
         patterns: [
-          { 
-            group: ['../*', '../../*'], 
-            message: 'Use absolute imports instead of relative imports outside current directory' 
+          {
+            group: ['../*', '../../*'],
+            message: 'Use absolute imports instead of relative imports outside current directory'
+          }
+        ]
+      }]
+    }
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/testing/**', 'src/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: [],
+        patterns: [
+          {
+            group: ['../*', '../../*'],
+            message: 'Use absolute imports instead of relative imports outside current directory'
+          },
+          {
+            group: ['@/testing', '@/testing/*', '**/testing/**'],
+            message: 'micugl/testing is dev/test-only and must stay out of library source; only src/testing/** and *.test.* files may import it.'
           }
         ]
       }]
