@@ -148,3 +148,21 @@ describe('FBOManager viewport cache', () => {
         expect(viewportCalls).toEqual([[0, 0, 4, 4], [0, 0, 300, 150]]);
     });
 });
+
+describe('FBOManager getFramebufferIds', () => {
+    it('lists created framebuffer ids and reflects destroy', () => {
+        const { gl } = createGLStub({ renderableTypes: [GL_UNSIGNED_BYTE] });
+        const manager = new FBOManager(gl);
+
+        expect(manager.getFramebufferIds()).toEqual([]);
+
+        manager.createFramebuffer('a', { width: 4, height: 4, textureCount: 1 });
+        manager.createFramebuffer('b', { width: 4, height: 4, textureCount: 1 });
+
+        expect(manager.getFramebufferIds().sort()).toEqual(['a', 'b']);
+
+        manager.destroy('a');
+
+        expect(manager.getFramebufferIds()).toEqual(['b']);
+    });
+});

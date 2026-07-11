@@ -317,6 +317,10 @@ export class FBOManager {
         return this.capabilities;
     }
 
+    getFramebufferIds(): string[] {
+        return Array.from(this.resources.keys());
+    }
+
     isFloatTexturesSupported(): boolean {
         return this.capabilities.floatRenderable;
     }

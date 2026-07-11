@@ -10,6 +10,7 @@ export default defineConfig({
                 core:  resolve(__dirname, 'src/core/index.ts'),
                 react: resolve(__dirname, 'src/react/index.ts'),
                 testing: resolve(__dirname, 'src/testing/index.ts'),
+                devtools: resolve(__dirname, 'src/react/devtools/index.ts'),
             },
             formats: ['es','cjs'],
             fileName: (format, entry) =>

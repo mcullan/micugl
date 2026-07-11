@@ -287,3 +287,41 @@ describe('RenderLoop speed and control', () => {
         }
     });
 });
+
+describe('RenderLoop introspection getters', () => {
+    it('reports the configured frameloop mode and reacts to setFrameloop', () => {
+        const h = harness({ frameloop: 'demand' });
+        expect(h.loop.getFrameloop()).toBe('demand');
+
+        h.loop.setFrameloop('always');
+        expect(h.loop.getFrameloop()).toBe('always');
+    });
+
+    it('reports the configured speed and reacts to setSpeed', () => {
+        const h = harness({ speed: 2 });
+        expect(h.loop.getSpeed()).toBe(2);
+
+        h.loop.setSpeed(0.5);
+        expect(h.loop.getSpeed()).toBe(0.5);
+    });
+
+    it('reports paused before start and while hidden, unpaused once started and visible', () => {
+        const h = harness({ frameloop: 'always' });
+        expect(h.loop.isPaused()).toBe(true);
+
+        h.loop.start();
+        expect(h.loop.isPaused()).toBe(false);
+
+        h.loop.setVisible(false);
+        expect(h.loop.isPaused()).toBe(true);
+
+        h.loop.setVisible(true);
+        expect(h.loop.isPaused()).toBe(false);
+    });
+
+    it('reports paused when speed is zero', () => {
+        const h = harness({ frameloop: 'always', speed: 0 });
+        h.loop.start();
+        expect(h.loop.isPaused()).toBe(true);
+    });
+});
