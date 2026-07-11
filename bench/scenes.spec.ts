@@ -1,7 +1,7 @@
 import { type CDPSession, expect, test } from '@playwright/test';
 
 import { gitSha } from './gitSha';
-import { installInstrumentation } from './instrument';
+import { instrumentationInitScript } from './instrument';
 import { type SceneProjectResult, writeSceneResult } from './writer';
 
 const MEASUREMENT_MS = 10_000;
@@ -35,22 +35,22 @@ test.describe.configure({ mode: 'serial' });
 
 for (const spec of specs) {
     test(spec.name, async ({ page }, testInfo) => {
-        await page.addInitScript(installInstrumentation);
+        await page.addInitScript({ content: instrumentationInitScript });
 
         const session = await page.context().newCDPSession(page);
         await session.send('Performance.enable');
 
         await page.goto(spec.query, { waitUntil: 'networkidle' });
         await page.waitForSelector('canvas', { state: 'attached' });
-        await page.waitForFunction(() => window.__glCounters.snapshot().contextsCreated > 0);
+        await page.waitForFunction(() => window.__micuglInstrumentation.counters.snapshot().contextsCreated > 0);
         await page.waitForTimeout(SETTLE_MS);
 
-        await page.evaluate(() => { window.__glCounters.reset() });
+        await page.evaluate(() => { window.__micuglInstrumentation.counters.reset() });
         const before = await readMetrics(session);
-        await page.evaluate(() => { window.__frameSampler.start() });
+        await page.evaluate(() => { window.__micuglInstrumentation.frameSampler.start() });
         await page.waitForTimeout(MEASUREMENT_MS);
-        const frameStats = await page.evaluate(() => window.__frameSampler.stop());
-        const glCounters = await page.evaluate(() => window.__glCounters.snapshot());
+        const frameStats = await page.evaluate(() => window.__micuglInstrumentation.frameSampler.stop());
+        const glCounters = await page.evaluate(() => window.__micuglInstrumentation.counters.snapshot());
         const after = await readMetrics(session);
 
         const result: SceneProjectResult = {
