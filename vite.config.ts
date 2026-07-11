@@ -17,7 +17,7 @@ export default defineConfig({
         `${entry}.${format === 'es' ? 'mjs' : 'js'}`
         },
         rollupOptions: {
-            external: ['react','react-dom','react/jsx-runtime',/^react\/.*/],
+            external: ['react','react-dom','react/jsx-runtime',/^react\/.*/,/^react-dom\/.*/],
             output: {
                 preserveModules:       true,
                 preserveModulesRoot:   'src',

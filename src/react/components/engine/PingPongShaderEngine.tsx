@@ -36,6 +36,7 @@ interface PingPongShaderEngineProps extends RenderControlProps {
     style?: CSSProperties;
     renderWidth?: number;
     renderHeight?: number;
+    debug?: boolean;
 }
 
 interface ObservedSize {
@@ -98,6 +99,7 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
     height,
     renderWidth,
     renderHeight,
+    debug = false,
     useDevicePixelRatio,
     pixelRatio,
     frameloop = 'always',
@@ -414,6 +416,17 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
         controller.setSpeed(speed);
         controller.setPauseWhenHidden(pauseWhenHidden);
     }, [frameloop, speed, pauseWhenHidden]);
+
+    useEffect(() => {
+        if (!debug) return;
+        let cancelled = false;
+        void import('@/react/devtools/attach').then(module => {
+            if (!cancelled) {
+                module.ensureDevtoolsMounted();
+            }
+        });
+        return () => { cancelled = true };
+    }, [debug]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
