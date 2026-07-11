@@ -1,43 +1,75 @@
-import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
+import {
+    type CSSProperties,
+    forwardRef,
+    memo,
+    useCallback,
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState
+} from 'react';
 
 import type {
     RenderOptions,
     ShaderProgramConfig,
     ShaderRenderCallback,
-    ShaderResources,
     UniformType,
-    UniformUpdateFn,
+    UniformUpdateFn
 } from '@/core';
 import { WebGLManager } from '@/core/managers/WebGLManager';
+import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
+import { RenderLoop } from '@/react/lib/renderLoop';
+import {
+    DEFAULT_DPR,
+    DEFAULT_MAX_PIXEL_COUNT,
+    resolveDeviceResolution,
+    resolveResolution
+} from '@/react/lib/resolution';
+import type { Dpr, RenderControlProps, ShaderHandle } from '@/types';
 
-interface ShaderEngineProps {
+interface UniformUpdaterEntry {
+    name: string;
+    type: UniformType;
+    updateFn: UniformUpdateFn<UniformType>;
+}
+
+interface ShaderEngineProps extends RenderControlProps {
     programConfigs: Record<string, ShaderProgramConfig>;
     renderCallback: ShaderRenderCallback;
     renderOptions?: RenderOptions;
     className?: string;
     style?: CSSProperties;
-    width?: number;
-    height?: number;
-    uniformUpdaters?: Record<string, {
-        name: string;
-        type: UniformType;
-        updateFn: UniformUpdateFn<UniformType>;
-    }[]>;
+    uniformUpdaters?: Record<string, UniformUpdaterEntry[]>;
     useFastPath?: boolean;
-    useDevicePixelRatio?: boolean;
-    pixelRatio?: number;
+}
+
+interface ObservedSize {
+    cssWidth: number;
+    cssHeight: number;
+    deviceWidth?: number;
+    deviceHeight?: number;
 }
 
 const DEFAULT_RENDER_OPTIONS: RenderOptions = {};
 const DEFAULT_CLASS_NAME = '';
 const DEFAULT_STYLE: CSSProperties = {};
-const DEFAULT_UNIFORM_UPDATERS: Record<string, {
-    name: string;
-    type: UniformType;
-    updateFn: UniformUpdateFn<UniformType>;
-}[]> = {};
+const DEFAULT_UNIFORM_UPDATERS: Record<string, UniformUpdaterEntry[]> = {};
 
-export const ShaderEngine = ({
+const scheduleFrame = (callback: (now: number) => void): number =>
+    typeof requestAnimationFrame === 'function' ? requestAnimationFrame(callback) : 0;
+
+const cancelFrame = (handle: number): void => {
+    if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(handle);
+    }
+};
+
+const readNow = (): number => (typeof performance === 'object' ? performance.now() : 0);
+
+const readDevicePixelRatio = (): number =>
+    typeof window === 'object' ? window.devicePixelRatio : 1;
+
+const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     programConfigs,
     renderCallback,
     renderOptions = DEFAULT_RENDER_OPTIONS,
@@ -47,126 +79,297 @@ export const ShaderEngine = ({
     height,
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
-    useDevicePixelRatio = true,
-    pixelRatio
-}: ShaderEngineProps) => {
+    useDevicePixelRatio,
+    pixelRatio,
+    frameloop = 'always',
+    speed = 1,
+    pauseWhenHidden = true,
+    dpr = DEFAULT_DPR,
+    maxPixelCount = DEFAULT_MAX_PIXEL_COUNT,
+    fit = 'window'
+}, ref) => {
+    const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
+    const contentKey = programConfigContentKey(keyProgramId, keyProgramConfig);
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const managerRef = useRef<WebGLManager | null>(null);
     const activeProgram = useRef<string | null>(null);
-    const animationFrameRef = useRef<number | null>(null);
-    const startTimeRef = useRef<number>(0);
+    const readyRef = useRef(false);
+    const controllerRef = useRef<RenderLoop | null>(null);
+    const observedSizeRef = useRef<ObservedSize | null>(null);
+    const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const renderLoopRef = useRef<(time: number) => void>((time: number) => {
+    const initPropsRef = useRef({ programConfigs, uniformUpdaters });
+    const renderConfigRef = useRef({ useFastPath, renderOptions, renderCallback });
+
+    const [epoch, setEpoch] = useState(0);
+
+    const dprMin = Array.isArray(dpr) ? dpr[0] : dpr;
+    const dprMax = Array.isArray(dpr) ? dpr[1] : dpr;
+
+    const renderFrame = useCallback((elapsed: number) => {
+        if (!readyRef.current) return;
+
         const manager = managerRef.current;
         const programId = activeProgram.current;
-
         if (!manager || !programId) return;
 
-        const elapsedTime = time - startTimeRef.current;
         const gl = manager.context;
+        const { useFastPath: fast, renderOptions: options, renderCallback: callback } = renderConfigRef.current;
 
-        if (useFastPath) {
-            manager.fastRender(programId, elapsedTime, renderOptions.clear);
+        if (fast) {
+            manager.fastRender(programId, elapsed, options.clear);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         } else {
             const resources = manager.resources.get(programId);
             if (!resources) return;
 
-            manager.prepareRender(programId, renderOptions);
-            stableRenderCallback(elapsedTime, resources, gl);
+            manager.prepareRender(programId, options);
+            callback(elapsed, resources, gl);
         }
+    }, []);
 
-        animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
-    });
+    const applySize = useCallback(() => {
+        const manager = managerRef.current;
+        const canvas = canvasRef.current;
+        if (!readyRef.current || !manager || !canvas) return;
 
-    const stableRenderCallback = useCallback((time: number, resources: ShaderResources, gl: WebGLRenderingContext) => {
-        renderCallback(time, resources, gl);
-    }, [renderCallback]);
+        const devicePixelRatio = readDevicePixelRatio();
+        const disableDevicePixelRatio = useDevicePixelRatio === false;
+        const resolvedDpr: Dpr = [dprMin, dprMax];
 
-    useEffect(() => {
-        renderLoopRef.current = (time: number) => {
-            const manager = managerRef.current;
-            const programId = activeProgram.current;
+        if (fit === 'element') {
+            const observed = observedSizeRef.current;
+            const hasFixed = width !== undefined || height !== undefined;
 
-            if (!manager || !programId) return;
-
-            const elapsedTime = time - startTimeRef.current;
-            const gl = manager.context;
-
-            if (useFastPath) {
-                manager.fastRender(programId, elapsedTime, renderOptions.clear);
-                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            } else {
-                const resources = manager.resources.get(programId);
-                if (!resources) return;
-
-                manager.prepareRender(programId, renderOptions);
-                stableRenderCallback(elapsedTime, resources, gl);
+            if (!hasFixed && observed?.deviceWidth !== undefined && observed.deviceHeight !== undefined) {
+                const resolution = resolveDeviceResolution({
+                    deviceWidth: observed.deviceWidth,
+                    deviceHeight: observed.deviceHeight,
+                    devicePixelRatio,
+                    dpr: resolvedDpr,
+                    maxPixelCount,
+                    pixelRatioOverride: pixelRatio,
+                    disableDevicePixelRatio
+                });
+                manager.setDrawingBufferSize(resolution.renderWidth, resolution.renderHeight);
+                controllerRef.current?.invalidate();
+                return;
             }
 
-            animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
+            const cssWidth = width ?? observed?.cssWidth ?? canvas.clientWidth;
+            const cssHeight = height ?? observed?.cssHeight ?? canvas.clientHeight;
+            const resolution = resolveResolution({
+                displayWidth: cssWidth,
+                displayHeight: cssHeight,
+                devicePixelRatio,
+                dpr: resolvedDpr,
+                maxPixelCount,
+                pixelRatioOverride: pixelRatio,
+                disableDevicePixelRatio
+            });
+            manager.setDrawingBufferSize(resolution.renderWidth, resolution.renderHeight);
+            controllerRef.current?.invalidate();
+            return;
+        }
+
+        const displayWidth = width ?? (typeof window === 'object' ? window.innerWidth : 0);
+        const displayHeight = height ?? (typeof window === 'object' ? window.innerHeight : 0);
+        const resolution = resolveResolution({
+            displayWidth,
+            displayHeight,
+            devicePixelRatio,
+            dpr: resolvedDpr,
+            maxPixelCount,
+            pixelRatioOverride: pixelRatio,
+            disableDevicePixelRatio
+        });
+        manager.setSize(resolution.renderWidth, resolution.renderHeight, displayWidth, displayHeight);
+        controllerRef.current?.invalidate();
+    }, [width, height, dprMin, dprMax, maxPixelCount, pixelRatio, useDevicePixelRatio, fit]);
+
+    const applySizeRef = useRef(applySize);
+
+    useEffect(() => {
+        initPropsRef.current = { programConfigs, uniformUpdaters };
+        renderConfigRef.current = { useFastPath, renderOptions, renderCallback };
+        applySizeRef.current = applySize;
+    });
+
+    useEffect(() => {
+        const controller = new RenderLoop({
+            requestAnimationFrame: scheduleFrame,
+            cancelAnimationFrame: cancelFrame,
+            now: readNow,
+            render: renderFrame
+        });
+        controllerRef.current = controller;
+        return () => {
+            controller.stop();
+            controllerRef.current = null;
         };
-    }, [renderOptions, useFastPath, stableRenderCallback]);
+    }, [renderFrame]);
 
-    const handleResize = useCallback(() => {
-        if (!canvasRef.current || !managerRef.current) return;
-
-        const displayWidth = width ?? window.innerWidth;
-        const displayHeight = height ?? window.innerHeight;
-        const dpr = pixelRatio ?? (useDevicePixelRatio ? window.devicePixelRatio : 1);
-
-        const renderWidth = Math.floor(displayWidth * dpr);
-        const renderHeight = Math.floor(displayHeight * dpr);
-
-        managerRef.current.setSize(renderWidth, renderHeight, displayWidth, displayHeight);
-    }, [useDevicePixelRatio, pixelRatio, width, height]);
-    
     useEffect(() => {
         if (!canvasRef.current) return;
+
         const manager = new WebGLManager(canvasRef.current);
         managerRef.current = manager;
 
-        handleResize();
-        const [[pid, cfg]] = Object.entries(programConfigs);
-        manager.createProgram(pid, cfg);
-        manager.createBuffer(pid, 'a_position', new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
-        manager.setAttributeOnce(pid, 'a_position', {
-            name: 'a_position', size: 2, type: 'FLOAT',
-            normalized: false, stride: 0, offset: 0
-        });
-        activeProgram.current = pid;
+        if (!manager.context.isContextLost()) {
+            const [pid, cfg] = singleProgramEntry(initPropsRef.current.programConfigs);
+            manager.createProgram(pid, cfg);
+            manager.createBuffer(pid, 'a_position', new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+            manager.setAttributeOnce(pid, 'a_position', {
+                name: 'a_position', size: 2, type: 'FLOAT',
+                normalized: false, stride: 0, offset: 0
+            });
+            activeProgram.current = pid;
 
-        const ups = uniformUpdaters[pid];
-        if (ups) {
-            ups.forEach(u => {
+            const ups = initPropsRef.current.uniformUpdaters[pid] as UniformUpdaterEntry[] | undefined;
+            ups?.forEach(u => {
                 manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
             });
+
+            readyRef.current = true;
+            applySizeRef.current();
+            controllerRef.current?.start();
         }
 
-        startTimeRef.current = performance.now();
-        animationFrameRef.current = requestAnimationFrame(renderLoopRef.current);
-        window.addEventListener('resize', handleResize);
-
         return () => {
-            window.removeEventListener('resize', handleResize);
-            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            readyRef.current = false;
+            controllerRef.current?.stop();
             manager.destroyAll();
+            activeProgram.current = null;
         };
-    }, [programConfigs, handleResize, uniformUpdaters]);
+    }, [contentKey, epoch]);
 
     useEffect(() => {
-        const manager = managerRef.current;
-        const pid = activeProgram.current;
-        if (!manager || !pid) return;
+        applySize();
 
-        const ups = uniformUpdaters[pid];
+        if (width !== undefined && height !== undefined) {
+            return;
+        }
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (!ups) return;
-        ups.forEach(u => {
-            manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
-        });
-    }, [uniformUpdaters]);
+        const canvas = canvasRef.current;
+
+        if (fit === 'element') {
+            if (!canvas || typeof ResizeObserver !== 'function') {
+                return;
+            }
+            const observer = new ResizeObserver(entries => {
+                const entry = entries[entries.length - 1] as ResizeObserverEntry | undefined;
+                if (!entry) return;
+
+                const boxes = entry.devicePixelContentBoxSize as readonly ResizeObserverSize[] | undefined;
+                const deviceBox = boxes?.[0];
+                observedSizeRef.current = {
+                    cssWidth: entry.contentRect.width,
+                    cssHeight: entry.contentRect.height,
+                    deviceWidth: deviceBox?.inlineSize,
+                    deviceHeight: deviceBox?.blockSize
+                };
+                applySize();
+            });
+            observer.observe(canvas);
+            return () => { observer.disconnect() };
+        }
+
+        if (typeof window !== 'object') {
+            return;
+        }
+        const onResize = () => { applySize() };
+        window.addEventListener('resize', onResize);
+        return () => { window.removeEventListener('resize', onResize) };
+    }, [fit, width, height, applySize]);
+
+    useEffect(() => {
+        const controller = controllerRef.current;
+        if (!controller) return;
+
+        const onVisibility = () => {
+            controller.setVisible(typeof document === 'object' ? !document.hidden : true);
+        };
+
+        if (typeof document === 'object') {
+            controller.setVisible(!document.hidden);
+            document.addEventListener('visibilitychange', onVisibility);
+        }
+
+        let observer: IntersectionObserver | null = null;
+        const canvas = canvasRef.current;
+        if (canvas && typeof IntersectionObserver === 'function') {
+            observer = new IntersectionObserver(entries => {
+                const entry = entries[entries.length - 1] as IntersectionObserverEntry | undefined;
+                if (entry) {
+                    controller.setIntersecting(entry.isIntersecting);
+                }
+            }, { threshold: 0 });
+            observer.observe(canvas);
+        } else {
+            controller.setIntersecting(true);
+        }
+
+        return () => {
+            if (typeof document === 'object') {
+                document.removeEventListener('visibilitychange', onVisibility);
+            }
+            observer?.disconnect();
+        };
+    }, []);
+
+    useEffect(() => {
+        const controller = controllerRef.current;
+        if (!controller) return;
+
+        controller.setFrameloop(frameloop);
+        controller.setSpeed(speed);
+        controller.setPauseWhenHidden(pauseWhenHidden);
+    }, [frameloop, speed, pauseWhenHidden]);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const onLost = (event: Event) => {
+            event.preventDefault();
+            readyRef.current = false;
+            controllerRef.current?.stop();
+        };
+        const onRestored = () => {
+            setEpoch(value => value + 1);
+        };
+
+        canvas.addEventListener('webglcontextlost', onLost);
+        canvas.addEventListener('webglcontextrestored', onRestored);
+        return () => {
+            canvas.removeEventListener('webglcontextlost', onLost);
+            canvas.removeEventListener('webglcontextrestored', onRestored);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (releaseTimerRef.current !== null) {
+            clearTimeout(releaseTimerRef.current);
+            releaseTimerRef.current = null;
+        }
+        return () => {
+            const manager = managerRef.current;
+            releaseTimerRef.current = setTimeout(() => {
+                manager?.loseContext();
+                managerRef.current = null;
+                releaseTimerRef.current = null;
+            }, 0);
+        };
+    }, []);
+
+    useImperativeHandle(ref, () => ({
+        invalidate: () => { controllerRef.current?.invalidate() },
+        setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
+        getFrame: () => controllerRef.current?.getFrame() ?? 0,
+        start: () => { controllerRef.current?.start() },
+        stop: () => { controllerRef.current?.stop() }
+    }), []);
 
     return (
         <canvas
@@ -175,4 +378,8 @@ export const ShaderEngine = ({
             style={style}
         />
     );
-};
+});
+
+ShaderEngineComponent.displayName = 'ShaderEngine';
+
+export const ShaderEngine = memo(ShaderEngineComponent);

@@ -11,15 +11,9 @@ export const useDarkMode = () => {
 
         checkDarkMode();
 
-        const observer = new MutationObserver(mutations => {
-            mutations.forEach(mutation => {
-                if (mutation.attributeName === 'class') {
-                    checkDarkMode();
-                }
-            });
-        });
+        const observer = new MutationObserver(() => { checkDarkMode() });
 
-        observer.observe(document.documentElement, { attributes: true });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
         return () => { observer.disconnect() };
     }, []);

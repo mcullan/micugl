@@ -73,9 +73,40 @@ export interface ShaderProgramConfig {
 
 export type ShaderRenderCallback = (
   time: number,
-  resources: ShaderResources, 
+  resources: ShaderResources,
   gl: WebGLRenderingContext
 ) => void;
+
+// ===================================================
+// Rendering Control
+// ===================================================
+
+export type Frameloop = 'always' | 'demand' | 'never';
+
+export type Fit = 'window' | 'element';
+
+export type Dpr = number | [number, number];
+
+export interface ShaderHandle {
+  invalidate: () => void;
+  setFrame: (frame: number) => void;
+  getFrame: () => number;
+  start: () => void;
+  stop: () => void;
+}
+
+export interface RenderControlProps {
+  frameloop?: Frameloop;
+  speed?: number;
+  pauseWhenHidden?: boolean;
+  dpr?: Dpr;
+  maxPixelCount?: number;
+  fit?: Fit;
+  width?: number;
+  height?: number;
+  pixelRatio?: number;
+  useDevicePixelRatio?: boolean;
+}
 
 export interface WebGLExtensionTypes {
   'OES_texture_float': OES_texture_float;
@@ -101,7 +132,16 @@ export interface TextureOptions {
   magFilter?: number;
   wrapS?: number;
   wrapT?: number;
-  generateMipmap?: boolean;
+}
+
+export interface ResolvedTextureOptions {
+  internalFormat: number;
+  format: number;
+  type: number;
+  minFilter: number;
+  magFilter: number;
+  wrapS: number;
+  wrapT: number;
 }
 
 export interface FramebufferResources {
@@ -110,6 +150,8 @@ export interface FramebufferResources {
   currentTextureIndex: number;
   width: number;
   height: number;
+  textureOptions: ResolvedTextureOptions;
+  lastBoundTextureIndex: number;
 }
 
 export interface FramebufferOptions {
@@ -128,6 +170,7 @@ export interface TextureBinding {
   id: string;
   textureUnit: number;
   bindingType: 'read' | 'write' | 'readwrite';
+  samplerName?: string;
 }
 
 export type RenderPassUniformUpdateFn = (

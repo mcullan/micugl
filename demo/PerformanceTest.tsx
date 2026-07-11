@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { createShaderConfig } from '../src/core/lib/createShaderConfig';
+import { GL_FLOAT, GL_LINEAR } from '../src/core/lib/glConstants';
 import { vec3 } from '../src/core/lib/vectorUtils';
 import { PingPongShaderEngine } from '../src/react/components/engine/PingPongShaderEngine';
 import { usePingPongPasses } from '../src/react/hooks/usePingPongPasses';
@@ -64,22 +65,12 @@ const renderShader = /* glsl */`
 `;
 
 interface PerformanceMetrics {
-    hookCacheHits: number;
-    hookCacheMisses: number;
-    engineSkippedInits: number;
-    engineActualInits: number;
     shaderRenderCount: number;
 }
 
 const metrics: PerformanceMetrics = {
-    hookCacheHits: 0,
-    hookCacheMisses: 0,
-    engineSkippedInits: 0,
-    engineActualInits: 0,
     shaderRenderCount: 0
 };
-
-(window as unknown as { __micuglMetrics: PerformanceMetrics }).__micuglMetrics = metrics;
 
 const MetricsDisplay = () => {
     const [displayMetrics, setDisplayMetrics] = useState<PerformanceMetrics>({ ...metrics });
@@ -104,13 +95,9 @@ const MetricsDisplay = () => {
         }}>
             <div style={{ fontWeight: 600, marginBottom: '8px' }}>Performance Metrics</div>
             <div>Shader component renders: <strong>{displayMetrics.shaderRenderCount}</strong></div>
-            <div>Hook cache hits: <strong style={{ color: '#4ade80' }}>{displayMetrics.hookCacheHits}</strong></div>
-            <div>Hook cache misses: <strong style={{ color: '#f87171' }}>{displayMetrics.hookCacheMisses}</strong></div>
-            <div>Engine skipped inits: <strong style={{ color: '#4ade80' }}>{displayMetrics.engineSkippedInits}</strong></div>
-            <div>Engine actual inits: <strong style={{ color: '#f87171' }}>{displayMetrics.engineActualInits}</strong></div>
             <div style={{ marginTop: '8px', fontSize: '11px', opacity: 0.7 }}>
                 Click "Force Parent Rerender" to test stability.<br/>
-                Cache hits should increase, misses should stay low.
+                Passes stay identity-stable, so the engine does not rebuild.
             </div>
         </div>
     );
@@ -156,10 +143,11 @@ const ShaderScene = memo(({ iterations }: { iterations: number }) => {
         framebufferOptions: {
             width: 0,
             height: 0,
-            textureCount: 2,
+            textureCount: 1,
             textureOptions: {
-                minFilter: WebGLRenderingContext.LINEAR,
-                magFilter: WebGLRenderingContext.LINEAR
+                type: GL_FLOAT,
+                minFilter: GL_LINEAR,
+                magFilter: GL_LINEAR
             }
         }
     });
