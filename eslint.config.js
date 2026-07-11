@@ -90,6 +90,7 @@ export default tseslint.config(
       }],
       '@typescript-eslint/restrict-template-expressions': 'off',
       'react-x/no-context-provider': 'off',
+      'react-x/no-forward-ref': 'off',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       'simple-import-sort/imports': ['error', {
         groups: [

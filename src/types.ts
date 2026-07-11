@@ -73,9 +73,40 @@ export interface ShaderProgramConfig {
 
 export type ShaderRenderCallback = (
   time: number,
-  resources: ShaderResources, 
+  resources: ShaderResources,
   gl: WebGLRenderingContext
 ) => void;
+
+// ===================================================
+// Rendering Control
+// ===================================================
+
+export type Frameloop = 'always' | 'demand' | 'never';
+
+export type Fit = 'window' | 'element';
+
+export type Dpr = number | [number, number];
+
+export interface ShaderHandle {
+  invalidate: () => void;
+  setFrame: (frame: number) => void;
+  getFrame: () => number;
+  start: () => void;
+  stop: () => void;
+}
+
+export interface RenderControlProps {
+  frameloop?: Frameloop;
+  speed?: number;
+  pauseWhenHidden?: boolean;
+  dpr?: Dpr;
+  maxPixelCount?: number;
+  fit?: Fit;
+  width?: number;
+  height?: number;
+  pixelRatio?: number;
+  useDevicePixelRatio?: boolean;
+}
 
 export interface WebGLExtensionTypes {
   'OES_texture_float': OES_texture_float;

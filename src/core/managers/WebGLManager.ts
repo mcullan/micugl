@@ -275,6 +275,16 @@ export class WebGLManager {
         canvas.style.height = `${actualDisplayHeight}px`;
     }
 
+    setDrawingBufferSize(renderWidth: number, renderHeight: number): void {
+        const canvas = this.gl.canvas as HTMLCanvasElement;
+
+        if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+            canvas.width = renderWidth;
+            canvas.height = renderHeight;
+            this.fboManager.setCanvasViewport(renderWidth, renderHeight);
+        }
+    }
+
     private useProgram(program: WebGLProgram): void {
         if (this.currentProgram !== program) {
             this.gl.useProgram(program);
@@ -448,6 +458,10 @@ export class WebGLManager {
         this.compileCache.clear();
         this.currentProgram = null;
         this.fboManager.destroyAll();
+    }
+
+    loseContext(): void {
+        this.gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
 
     get context(): WebGLRenderingContext {
