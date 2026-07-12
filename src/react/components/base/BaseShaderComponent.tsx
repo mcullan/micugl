@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, useRef } from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
 import { ShaderEngine } from '@/react';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
+import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type { RenderControlProps, ShaderHandle, UniformParam } from '@/types';
 
 export interface BaseShaderProps extends RenderControlProps {
@@ -50,14 +51,17 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     renderOptions = RENDER_OPTIONS
 }, ref) => {
     const programConfigs = { [programId]: shaderConfig };
-    const uniformUpdaters = useUniformUpdaters(programId, uniforms, { skipDefaultUniforms });
+    const { updaters, port } = useUniformUpdaters(programId, uniforms, { skipDefaultUniforms });
+    const debugPortRef = useRef<UniformDebugPort | null>(null);
+    debugPortRef.current = port;
 
     return (
         <ShaderEngine
             ref={ref}
             programConfigs={programConfigs}
             renderCallback={renderFullscreenQuad}
-            uniformUpdaters={uniformUpdaters}
+            uniformUpdaters={updaters}
+            debugPortRef={debugPortRef}
             width={width}
             height={height}
             pixelRatio={pixelRatio}

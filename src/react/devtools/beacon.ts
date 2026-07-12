@@ -1,5 +1,6 @@
 import type { WebGLManager } from '@/core';
 import type { TextureCapabilities } from '@/core/lib/textureCapabilities';
+import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type { Frameloop } from '@/types';
 
 export interface EngineDebugState {
@@ -24,6 +25,7 @@ export interface EngineHandle {
     setFrameloop?: (mode: Frameloop) => void;
     setFrame?: (frame: number) => void;
     getFrame?: () => number;
+    uniforms?: UniformDebugPort;
 }
 
 export interface DevtoolsSink {

@@ -16,8 +16,11 @@ const GL_COLOR_BUFFER_BIT = 0x4000;
 const GL_COMPILE_STATUS = 0x8b81;
 const GL_FRAGMENT_SHADER = 0x8b30;
 const GL_FRAMEBUFFER = 0x8d40;
+const GL_FRAMEBUFFER_BINDING = 0x8ca6;
 const GL_FRAMEBUFFER_COMPLETE = 0x8cd5;
 const GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT = 0x8cd6;
+const GL_IMPLEMENTATION_COLOR_READ_FORMAT = 0x8b9b;
+const GL_IMPLEMENTATION_COLOR_READ_TYPE = 0x8b9a;
 const GL_LINK_STATUS = 0x8b82;
 const GL_SHORT = 0x1402;
 const GL_STATIC_DRAW = 0x88e4;
@@ -30,6 +33,7 @@ const GL_TEXTURE0 = 0x84c0;
 const GL_TRIANGLE_STRIP = 0x0005;
 const GL_UNSIGNED_SHORT = 0x1403;
 const GL_VERTEX_SHADER = 0x8b31;
+const GL_VIEWPORT = 0x0ba2;
 
 const ENUM_CONSTANTS = {
     ARRAY_BUFFER: GL_ARRAY_BUFFER,
@@ -41,8 +45,11 @@ const ENUM_CONSTANTS = {
     FLOAT: GL_FLOAT,
     FRAGMENT_SHADER: GL_FRAGMENT_SHADER,
     FRAMEBUFFER: GL_FRAMEBUFFER,
+    FRAMEBUFFER_BINDING: GL_FRAMEBUFFER_BINDING,
     FRAMEBUFFER_COMPLETE: GL_FRAMEBUFFER_COMPLETE,
     FRAMEBUFFER_INCOMPLETE_ATTACHMENT: GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT,
+    IMPLEMENTATION_COLOR_READ_FORMAT: GL_IMPLEMENTATION_COLOR_READ_FORMAT,
+    IMPLEMENTATION_COLOR_READ_TYPE: GL_IMPLEMENTATION_COLOR_READ_TYPE,
     LINEAR: GL_LINEAR,
     LINK_STATUS: GL_LINK_STATUS,
     NEAREST: GL_NEAREST,
@@ -58,7 +65,8 @@ const ENUM_CONSTANTS = {
     TRIANGLE_STRIP: GL_TRIANGLE_STRIP,
     UNSIGNED_BYTE: GL_UNSIGNED_BYTE,
     UNSIGNED_SHORT: GL_UNSIGNED_SHORT,
-    VERTEX_SHADER: GL_VERTEX_SHADER
+    VERTEX_SHADER: GL_VERTEX_SHADER,
+    VIEWPORT: GL_VIEWPORT
 } as const;
 
 const ENUM_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
@@ -94,6 +102,15 @@ export interface UniformCallRecord {
     value: unknown;
 }
 
+export interface ReadPixelsCallRecord {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    format: number;
+    type: number;
+}
+
 export interface GLStubConfig {
     extensions?: Partial<Record<WebGLExtensionName, boolean>>;
     renderableTypes?: number[];
@@ -101,6 +118,8 @@ export interface GLStubConfig {
     compileFails?: boolean;
     linkFails?: boolean;
     missingAttributes?: string[];
+    colorReadType?: number;
+    colorReadFormat?: number;
     overrides?: Partial<WebGLRenderingContext>;
 }
 
@@ -111,6 +130,7 @@ export interface GLStubHandle {
     viewportCalls: readonly [number, number, number, number][];
     useProgramCalls: readonly WebGLProgram[];
     uniformCalls: readonly UniformCallRecord[];
+    readPixelsCalls: readonly ReadPixelsCallRecord[];
     reset: () => void;
     config: Readonly<GLStubConfig>;
 }
@@ -135,11 +155,16 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
     const viewportCalls: [number, number, number, number][] = [];
     const useProgramCalls: WebGLProgram[] = [];
     const uniformCalls: UniformCallRecord[] = [];
+    const readPixelsCalls: ReadPixelsCallRecord[] = [];
+
+    const colorReadType = config.colorReadType ?? GL_UNSIGNED_BYTE;
+    const colorReadFormat = config.colorReadFormat ?? GL_RGBA;
 
     let boundTexture: WebGLTexture | null = null;
     let boundFramebuffer: WebGLFramebuffer | null = null;
     let boundBuffer: WebGLBuffer | null = null;
     let currentProgram: WebGLProgram | null = null;
+    let currentViewport: [number, number, number, number] = [0, 0, canvasSize.width, canvasSize.height];
 
     const textureTypes = new Map<WebGLTexture, number>();
     const fbAttachment = new Map<WebGLFramebuffer, WebGLTexture>();
@@ -233,6 +258,7 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         viewport: (x: number, y: number, width: number, height: number): void => {
             record('viewport', [x, y, width, height]);
             viewportCalls.push([x, y, width, height]);
+            currentViewport = [x, y, width, height];
         },
         deleteTexture: (texture: WebGLTexture | null): void => {
             record('deleteTexture', [texture]);
@@ -409,6 +435,39 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         },
         uniformMatrix4fv: (location: WebGLUniformLocation | null, transpose: boolean, value: Float32Array | number[]): void => {
             recordUniform('uniformMatrix4fv', location, value, [location, transpose, value]);
+        },
+        readPixels: (
+            x: number,
+            y: number,
+            width: number,
+            height: number,
+            format: number,
+            type: number,
+            pixels: ArrayBufferView | null
+        ): void => {
+            record('readPixels', [x, y, width, height, format, type, pixels]);
+            readPixelsCalls.push({ x, y, width, height, format, type });
+            if (pixels && typeof (pixels as unknown as { fill?: unknown }).fill === 'function') {
+                (pixels as unknown as { fill: (value: number) => void }).fill(0);
+            }
+        },
+        getParameter: (pname: number): unknown => {
+            record('getParameter', [pname]);
+            if (pname === GL_FRAMEBUFFER_BINDING) {
+                return boundFramebuffer;
+            }
+            if (pname === GL_VIEWPORT) {
+                return currentViewport;
+            }
+            if (pname === GL_IMPLEMENTATION_COLOR_READ_TYPE) {
+                return colorReadType;
+            }
+            if (pname === GL_IMPLEMENTATION_COLOR_READ_FORMAT) {
+                return colorReadFormat;
+            }
+            throw new Error(
+                `micugl test stub: unstubbed getParameter pname ${pname}. ${UNSTUBBED_METHOD_MESSAGE_SUFFIX}`
+            );
         }
     };
 
@@ -447,12 +506,14 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         viewportCalls,
         useProgramCalls,
         uniformCalls,
+        readPixelsCalls,
         reset: (): void => {
             calls.length = 0;
             texImage2DCalls.length = 0;
             viewportCalls.length = 0;
             useProgramCalls.length = 0;
             uniformCalls.length = 0;
+            readPixelsCalls.length = 0;
         },
         config: resolvedConfig
     };

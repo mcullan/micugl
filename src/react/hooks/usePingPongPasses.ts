@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
+import { combineUniformDebugPorts, type UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import {
     buildPasses,
     DEFAULT_FRAMEBUFFER_OPTIONS,
     DEFAULT_RENDER_OPTIONS,
+    type PingPongPassesResult,
     type PingPongRenderOptions,
     serializeFramebufferOptions,
     serializeRenderOptions
@@ -25,6 +27,10 @@ interface PingPongPassesOptions {
 
 const EMPTY_UNIFORMS: Record<string, UniformParam> = {};
 
+export interface PingPongPassesWithPort extends PingPongPassesResult {
+    port: UniformDebugPort;
+}
+
 export const usePingPongPasses = ({
     programId,
     secondaryProgramId,
@@ -35,9 +41,9 @@ export const usePingPongPasses = ({
     renderOptions = DEFAULT_RENDER_OPTIONS,
     customPasses,
     framebuffers
-}: PingPongPassesOptions) => {
-    const primaryUniforms = useUniformUpdaters(programId, uniforms);
-    const secondaryUniformsConverted = useUniformUpdaters(
+}: PingPongPassesOptions): PingPongPassesWithPort => {
+    const primary = useUniformUpdaters(programId, uniforms);
+    const secondary = useUniformUpdaters(
         secondaryProgramId ?? `${programId}-secondary`,
         secondaryUniforms
     );
@@ -46,7 +52,7 @@ export const usePingPongPasses = ({
     const renderKey = serializeRenderOptions(renderOptions);
     const overrideKey = framebuffers ? JSON.stringify(framebuffers) : '';
 
-    return useMemo(() => {
+    const passesResult = useMemo(() => {
         const framebufferOpts = JSON.parse(framebufferKey) as FramebufferOptions;
         const renderOpts = JSON.parse(renderKey) as PingPongRenderOptions;
         const override = overrideKey
@@ -56,8 +62,8 @@ export const usePingPongPasses = ({
             programId,
             secondaryProgramId,
             iterations,
-            primaryUniforms,
-            secondaryUniformsConverted,
+            primary.updaters,
+            secondary.updaters,
             framebufferOpts,
             renderOpts,
             customPasses,
@@ -67,11 +73,18 @@ export const usePingPongPasses = ({
         programId,
         secondaryProgramId,
         iterations,
-        primaryUniforms,
-        secondaryUniformsConverted,
+        primary.updaters,
+        secondary.updaters,
         framebufferKey,
         renderKey,
         customPasses,
         overrideKey
     ]);
+
+    const port = useMemo(
+        () => combineUniformDebugPorts([primary.port, secondary.port]),
+        [primary.port, secondary.port]
+    );
+
+    return { ...passesResult, port };
 };

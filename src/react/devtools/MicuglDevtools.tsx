@@ -10,8 +10,10 @@ import { computeFrameStats, fpsFromMean, pushCapped } from '@/react/devtools/lib
 import { buttonStyle, COLORS, FONT, sectionStyle } from '@/react/devtools/lib/theme';
 import { CapabilitiesPanel } from '@/react/devtools/panels/CapabilitiesPanel';
 import { FpsPanel } from '@/react/devtools/panels/FpsPanel';
+import { FramebuffersPanel } from '@/react/devtools/panels/FramebuffersPanel';
 import { FrameloopPanel } from '@/react/devtools/panels/FrameloopPanel';
 import { GlCountersPanel } from '@/react/devtools/panels/GlCountersPanel';
+import { UniformsPanel } from '@/react/devtools/panels/UniformsPanel';
 import { diffCounters } from '@/testing/assertions';
 import type { GlCountersData, GlCountersHandle } from '@/testing/glCounters';
 import { installGlCounters } from '@/testing/glCounters';
@@ -26,6 +28,7 @@ export interface MicuglDevtoolsProps {
 
 const MAX_SAMPLES = 180;
 const THROTTLE_MS = 100;
+const CAPTURE_THROTTLE_MS = 333;
 
 let panelActive = false;
 
@@ -153,6 +156,7 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
     const [liveFrame, setLiveFrame] = useState(0);
     const [glOn, setGlOn] = useState(false);
     const [glDelta, setGlDelta] = useState<GlCountersData | null>(null);
+    const [captureTick, setCaptureTick] = useState(0);
 
     const selected = engines.find(engine => engine.id === selectedId) ?? engines.at(0) ?? null;
 
@@ -162,6 +166,7 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
     const glHistoryRef = useRef<number[]>([]);
     const lastTsRef = useRef(0);
     const lastThrottleRef = useRef(0);
+    const captureThrottleRef = useRef(0);
     const glCountersRef = useRef<GlCountersHandle | null>(null);
     const latestGlRef = useRef<GlCountersData | null>(null);
     const prevGlRef = useRef<GlCountersData | null>(null);
@@ -209,6 +214,10 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
                         drawSparkline(glCanvasRef.current, glHistoryRef.current, COLORS.accent);
                     }
                 }
+            }
+            if (opened && timestamp - captureThrottleRef.current >= CAPTURE_THROTTLE_MS) {
+                captureThrottleRef.current = timestamp;
+                setCaptureTick(tick => tick + 1);
             }
             if (timestamp - lastThrottleRef.current >= THROTTLE_MS) {
                 lastThrottleRef.current = timestamp;
@@ -318,6 +327,16 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
                                             onStep={handleStep}
                                             onSetFrame={handleSetFrame}
                                         />
+                                        <UniformsPanel engine={selected} />
+                                        {engineState.framebufferIds.length > 0
+                                            ? (
+                                                <FramebuffersPanel
+                                                    framebufferIds={engineState.framebufferIds}
+                                                    manager={selected?.getManager() ?? null}
+                                                    captureTick={captureTick}
+                                                />
+                                            )
+                                            : null}
                                     </>
                                 )
                                 : null}

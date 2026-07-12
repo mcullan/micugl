@@ -8,6 +8,16 @@ import { GL_HALF_FLOAT_OES } from '@/core/lib/glConstants';
 import type { TextureCapabilities } from '@/core/lib/textureCapabilities';
 import { resolveTextureType } from '@/core/lib/textureCapabilities';
 
+export interface FramebufferReadResult {
+    width: number;
+    height: number;
+    pixels: Uint8ClampedArray;
+}
+
+export interface FramebufferUnreadable {
+    unreadable: string;
+}
+
 export class FBOManager {
     private gl: WebGLRenderingContext;
     private resources = new Map<string, FramebufferResources>();
@@ -311,6 +321,54 @@ export class FBOManager {
         });
         this.lastViewportWidth = -1;
         this.lastViewportHeight = -1;
+    }
+
+    debugReadFramebuffer(id: string, maxSize?: number): FramebufferReadResult | FramebufferUnreadable {
+        const resources = this.resources.get(id);
+        if (!resources) {
+            throw new Error(`Framebuffer with id ${id} not found`);
+        }
+
+        const { width, height } = resources;
+        if (width <= 0 || height <= 0) {
+            return { unreadable: 'framebuffer has zero size' };
+        }
+        if (maxSize !== undefined && (width > maxSize || height > maxSize)) {
+            return { unreadable: `framebuffer ${width}x${height} exceeds capture maxSize ${maxSize}` };
+        }
+
+        const gl = this.gl;
+        const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+        const previousViewport = gl.getParameter(gl.VIEWPORT) as ArrayLike<number>;
+
+        const restore = (): void => {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
+            gl.viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+        };
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, resources.framebuffer);
+
+        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+        if (status !== gl.FRAMEBUFFER_COMPLETE) {
+            restore();
+            return { unreadable: `framebuffer incomplete: ${status}` };
+        }
+
+        if (resources.textureOptions.type !== gl.UNSIGNED_BYTE) {
+            const readType = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE) as number;
+            const readFormat = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT) as number;
+            if (readType !== gl.UNSIGNED_BYTE || readFormat !== gl.RGBA) {
+                restore();
+                return { unreadable: 'float framebuffer readback unsupported' };
+            }
+        }
+
+        const pixels = new Uint8ClampedArray(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+        restore();
+
+        return { width, height, pixels };
     }
 
     getCapabilities(): TextureCapabilities {

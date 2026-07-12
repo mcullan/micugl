@@ -57,6 +57,7 @@ export const PingPongSim = () => {
             programConfigs={programConfigs}
             passes={passes}
             framebuffers={framebuffers}
+            debug
             style={{ width: '100vw', height: '100vh', display: 'block' }}
         />
     );
