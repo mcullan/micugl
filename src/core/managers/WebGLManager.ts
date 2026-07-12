@@ -17,6 +17,7 @@ import type { BufferData, UniformTypeMap } from '@/types';
 declare global {
     interface WebGLRenderingContext {
         vertexAttribDivisor: ((index: number, divisor: number) => void) | undefined;
+        drawArraysInstanced: ((mode: number, first: number, count: number, instanceCount: number) => void) | undefined;
     }
 }
 
@@ -144,7 +145,12 @@ export class WebGLManager {
         return shader;
     }
 
-    createBuffer(programId: string, attributeName: string, data: Float32Array | Uint8Array | Uint16Array): WebGLBuffer {
+    createBuffer(
+        programId: string,
+        attributeName: string,
+        data: Float32Array | Uint8Array | Uint16Array,
+        usage: 'static' | 'dynamic' = 'static'
+    ): WebGLBuffer {
         const gl = this.gl;
         const resources = this.resources.get(programId);
 
@@ -152,15 +158,15 @@ export class WebGLManager {
             throw new Error(`Program with id ${programId} not found`);
         }
 
-         
+
         const buffer = gl.createBuffer() as WebGLBuffer | null;
         if (!buffer) {
             throw new Error('Failed to create buffer');
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, data, usage === 'dynamic' ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW);
 
-        resources.buffers[attributeName] = { buffer, data };
+        resources.buffers[attributeName] = { buffer, data, allocatedByteLength: data.byteLength };
         return buffer;
     }
 
@@ -180,6 +186,36 @@ export class WebGLManager {
         gl.bindBuffer(gl.ARRAY_BUFFER, bufferData.buffer);
         gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
         bufferData.data = data;
+        bufferData.allocatedByteLength = data.byteLength;
+    }
+
+    updateBufferSub(
+        programId: string,
+        attributeName: string,
+        data: Float32Array | Uint8Array | Uint16Array,
+        offset = 0
+    ): void {
+        const gl = this.gl;
+        const resources = this.resources.get(programId);
+
+        if (!resources) {
+            throw new Error(`Program with id ${programId} not found`);
+        }
+
+        const bufferData = resources.buffers[attributeName] as BufferData | undefined;
+        if (!bufferData) {
+            throw new Error(`Buffer for attribute ${attributeName} not found`);
+        }
+
+        if (offset + data.byteLength > bufferData.allocatedByteLength) {
+            throw new Error(
+                `updateBufferSub for attribute ${attributeName} would write past the allocated buffer: ` +
+                `offset ${offset} + ${data.byteLength} bytes exceeds ${bufferData.allocatedByteLength} allocated bytes`
+            );
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, bufferData.buffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, offset, data);
     }
 
    
@@ -434,6 +470,19 @@ export class WebGLManager {
 
     drawArrays(mode: number, first: number, count: number): void {
         this.gl.drawArrays(mode, first, count);
+    }
+
+    drawArraysInstanced(mode: number, first: number, count: number, instanceCount: number): void {
+        const gl = this.gl;
+        const instancedExt = this.getExtension('ANGLE_instanced_arrays');
+
+        if (instancedExt?.drawArraysInstancedANGLE) {
+            instancedExt.drawArraysInstancedANGLE(mode, first, count, instanceCount);
+        } else if (gl.drawArraysInstanced) {
+            gl.drawArraysInstanced(mode, first, count, instanceCount);
+        } else {
+            throw new Error('Instanced rendering requires ANGLE_instanced_arrays');
+        }
     }
 
     drawElements(mode: number, count: number, type: number, offset: number): void {
