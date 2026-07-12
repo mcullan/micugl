@@ -27,7 +27,9 @@ import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { resolveMotionGate } from '@/react/lib/motionPolicy';
+import { createRecording } from '@/react/lib/record';
 import { RenderLoop } from '@/react/lib/renderLoop';
+import { runRenderSequence } from '@/react/lib/renderSequence';
 import {
     DEFAULT_DPR,
     DEFAULT_MAX_PIXEL_COUNT,
@@ -35,7 +37,15 @@ import {
     resolveResolution
 } from '@/react/lib/resolution';
 import { frameToMs } from '@/react/lib/timeKeeper';
-import type { Dpr, PingPongShaderHandle, RenderControlProps, RenderToBlobOptions, SeedOptions } from '@/types';
+import type {
+    Dpr,
+    PingPongShaderHandle,
+    RecordOptions,
+    RenderControlProps,
+    RenderToBlobOptions,
+    SeedOptions,
+    SequenceOptions
+} from '@/types';
 
 interface PingPongShaderEngineProps extends RenderControlProps {
     programConfigs: Record<string, ShaderProgramConfig>;
@@ -593,6 +603,69 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         renderToDataURL: (options?: RenderToBlobOptions) => {
             const { pixels, width, height, type, quality } = captureStill(options);
             return Promise.resolve(pixelsToDataURL(pixels, width, height, type, quality));
+        },
+        captureStream: (fps?: number) => {
+            const manager = managerRef.current;
+            if (!readyRef.current || !manager) {
+                throw new Error('PingPongShaderEngine.captureStream: engine is not ready');
+            }
+            if (manager.context.isContextLost()) {
+                throw new Error('PingPongShaderEngine.captureStream: WebGL context is lost');
+            }
+            const canvas = manager.context.canvas as HTMLCanvasElement;
+            if (typeof canvas.captureStream !== 'function') {
+                throw new Error('PingPongShaderEngine.captureStream: this canvas does not support captureStream');
+            }
+            return canvas.captureStream(fps ?? 60);
+        },
+        record: (options?: RecordOptions) => {
+            const manager = managerRef.current;
+            if (!readyRef.current || !manager) {
+                throw new Error('PingPongShaderEngine.record: engine is not ready');
+            }
+            if (manager.context.isContextLost()) {
+                throw new Error('PingPongShaderEngine.record: WebGL context is lost');
+            }
+            if (controllerRef.current?.getMotionGate() !== 'none') {
+                throw new Error(
+                    'PingPongShaderEngine.record: recording a motion-gated engine captures a frozen poster; ' +
+                    'set reducedMotion="ignore"/saveData="ignore", or use renderSequence() instead'
+                );
+            }
+            const canvas = manager.context.canvas as HTMLCanvasElement;
+            return createRecording(canvas, options);
+        },
+        renderSequence: (options: SequenceOptions) => {
+            const manager = managerRef.current;
+            const passSystem = passSystemRef.current;
+            if (!readyRef.current || !manager || !passSystem) {
+                throw new Error('PingPongShaderEngine.renderSequence: engine is not ready');
+            }
+            if (manager.context.isContextLost()) {
+                throw new Error('PingPongShaderEngine.renderSequence: WebGL context is lost');
+            }
+            const canvas = manager.context.canvas as HTMLCanvasElement;
+            const controller = controllerRef.current;
+            const wasRunning = controller !== null && !controller.isPaused();
+            if (wasRunning) {
+                controller.stop();
+            }
+            return runRenderSequence(
+                {
+                    canvas,
+                    renderAtMs: t => { passSystem.execute(t) },
+                    reset: color => { passSystem.reset(color) },
+                    isTimePure: () => passSystem.isTimePure()
+                },
+                options
+            ).finally(() => {
+                if (options.seed === undefined) {
+                    passSystem.execute(frameToMs(controllerRef.current?.getFrame() ?? 0));
+                }
+                if (wasRunning && controllerRef.current === controller) {
+                    controller.start();
+                }
+            });
         }
     }), [resetSimulation, captureStill]);
 

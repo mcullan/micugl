@@ -205,3 +205,117 @@ resolution.
   finished initializing, or (for `ShaderEngine`) a custom resolution is requested while
   using the non-fast render-callback path (custom-resolution export requires
   `useFastPath`).
+
+## Video export
+
+Both engines' ref handle also expose two video paths: `captureStream(fps?)` +
+`record(options?)` for realtime recording, and `renderSequence(options)` for offline,
+exact-fps, frame-stepped export via WebCodecs.
+
+### `record()` — realtime, drops possible
+
+```tsx
+const ref = useRef<ShaderHandle>(null);
+
+const recording = ref.current!.record({ fps: 60 });
+setTimeout(async () => {
+  const webm = await recording.stop();
+  // upload/download webm
+}, 5000);
+```
+
+`record()` wraps `canvas.captureStream()` + `MediaRecorder`. It records whatever the
+canvas actually draws in realtime, so frames can drop under load — it is not frame-exact.
+It throws if the engine is currently motion-gated (`reducedMotion`/`saveData` resolved to
+`'static-frame'` or `'pause'`), because recording a frozen or interaction-only poster is
+almost always a mistake; set `reducedMotion="ignore"`/`saveData="ignore"` on the engine,
+or use `renderSequence()` instead, which drives its own frames independently of the loop
+mode. `recording.cancel()` discards the in-progress recording without producing a blob.
+
+### `renderSequence()` — offline, exact-fps
+
+```tsx
+// 4 seconds at 30fps, webm/VP9, no dropped frames:
+const webm = await ref.current!.renderSequence({ fps: 30, durationSeconds: 4 });
+
+// dependency-free: raw VideoFrames, no muxer required
+await ref.current!.renderSequence({
+  fps: 30,
+  frames: 90,
+  container: 'none',
+  onFrame: (frame, index) => {
+    // consume synchronously or copy — the frame is closed right after this returns
+  },
+});
+```
+
+`renderSequence` steps the deterministic clock exactly once per output frame (no realtime
+drift, no dropped frames) and encodes each frame with `VideoEncoder`. It **requires a
+secure context** (`localhost`/`https`) — `VideoEncoder`/`VideoFrame` are unavailable on
+plain `http://` origins in browsers that support WebCodecs at all, and `renderSequence`
+throws a clear error rather than silently falling back to realtime capture.
+
+The default codec is VP9 (`vp09.00.10.08`) for both `webm` and `mp4` containers — **many
+Chromium builds (including headless Playwright's bundled Chromium) have no H.264
+(`avc1`) encoder**, only VP8/VP9/AV1 software encode. Passing an `avc1.*` codec that
+`VideoEncoder.isConfigSupported` rejects throws an error suggesting VP9/AV1 or the
+scripted ffmpeg recipe below.
+
+Producing a `webm`/`mp4` container requires a muxer as an **optional peer dependency**,
+loaded via dynamic `import()` only when needed:
+
+```
+npm i webm-muxer
+# or: npm i mp4-muxer
+```
+
+If neither is installed, `renderSequence` throws telling you to install one or pass
+`container: 'none'` with `onFrame`, which hands you raw `VideoFrame`s with no muxer
+dependency at all.
+
+`SequenceOptions`:
+
+| Option           | Type                                     | Notes                                                              |
+| ---------------- | ----------------------------------------- | ------------------------------------------------------------------ |
+| `fps`            | number                                     | required; output frame rate                                        |
+| `frames`         | number                                     | exactly one of `frames`/`durationSeconds` is required               |
+| `durationSeconds`| number                                     | exactly one of `frames`/`durationSeconds` is required               |
+| `startFrame`     | number                                     | library frame number to start at (60fps timebase); default `0`; cannot combine with `seed` |
+| `codec`          | string                                     | default `'vp09.00.10.08'`                                           |
+| `container`      | `'webm' \| 'mp4' \| 'none'`                | default `'webm'`; `'none'` requires `onFrame`                       |
+| `bitrate`        | number                                     | default `8_000_000`                                                |
+| `seed`           | `SeedOptions`                              | ping-pong only: reset before the sequence (see below)               |
+| `onFrame`        | `(frame: VideoFrame, index: number) => void` | called before encoding each frame; required when `container: 'none'` |
+| `signal`         | `AbortSignal`                              | aborts the sequence loop between frames                             |
+
+Sequence export renders at the canvas's current backing size — custom export dimensions
+are not supported by `renderSequence` in this version; size the canvas explicitly before
+calling it.
+
+### Ping-pong sequences
+
+For a **time-pure** generated chain, `renderSequence` steps the same library clock
+`renderToBlob` uses (`startFrame + i * (60 / fps)`, converted to ms). For an
+**accumulating** custom chain, a `seed` is required — `renderSequence` resets the
+simulation and steps it forward at `i * (1000 / fps)` ms per output frame, matching
+`resetSimulation`/`renderToBlob({ seed, steps })` semantics. Passing `seed` on a
+time-pure chain opts into the same seeded schedule. After the sequence finishes (or
+throws), the display is restored to the current clock frame — unless a seed was used, in
+which case the seeded state becomes the new current simulation state, exactly like
+`resetSimulation`.
+
+### Scripted, frame-exact H.264 (recipe, not library code)
+
+When you need real H.264 and control the rendering environment yourself (CI, a build
+script), drive the canvas with Playwright instead of `renderSequence`:
+
+1. Launch headless Chromium with a real GPU on macOS: `--use-angle=metal` (or
+   `--enable-gpu`) — default headless falls back to SwiftShader software rendering.
+2. For each frame `i`, call `ref.setFrame(i)` and capture a PNG (`renderToDataURL`/
+   `page.screenshot`).
+3. Assemble the PNG sequence with ffmpeg, forcing `yuv420p` (PNG frames carry an alpha
+   channel even for opaque canvases, which `yuv420p` doesn't support unless forced):
+
+   ```
+   ffmpeg -framerate 30 -i frame_%d.png -pix_fmt yuv420p out.mp4
+   ```

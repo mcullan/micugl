@@ -1,10 +1,18 @@
+import { useEffect, useRef } from 'react';
+
 import { createShaderConfig } from '../../src/core/lib/createShaderConfig';
 import { BaseShaderComponent } from '../../src/react/components/base/BaseShaderComponent';
 import { useReducedMotion } from '../../src/react/hooks/useReducedMotion';
 import { useSaveData } from '../../src/react/hooks/useSaveData';
-import type { MotionPolicy, UniformParam } from '../../src/types';
+import type { MotionPolicy, ShaderHandle, UniformParam } from '../../src/types';
 import { getIntQuery, getQueryString } from './query';
 import { QUAD_VERTEX, WAVE_FRAGMENT } from './shaders';
+
+declare global {
+    interface Window {
+        __reducedMotionHandle?: ShaderHandle;
+    }
+}
 
 const config = createShaderConfig({
     vertexShader: QUAD_VERTEX,
@@ -28,10 +36,19 @@ export const ReducedMotion = () => {
     const saveDataActive = useSaveData();
     const policy = readPolicy();
     const staticFrame = getIntQuery('staticFrame', 0);
+    const handleRef = useRef<ShaderHandle>(null);
+
+    useEffect(() => {
+        window.__reducedMotionHandle = handleRef.current ?? undefined;
+        return () => {
+            window.__reducedMotionHandle = undefined;
+        };
+    }, []);
 
     return (
         <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
             <BaseShaderComponent
+                ref={handleRef}
                 programId='reduced-motion'
                 shaderConfig={config}
                 uniforms={uniforms}
