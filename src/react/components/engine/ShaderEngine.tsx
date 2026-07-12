@@ -2,6 +2,7 @@ import {
     type CSSProperties,
     forwardRef,
     memo,
+    type RefObject,
     useCallback,
     useEffect,
     useImperativeHandle,
@@ -20,6 +21,7 @@ import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
+import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import {
     DEFAULT_DPR,
@@ -44,6 +46,7 @@ interface ShaderEngineProps extends RenderControlProps {
     uniformUpdaters?: Record<string, UniformUpdaterEntry[]>;
     useFastPath?: boolean;
     debug?: boolean;
+    debugPortRef?: RefObject<UniformDebugPort | null>;
 }
 
 interface ObservedSize {
@@ -109,6 +112,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
     debug = false,
+    debugPortRef,
     useDevicePixelRatio,
     pixelRatio,
     frameloop = 'always',
@@ -311,7 +315,8 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                 invalidate: () => { controllerRef.current?.invalidate() },
                 setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
                 getFrame: () => controllerRef.current?.getFrame() ?? 0,
-                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) }
+                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
+                uniforms: debugPortRef?.current ?? undefined
             };
             emitEngineMount(handle);
         }
@@ -323,7 +328,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             activeProgram.current = null;
             emitEngineUnmount(engineIdRef.current);
         };
-    }, [contentKey, epoch]);
+    }, [contentKey, epoch, debugPortRef]);
 
     useEffect(() => {
         applySize();

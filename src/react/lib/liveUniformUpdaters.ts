@@ -2,6 +2,7 @@ import { createCommonUpdaters } from '@/react/lib/createUniformUpdater';
 import type {
     UniformParam,
     UniformType,
+    UniformTypeMap,
     UniformUpdaterDef,
     UniformValue
 } from '@/types';
@@ -16,6 +17,130 @@ export interface UniformDescriptor {
 }
 
 export type LiveValues = Record<string, UniformValue<UniformType>>;
+
+export interface UniformListEntry {
+    name: string;
+    type: UniformType;
+    value: unknown;
+    overridden: boolean;
+}
+
+export interface UniformDebugPort {
+    list: () => UniformListEntry[];
+    setOverride: (name: string, value: unknown) => void;
+    clearOverride: (name: string) => void;
+}
+
+export interface UniformDebugPortRefs {
+    descriptorsRef: { current: UniformDescriptor[] };
+    baseValuesRef: { current: LiveValues };
+    overridesRef: { current: LiveValues };
+    valuesRef: { current: LiveValues };
+}
+
+const VEC_LENGTHS: Partial<Record<UniformType, number>> = {
+    vec2: 2,
+    vec3: 3,
+    vec4: 4,
+    mat2: 4,
+    mat3: 9,
+    mat4: 16
+};
+
+function coerceFiniteNumber(type: UniformType, value: unknown): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        throw new Error(
+            `micugl devtools: override for "${type}" uniform must be a finite number, received ${JSON.stringify(value)}`
+        );
+    }
+    return parsed;
+}
+
+function isArrayLikeValue(value: unknown): value is ArrayLike<unknown> {
+    return typeof value === 'object' && value !== null && 'length' in value;
+}
+
+export function validateOverrideValue(type: UniformType, value: unknown): UniformTypeMap[UniformType] {
+    if (type === 'float') {
+        return coerceFiniteNumber(type, value);
+    }
+    if (type === 'int' || type === 'sampler2D') {
+        return Math.trunc(coerceFiniteNumber(type, value));
+    }
+    const length = VEC_LENGTHS[type];
+    if (length === undefined) {
+        throw new Error(`micugl devtools: unsupported uniform type "${type}" for override`);
+    }
+    if (!isArrayLikeValue(value) || value.length !== length) {
+        const gotLength = isArrayLikeValue(value) ? value.length : typeof value;
+        throw new Error(
+            `micugl devtools: override for "${type}" uniform expects ${length} components, received ${String(gotLength)}`
+        );
+    }
+    const buffer = new Float32Array(length);
+    for (let i = 0; i < length; i++) {
+        buffer[i] = coerceFiniteNumber(type, value[i]);
+    }
+    return buffer as UniformTypeMap[UniformType];
+}
+
+export function mergeOverrides(base: LiveValues, overrides: LiveValues): LiveValues {
+    return Object.keys(overrides).length === 0 ? base : { ...base, ...overrides };
+}
+
+export function createUniformDebugPort(refs: UniformDebugPortRefs): UniformDebugPort {
+    const findDescriptor = (name: string): UniformDescriptor => {
+        const found = refs.descriptorsRef.current.find(descriptor => descriptor.name === name);
+        if (!found) {
+            throw new Error(`micugl devtools: unknown uniform "${name}"`);
+        }
+        return found;
+    };
+
+    return {
+        list: () => refs.descriptorsRef.current.map(descriptor => ({
+            name: descriptor.name,
+            type: descriptor.type,
+            value: refs.valuesRef.current[descriptor.name],
+            overridden: Object.prototype.hasOwnProperty.call(refs.overridesRef.current, descriptor.name)
+        })),
+        setOverride: (name, value) => {
+            const descriptor = findDescriptor(name);
+            const validated = validateOverrideValue(descriptor.type, value);
+            refs.overridesRef.current[name] = validated;
+            refs.valuesRef.current = mergeOverrides(refs.baseValuesRef.current, refs.overridesRef.current);
+        },
+        clearOverride: name => {
+            findDescriptor(name);
+            Reflect.deleteProperty(refs.overridesRef.current, name);
+            refs.valuesRef.current[name] = refs.baseValuesRef.current[name];
+        }
+    };
+}
+
+export function combineUniformDebugPorts(ports: UniformDebugPort[]): UniformDebugPort {
+    const portsWithName = (name: string): UniformDebugPort[] =>
+        ports.filter(port => port.list().some(entry => entry.name === name));
+
+    return {
+        list: () => ports.flatMap(port => port.list()),
+        setOverride: (name, value) => {
+            const targets = portsWithName(name);
+            if (targets.length === 0) {
+                throw new Error(`micugl devtools: unknown uniform "${name}"`);
+            }
+            targets.forEach(port => { port.setOverride(name, value) });
+        },
+        clearOverride: name => {
+            const targets = portsWithName(name);
+            if (targets.length === 0) {
+                throw new Error(`micugl devtools: unknown uniform "${name}"`);
+            }
+            targets.forEach(port => { port.clearOverride(name) });
+        }
+    };
+}
 
 export function normalizeUniformName(name: string): string {
     return name.startsWith('u_') ? name : `u_${name}`;

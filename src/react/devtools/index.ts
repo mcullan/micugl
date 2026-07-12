@@ -6,3 +6,5 @@ export { listEngines, setDevtoolsSink } from '@/react/devtools/beacon';
 export type { DevtoolsPosition, MicuglDevtoolsProps } from '@/react/devtools/MicuglDevtools';
 /** @experimental */
 export { MicuglDevtools } from '@/react/devtools/MicuglDevtools';
+/** @experimental */
+export type { UniformDebugPort, UniformListEntry } from '@/react/lib/liveUniformUpdaters';

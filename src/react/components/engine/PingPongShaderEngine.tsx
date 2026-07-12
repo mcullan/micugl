@@ -2,6 +2,7 @@ import {
     type CSSProperties,
     forwardRef,
     memo,
+    type RefObject,
     useCallback,
     useEffect,
     useImperativeHandle,
@@ -19,6 +20,7 @@ import { Passes } from '@/core/systems/Passes';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
+import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import {
     DEFAULT_DPR,
@@ -37,6 +39,7 @@ interface PingPongShaderEngineProps extends RenderControlProps {
     renderWidth?: number;
     renderHeight?: number;
     debug?: boolean;
+    debugPortRef?: RefObject<UniformDebugPort | null>;
 }
 
 interface ObservedSize {
@@ -100,6 +103,7 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
     renderWidth,
     renderHeight,
     debug = false,
+    debugPortRef,
     useDevicePixelRatio,
     pixelRatio,
     frameloop = 'always',
@@ -303,7 +307,8 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
                 invalidate: () => { controllerRef.current?.invalidate() },
                 setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
                 getFrame: () => controllerRef.current?.getFrame() ?? 0,
-                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) }
+                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
+                uniforms: debugPortRef?.current ?? undefined
             };
             emitEngineMount(handle);
         }
@@ -315,7 +320,7 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
             passSystemRef.current = null;
             emitEngineUnmount(engineIdRef.current);
         };
-    }, [contentKey, epoch]);
+    }, [contentKey, epoch, debugPortRef]);
 
     useEffect(() => {
         applySize();

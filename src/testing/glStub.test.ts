@@ -167,6 +167,53 @@ describe('createGLStub call log ordering and typed views', () => {
     });
 });
 
+describe('createGLStub readPixels', () => {
+    it('zeroes the provided buffer and records the call', () => {
+        const { gl, calls, readPixelsCalls } = createGLStub();
+        const buffer = new Uint8ClampedArray(16).fill(255);
+
+        gl.readPixels(0, 0, 2, 2, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+
+        expect(buffer.every(value => value === 0)).toBe(true);
+        expect(readPixelsCalls).toEqual([
+            { x: 0, y: 0, width: 2, height: 2, format: gl.RGBA, type: gl.UNSIGNED_BYTE }
+        ]);
+        expect(calls.some(call => call.name === 'readPixels')).toBe(true);
+    });
+});
+
+describe('createGLStub getParameter', () => {
+    it('defaults IMPLEMENTATION_COLOR_READ_TYPE/FORMAT to UNSIGNED_BYTE/RGBA', () => {
+        const { gl } = createGLStub();
+
+        expect(gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE)).toBe(gl.UNSIGNED_BYTE);
+        expect(gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT)).toBe(gl.RGBA);
+    });
+
+    it('reflects configured colorReadType/colorReadFormat', () => {
+        const { gl } = createGLStub({ colorReadType: GL_FLOAT });
+
+        expect(gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE)).toBe(GL_FLOAT);
+    });
+
+    it('exposes the currently bound framebuffer and viewport', () => {
+        const { gl } = createGLStub();
+        const framebuffer = gl.createFramebuffer();
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.viewport(1, 2, 3, 4);
+
+        expect(gl.getParameter(gl.FRAMEBUFFER_BINDING)).toBe(framebuffer);
+        expect(gl.getParameter(gl.VIEWPORT)).toEqual([1, 2, 3, 4]);
+    });
+
+    it('throws for an unmodeled pname', () => {
+        const { gl } = createGLStub();
+
+        expect(() => { gl.getParameter(0x9999) }).toThrow(/unstubbed getParameter/);
+    });
+});
+
 describe('createGLStub uniform-location identity', () => {
     it('returns the same location object for repeated lookups of the same name', () => {
         const { gl } = createGLStub();
@@ -191,7 +238,7 @@ describe('createGLStub uniform-location identity', () => {
 
 describe('createGLStub reset', () => {
     it('clears all recorded call logs but preserves gl identity', () => {
-        const { gl, calls, texImage2DCalls, viewportCalls, useProgramCalls, uniformCalls, reset } = createGLStub();
+        const { gl, calls, texImage2DCalls, viewportCalls, useProgramCalls, uniformCalls, readPixelsCalls, reset } = createGLStub();
         const program = gl.createProgram();
         const texture = gl.createTexture();
 
@@ -200,6 +247,7 @@ describe('createGLStub reset', () => {
         gl.viewport(0, 0, 4, 4);
         gl.useProgram(program);
         gl.uniform1f(gl.getUniformLocation(program, 'u_x'), 1);
+        gl.readPixels(0, 0, 4, 4, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8ClampedArray(64));
 
         const glBefore = gl;
         reset();
@@ -209,6 +257,7 @@ describe('createGLStub reset', () => {
         expect(viewportCalls).toHaveLength(0);
         expect(useProgramCalls).toHaveLength(0);
         expect(uniformCalls).toHaveLength(0);
+        expect(readPixelsCalls).toHaveLength(0);
         expect(gl).toBe(glBefore);
     });
 });

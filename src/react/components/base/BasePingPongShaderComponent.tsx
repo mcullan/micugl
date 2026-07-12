@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, useRef } from 'react';
 
 import type { FramebufferOptions, RenderOptions, RenderPass, ShaderProgramConfig } from '@/core';
 import { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
 import { usePingPongPasses } from '@/react/hooks/usePingPongPasses';
+import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type { RenderControlProps, ShaderHandle, UniformParam } from '@/types';
 
 export interface BasePingPongShaderProps extends RenderControlProps {
@@ -71,7 +72,7 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
         programConfigs[actualSecondaryProgramId] = secondaryShaderConfig;
     }
 
-    const { passes, framebuffers } = usePingPongPasses({
+    const { passes, framebuffers, port } = usePingPongPasses({
         programId,
         secondaryProgramId: secondaryShaderConfig ? actualSecondaryProgramId : undefined,
         iterations,
@@ -82,6 +83,8 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
         customPasses,
         framebuffers: framebuffersOverride
     });
+    const debugPortRef = useRef<UniformDebugPort | null>(null);
+    debugPortRef.current = port;
 
     return (
         <PingPongShaderEngine
@@ -89,6 +92,7 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
             programConfigs={programConfigs}
             passes={passes}
             framebuffers={framebuffers}
+            debugPortRef={debugPortRef}
             className={className}
             style={style}
             width={width}
