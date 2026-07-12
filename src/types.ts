@@ -103,6 +103,31 @@ export interface RenderToBlobOptions {
   fps?: number;
 }
 
+export interface RecordOptions {
+  fps?: number;
+  mimeType?: string;
+  videoBitsPerSecond?: number;
+}
+
+export interface Recording {
+  stop(): Promise<Blob>;
+  cancel(): void;
+  readonly stream: MediaStream;
+}
+
+export interface SequenceOptions {
+  fps: number;
+  frames?: number;
+  durationSeconds?: number;
+  startFrame?: number;
+  codec?: string;
+  container?: 'webm' | 'mp4' | 'none';
+  bitrate?: number;
+  seed?: SeedOptions;
+  onFrame?: (frame: VideoFrame, index: number) => void;
+  signal?: AbortSignal;
+}
+
 export interface ShaderHandle {
   invalidate: () => void;
   setFrame: (frame: number) => void;
@@ -111,6 +136,9 @@ export interface ShaderHandle {
   stop: () => void;
   renderToBlob: (options?: RenderToBlobOptions) => Promise<Blob>;
   renderToDataURL: (options?: RenderToBlobOptions) => Promise<string>;
+  captureStream: (fps?: number) => MediaStream;
+  record: (options?: RecordOptions) => Recording;
+  renderSequence: (options: SequenceOptions) => Promise<Blob | null>;
 }
 
 export interface PingPongShaderHandle extends ShaderHandle {

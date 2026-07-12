@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 
 import { DevtoolsDebug } from './DevtoolsDebug';
+import { ExportDemo } from './ExportDemo';
 import { ManyCanvases } from './ManyCanvases';
 import { ManyCanvasesDevtools } from './ManyCanvasesDevtools';
 import { Offscreen } from './Offscreen';
@@ -20,7 +21,8 @@ export const scenes: Record<string, ComponentType> = {
     'many-canvases-devtools': ManyCanvasesDevtools,
     'devtools-debug': DevtoolsDebug,
     'reduced-motion': ReducedMotion,
-    'visual-fixed': VisualFixed
+    'visual-fixed': VisualFixed,
+    'export-demo': ExportDemo
 };
 
 export const getSceneComponent = (): ComponentType | null => {
