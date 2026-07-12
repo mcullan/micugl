@@ -19,7 +19,7 @@ type ColorMode = 'auto' | 'color' | 'number';
 
 const formatReadonlyValue = (value: unknown): string => {
     if (typeof value === 'function') {
-        return 'ƒ()';
+        return '\u0192()';
     }
     if (typeof value === 'number') {
         return value.toFixed(3);
@@ -120,7 +120,7 @@ const UniformRow = ({ entry, mode, error, onToggleMode, onSetOverride, onClearOv
     } else {
         control = (
             <span style={{ fontSize: '11px', color: COLORS.dim }}>
-                {entry.type} · {formatReadonlyValue(entry.value)}
+                {entry.type} {'\u00b7'} {formatReadonlyValue(entry.value)}
             </span>
         );
     }
@@ -129,7 +129,7 @@ const UniformRow = ({ entry, mode, error, onToggleMode, onSetOverride, onClearOv
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={rowStyle}>
                 <span style={{ color: entry.overridden ? COLORS.accent : COLORS.dim, fontSize: '11px' }}>
-                    {entry.overridden ? '● ' : ''}{entry.name}
+                    {entry.overridden ? '\u25cf ' : ''}{entry.name}
                 </span>
                 {modeToggle}
             </div>

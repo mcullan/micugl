@@ -20,7 +20,7 @@ export const FpsPanel = ({ stats, canvasRef }: FpsPanelProps): ReactElement => {
                 </span>
                 <span style={{ fontSize: '10px', color: COLORS.dim, textAlign: 'right' }}>
                     mean {stats.mean.toFixed(1)}ms<br />
-                    p50 {stats.p50.toFixed(1)} · p95 {stats.p95.toFixed(1)}
+                    p50 {stats.p50.toFixed(1)} {'\u00b7'} p95 {stats.p95.toFixed(1)}
                 </span>
             </div>
             <canvas

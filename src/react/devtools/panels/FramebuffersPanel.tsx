@@ -113,7 +113,7 @@ export const FramebuffersPanel = ({ framebufferIds, manager, captureTick }: Fram
         <div style={sectionStyle}>
             <div style={sectionTitleStyle}>framebuffers</div>
             <div style={{ fontSize: '10px', color: COLORS.warn }}>
-                capture stalls the GPU pipeline — perturbs timing
+                capture stalls the GPU pipeline {'\u2014'} perturbs timing
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {framebufferIds.map(id => (

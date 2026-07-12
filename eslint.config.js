@@ -8,6 +8,7 @@ import reactDom from 'eslint-plugin-react-dom';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import asciiOnly from './eslint-rules/ascii-only.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,8 +40,14 @@ export default tseslint.config(
       'react-x': reactX,
       'react-dom': reactDom,
       'simple-import-sort': simpleImportSort,
+      local: {
+        rules: {
+          'ascii-only': asciiOnly,
+        },
+      },
     },
     rules: {
+      'local/ascii-only': 'error',
       'indent': ['error', 4, {
         SwitchCase: 1,
         ignoredNodes: [

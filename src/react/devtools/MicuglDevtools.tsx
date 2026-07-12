@@ -270,7 +270,7 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
         return (
             <div style={positionStyle(position)}>
                 <button type='button' onClick={() => { setOpen(true) }} style={collapsedButtonStyle}>
-                    micugl · {Math.round(fpsFromMean(fpsStats.mean))} fps
+                    micugl {'\u00b7'} {Math.round(fpsFromMean(fpsStats.mean))} fps
                 </button>
             </div>
         );
@@ -299,7 +299,7 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
                                         >
                                             {engines.map(engine => (
                                                 <option key={engine.id} value={engine.id}>
-                                                    {engine.kind} · {engine.id.slice(0, 8)}
+                                                    {engine.kind} {'\u00b7'} {engine.id.slice(0, 8)}
                                                 </option>
                                             ))}
                                         </select>

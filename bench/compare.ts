@@ -44,7 +44,7 @@ const main = (): void => {
     const rows: string[] = [];
     rows.push(`Comparing project '${project}': ${shaA.slice(0, 7)} (A) vs ${shaB.slice(0, 7)} (B)`);
     rows.push('');
-    rows.push(`| Scene | Metric | A | B | Δ | Δ% |`);
+    rows.push(`| Scene | Metric | A | B | \u0394 | \u0394% |`);
     rows.push(`| --- | --- | ---: | ---: | ---: | ---: |`);
 
     for (const scene of Object.keys(docB.scenes).sort()) {
