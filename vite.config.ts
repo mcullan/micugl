@@ -2,7 +2,13 @@ import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 
+import { assertWorkerIsReactFree } from './vite.workerPlugins';
+
 export default defineConfig({
+    worker: {
+        format: 'iife',
+        plugins: () => [assertWorkerIsReactFree()]
+    },
     build: {
         lib: {
             entry: {

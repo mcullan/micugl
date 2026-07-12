@@ -21,17 +21,19 @@ declare global {
     }
 }
 
+export type WebGLManagerCanvas = HTMLCanvasElement | OffscreenCanvas;
+
 export class WebGLManager {
     private gl: WebGLRenderingContext;
     private fboManager: FBOManager;
-  
+
     resources = new Map<string, ShaderResources>();
     private compileCache = new Map<string, WebGLShader>();
     private uniformUpdateFns = new Map<string, Map<string, UniformUpdateFn<UniformType>>>();
     private extensions = new Map<string, any>();
     private currentProgram: WebGLProgram | null = null;
 
-    constructor(canvas: HTMLCanvasElement, options?: WebGLContextAttributes) {
+    constructor(canvas: WebGLManagerCanvas, options?: WebGLContextAttributes) {
         const defaultOptions: WebGLContextAttributes = {
             alpha: false,
             depth: false,
@@ -282,7 +284,7 @@ export class WebGLManager {
             return;
         }
 
-        const canvas = this.gl.canvas as HTMLCanvasElement;
+        const canvas = this.gl.canvas;
         const resolvedWidth = width ?? canvas.width;
         const resolvedHeight = height ?? canvas.height;
 
@@ -296,7 +298,7 @@ export class WebGLManager {
         displayWidth?: number,
         displayHeight?: number
     ): void {
-        const canvas = this.gl.canvas as HTMLCanvasElement;
+        const canvas = this.gl.canvas;
 
         const actualDisplayWidth = displayWidth ?? renderWidth;
         const actualDisplayHeight = displayHeight ?? renderHeight;
@@ -307,12 +309,14 @@ export class WebGLManager {
             this.fboManager.setCanvasViewport(renderWidth, renderHeight);
         }
 
-        canvas.style.width = `${actualDisplayWidth}px`;
-        canvas.style.height = `${actualDisplayHeight}px`;
+        if ('style' in canvas) {
+            canvas.style.width = `${actualDisplayWidth}px`;
+            canvas.style.height = `${actualDisplayHeight}px`;
+        }
     }
 
     setDrawingBufferSize(renderWidth: number, renderHeight: number): void {
-        const canvas = this.gl.canvas as HTMLCanvasElement;
+        const canvas = this.gl.canvas;
 
         if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
             canvas.width = renderWidth;

@@ -88,3 +88,6 @@ export type {
     WebGLExtensionName,
     WebGLExtensionTypes
 } from './types';
+export type { CreateWorkerOptions } from './worker/createWorker';
+export { createMicuglWorker } from './worker/createWorker';
+export type { WorkerCapabilities } from './worker/protocol';

@@ -9,7 +9,7 @@ export function singleProgramEntry(
     const entries = Object.entries(programConfigs);
     if (entries.length !== 1) {
         throw new Error(
-            `ShaderEngine requires exactly one entry in programConfigs, received ${entries.length}`
+            `micugl requires exactly one entry in programConfigs, received ${entries.length}`
         );
     }
     return entries[0];
