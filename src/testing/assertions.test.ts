@@ -20,6 +20,7 @@ const zeroCounters = (): GlCountersData => ({
     useProgram: 0,
     uniformCalls: 0,
     drawArrays: 0,
+    drawArraysInstanced: 0,
     drawElements: 0,
     bufferData: 0,
     bufferBytes: 0

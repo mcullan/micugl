@@ -12,6 +12,7 @@ interface SceneSpec {
     query: string;
     iterations: number | null;
     assertDrawArrays: boolean;
+    assertDrawArraysInstanced?: boolean;
 }
 
 const specs: SceneSpec[] = [
@@ -20,7 +21,20 @@ const specs: SceneSpec[] = [
     { name: 'static-idle', query: '/?scene=static-idle', iterations: null, assertDrawArrays: false },
     { name: 'offscreen', query: '/?scene=offscreen', iterations: null, assertDrawArrays: false },
     { name: 'many-canvases', query: '/?scene=many-canvases', iterations: null, assertDrawArrays: true },
-    { name: 'many-canvases-devtools', query: '/?scene=many-canvases-devtools', iterations: null, assertDrawArrays: true }
+    { name: 'many-canvases-devtools', query: '/?scene=many-canvases-devtools', iterations: null, assertDrawArrays: true },
+    {
+        name: 'instanced-particles',
+        query: '/?scene=instanced-particles&count=10000',
+        iterations: null,
+        assertDrawArrays: false,
+        assertDrawArraysInstanced: true
+    },
+    {
+        name: 'particles-components',
+        query: '/?scene=particles-components&n=12',
+        iterations: null,
+        assertDrawArrays: true
+    }
 ];
 
 const readMetrics = async (session: CDPSession): Promise<Map<string, number>> => {
@@ -74,6 +88,9 @@ for (const spec of specs) {
             expect(glCounters.contextsCreated).toBeGreaterThan(0);
             if (spec.assertDrawArrays) {
                 expect(glCounters.drawArrays).toBeGreaterThan(0);
+            }
+            if (spec.assertDrawArraysInstanced) {
+                expect(glCounters.drawArraysInstanced).toBeGreaterThan(0);
             }
         }
     });

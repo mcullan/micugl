@@ -1,3 +1,4 @@
+export { BaseInstancedShaderComponent } from './components/base/BaseInstancedShaderComponent';
 export { BasePingPongShaderComponent } from './components/base/BasePingPongShaderComponent';
 export { BaseShaderComponent } from './components/base/BaseShaderComponent';
 export { PingPongShaderEngine } from './components/engine/PingPongShaderEngine';
@@ -8,3 +9,4 @@ export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
 export { createCommonUpdaters, createUniformUpdater, createUniformUpdaters } from './lib/createUniformUpdater';
+export type { InstanceAttribute, InstancingConfig } from '@/types';

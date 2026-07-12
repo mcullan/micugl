@@ -12,6 +12,7 @@ export function diffCounters(before: GlCountersData, after: GlCountersData): GlC
         useProgram: after.useProgram - before.useProgram,
         uniformCalls: after.uniformCalls - before.uniformCalls,
         drawArrays: after.drawArrays - before.drawArrays,
+        drawArraysInstanced: after.drawArraysInstanced - before.drawArraysInstanced,
         drawElements: after.drawElements - before.drawElements,
         bufferData: after.bufferData - before.bufferData,
         bufferBytes: after.bufferBytes - before.bufferBytes

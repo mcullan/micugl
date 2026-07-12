@@ -100,3 +100,43 @@ export const PINGPONG_RENDER = `
         gl_FragColor = vec4(color, 1.0);
     }
 `;
+
+export const PARTICLE_VERTEX = `
+    attribute vec2 a_position;
+    attribute vec2 a_offset;
+    attribute vec3 a_color;
+    uniform float u_time;
+    varying vec3 v_color;
+    void main() {
+        float scale = 0.01 + 0.004 * sin(u_time + a_offset.x * 10.0);
+        vec2 pos = a_position * scale + a_offset;
+        gl_Position = vec4(pos, 0.0, 1.0);
+        v_color = a_color;
+    }
+`;
+
+export const PARTICLE_FRAGMENT = `
+    precision highp float;
+    varying vec3 v_color;
+    void main() {
+        gl_FragColor = vec4(v_color, 1.0);
+    }
+`;
+
+export const PARTICLES_COMPONENT_FRAGMENT = `
+    precision highp float;
+    uniform vec2 u_resolution;
+    uniform float u_time;
+    uniform vec2 u_offset0;
+    uniform vec2 u_offset1;
+    uniform vec2 u_offset2;
+    varying vec2 v_uv;
+    float particle(vec2 uv, vec2 center) {
+        return smoothstep(0.05, 0.0, length(uv - center));
+    }
+    void main() {
+        vec2 uv = v_uv * 2.0 - 1.0;
+        float v = particle(uv, u_offset0) + particle(uv, u_offset1) + particle(uv, u_offset2);
+        gl_FragColor = vec4(vec3(v), 1.0);
+    }
+`;

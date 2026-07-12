@@ -9,6 +9,7 @@ export interface GlCountersData {
     useProgram: number;
     uniformCalls: number;
     drawArrays: number;
+    drawArraysInstanced: number;
     drawElements: number;
     bufferData: number;
     bufferBytes: number;
@@ -69,6 +70,7 @@ export function installInstrumentation(target: Window & typeof globalThis = wind
         useProgram: 0,
         uniformCalls: 0,
         drawArrays: 0,
+        drawArraysInstanced: 0,
         drawElements: 0,
         bufferData: 0,
         bufferBytes: 0
@@ -167,6 +169,49 @@ export function installInstrumentation(target: Window & typeof globalThis = wind
         data.bufferBytes += estimateBufferBytes(args);
     });
 
+    const tryWrap = (name: string, onCall: (args: unknown[]) => void): void => {
+        const original = glProto[name];
+        if (original === undefined) {
+            return;
+        }
+        glProto[name] = function (this: WebGLRenderingContext, ...args: unknown[]): unknown {
+            onCall(args);
+            return original.apply(this, args);
+        };
+    };
+
+    tryWrap('drawArraysInstanced', () => { data.drawArraysInstanced += 1 });
+
+    const extInstrumentedSymbol = Symbol.for('micugl.instrumented.extension');
+
+    const wrapInstancedArraysExtension = (extension: Record<string, unknown>): void => {
+        const extFlags = extension as unknown as Record<symbol, boolean | undefined>;
+        if (extFlags[extInstrumentedSymbol] === true) {
+            return;
+        }
+        const originalDrawArraysInstancedANGLE = extension.drawArraysInstancedANGLE;
+        if (typeof originalDrawArraysInstancedANGLE === 'function') {
+            const typedOriginal = originalDrawArraysInstancedANGLE as (...args: unknown[]) => unknown;
+            extension.drawArraysInstancedANGLE = function (this: unknown, ...args: unknown[]): unknown {
+                data.drawArraysInstanced += 1;
+                return typedOriginal.apply(this, args);
+            };
+        }
+        extFlags[extInstrumentedSymbol] = true;
+    };
+
+    const originalGetExtension = glProto.getExtension;
+    if (originalGetExtension === undefined) {
+        throw new Error('missing WebGLRenderingContext method: getExtension');
+    }
+    glProto.getExtension = function (this: WebGLRenderingContext, ...args: unknown[]): unknown {
+        const extension = originalGetExtension.apply(this, args);
+        if (args[0] === 'ANGLE_instanced_arrays' && extension !== null && typeof extension === 'object') {
+            wrapInstancedArraysExtension(extension as Record<string, unknown>);
+        }
+        return extension;
+    };
+
     prototypeFlags[instrumentedSymbol] = true;
 
     type GetContextMethod = (
@@ -203,6 +248,7 @@ export function installInstrumentation(target: Window & typeof globalThis = wind
             data.useProgram = 0;
             data.uniformCalls = 0;
             data.drawArrays = 0;
+            data.drawArraysInstanced = 0;
             data.drawElements = 0;
             data.bufferData = 0;
             data.bufferBytes = 0;

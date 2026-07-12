@@ -37,15 +37,22 @@ const WRAPPED_GL_METHODS = [
     'uniformMatrix3fv',
     'uniformMatrix4fv',
     'drawArrays',
+    'drawArraysInstanced',
     'drawElements',
     'bufferData'
 ];
+
+const createFakeAngleInstancedArrays = (): Record<PropertyKey, unknown> => ({
+    drawArraysInstancedANGLE: (): string => 'drawArraysInstancedANGLE:original'
+});
 
 const createFakeWindow = (): { fakeWindow: FakeWindow; fireFrame: (timestamp: number) => void } => {
     const glProto: Record<PropertyKey, unknown> = {};
     for (const name of WRAPPED_GL_METHODS) {
         glProto[name] = (): string => `${name}:original`;
     }
+    const angleInstancedArrays = createFakeAngleInstancedArrays();
+    glProto.getExtension = (name: string): unknown => name === 'ANGLE_instanced_arrays' ? angleInstancedArrays : null;
 
     const canvasProto: Record<PropertyKey, unknown> = {
         getContext: (contextId: string): unknown => ({ contextId })
@@ -107,6 +114,7 @@ describe('installInstrumentation counting', () => {
         glProto.uniformMatrix3fv();
         glProto.uniformMatrix4fv();
         glProto.drawArrays();
+        glProto.drawArraysInstanced();
         glProto.drawElements();
         glProto.bufferData(0, 128, 0);
 
@@ -121,6 +129,7 @@ describe('installInstrumentation counting', () => {
             useProgram: 1,
             uniformCalls: 8,
             drawArrays: 1,
+            drawArraysInstanced: 1,
             drawElements: 1,
             bufferData: 1,
             bufferBytes: 128
@@ -161,6 +170,7 @@ describe('installInstrumentation counting', () => {
             useProgram: 0,
             uniformCalls: 0,
             drawArrays: 0,
+            drawArraysInstanced: 0,
             drawElements: 0,
             bufferData: 0,
             bufferBytes: 0
@@ -242,6 +252,51 @@ describe('frameSampler', () => {
         const handle = installInstrumentation(asTarget(fakeWindow));
 
         expect(handle.frameSampler.stop()).toEqual({ count: 0, mean: 0, p50: 0, p95: 0 });
+    });
+});
+
+describe('drawArraysInstanced via ANGLE_instanced_arrays', () => {
+    it('counts calls through the extension object returned by getExtension, preserving its return value', () => {
+        const { fakeWindow } = createFakeWindow();
+        const handle = installInstrumentation(asTarget(fakeWindow));
+        const glProto = fakeWindow.WebGLRenderingContext.prototype as Record<string, FakeGlMethod>;
+
+        const ext = glProto.getExtension('ANGLE_instanced_arrays') as Record<string, FakeGlMethod>;
+
+        expect(ext.drawArraysInstancedANGLE()).toBe('drawArraysInstancedANGLE:original');
+        expect(ext.drawArraysInstancedANGLE()).toBe('drawArraysInstancedANGLE:original');
+        expect(handle.counters.snapshot().drawArraysInstanced).toBe(2);
+    });
+
+    it('does not count for extension names other than ANGLE_instanced_arrays', () => {
+        const { fakeWindow } = createFakeWindow();
+        const handle = installInstrumentation(asTarget(fakeWindow));
+        const glProto = fakeWindow.WebGLRenderingContext.prototype as Record<string, FakeGlMethod>;
+
+        expect(glProto.getExtension('OES_texture_float')).toBeNull();
+        expect(handle.counters.snapshot().drawArraysInstanced).toBe(0);
+    });
+
+    it('does not double-wrap the extension object when getExtension is called more than once', () => {
+        const { fakeWindow } = createFakeWindow();
+        const handle = installInstrumentation(asTarget(fakeWindow));
+        const glProto = fakeWindow.WebGLRenderingContext.prototype as Record<string, FakeGlMethod>;
+
+        const first = glProto.getExtension('ANGLE_instanced_arrays') as Record<string, FakeGlMethod>;
+        const second = glProto.getExtension('ANGLE_instanced_arrays') as Record<string, FakeGlMethod>;
+
+        expect(second).toBe(first);
+        first.drawArraysInstancedANGLE();
+        expect(handle.counters.snapshot().drawArraysInstanced).toBe(1);
+    });
+
+    it('counts native gl.drawArraysInstanced calls when the method is present on the prototype', () => {
+        const { fakeWindow } = createFakeWindow();
+        const handle = installInstrumentation(asTarget(fakeWindow));
+        const glProto = fakeWindow.WebGLRenderingContext.prototype as Record<string, FakeGlMethod>;
+
+        expect(glProto.drawArraysInstanced()).toBe('drawArraysInstanced:original');
+        expect(handle.counters.snapshot().drawArraysInstanced).toBe(1);
     });
 });
 
