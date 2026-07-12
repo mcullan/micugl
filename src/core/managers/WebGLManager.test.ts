@@ -41,3 +41,25 @@ describe('WebGLManager program tracking', () => {
         expect(useProgramCalls).toHaveLength(2);
     });
 });
+
+describe('WebGLManager readPixels', () => {
+    it('reads from the currently bound framebuffer without changing any binding itself', () => {
+        const { canvas, readPixelsCalls, calls } = createCanvasStub();
+        const manager = new WebGLManager(canvas);
+
+        const pixels = manager.readPixels(4, 3);
+
+        expect(pixels).toBeInstanceOf(Uint8ClampedArray);
+        expect(pixels.length).toBe(4 * 3 * 4);
+        expect(readPixelsCalls).toHaveLength(1);
+        expect(readPixelsCalls[0]).toMatchObject({ x: 0, y: 0, width: 4, height: 3 });
+        expect(calls.some(call => call.name === 'bindFramebuffer')).toBe(false);
+    });
+
+    it('throws instead of reading when the context is lost', () => {
+        const { canvas } = createCanvasStub({ contextLost: true });
+        const manager = new WebGLManager(canvas);
+
+        expect(() => manager.readPixels(4, 4)).toThrow(/context is lost/);
+    });
+});

@@ -22,6 +22,7 @@ const GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT = 0x8cd6;
 const GL_IMPLEMENTATION_COLOR_READ_FORMAT = 0x8b9b;
 const GL_IMPLEMENTATION_COLOR_READ_TYPE = 0x8b9a;
 const GL_LINK_STATUS = 0x8b82;
+const GL_MAX_TEXTURE_SIZE = 0x0d33;
 const GL_SHORT = 0x1402;
 const GL_STATIC_DRAW = 0x88e4;
 const GL_TEXTURE_2D = 0x0de1;
@@ -52,6 +53,7 @@ const ENUM_CONSTANTS = {
     IMPLEMENTATION_COLOR_READ_TYPE: GL_IMPLEMENTATION_COLOR_READ_TYPE,
     LINEAR: GL_LINEAR,
     LINK_STATUS: GL_LINK_STATUS,
+    MAX_TEXTURE_SIZE: GL_MAX_TEXTURE_SIZE,
     NEAREST: GL_NEAREST,
     RGBA: GL_RGBA,
     SHORT: GL_SHORT,
@@ -120,6 +122,8 @@ export interface GLStubConfig {
     missingAttributes?: string[];
     colorReadType?: number;
     colorReadFormat?: number;
+    contextLost?: boolean;
+    maxTextureSize?: number;
     overrides?: Partial<WebGLRenderingContext>;
 }
 
@@ -210,6 +214,10 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
     const impl = {
         ...ENUM_CONSTANTS,
         canvas,
+        isContextLost: (): boolean => {
+            record('isContextLost', []);
+            return config.contextLost ?? false;
+        },
         getExtension: (name: string): object | null => {
             record('getExtension', [name]);
             if (!(extensionFlags[name] ?? false)) {
@@ -464,6 +472,9 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
             }
             if (pname === GL_IMPLEMENTATION_COLOR_READ_FORMAT) {
                 return colorReadFormat;
+            }
+            if (pname === GL_MAX_TEXTURE_SIZE) {
+                return config.maxTextureSize ?? 4096;
             }
             throw new Error(
                 `micugl test stub: unstubbed getParameter pname ${pname}. ${UNSTUBBED_METHOD_MESSAGE_SUFFIX}`

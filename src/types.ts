@@ -89,12 +89,32 @@ export type Dpr = number | [number, number];
 
 export type MotionPolicy = 'static-frame' | 'pause' | 'ignore';
 
+export interface SeedOptions { kind: 'clear'; color?: Vec4 }
+
+export interface RenderToBlobOptions {
+  frame?: number;
+  width?: number;
+  height?: number;
+  scale?: number;
+  type?: string;
+  quality?: number;
+  seed?: SeedOptions;
+  steps?: number;
+  fps?: number;
+}
+
 export interface ShaderHandle {
   invalidate: () => void;
   setFrame: (frame: number) => void;
   getFrame: () => number;
   start: () => void;
   stop: () => void;
+  renderToBlob: (options?: RenderToBlobOptions) => Promise<Blob>;
+  renderToDataURL: (options?: RenderToBlobOptions) => Promise<string>;
+}
+
+export interface PingPongShaderHandle extends ShaderHandle {
+  resetSimulation: (seed?: SeedOptions) => void;
 }
 
 export interface RenderControlProps {

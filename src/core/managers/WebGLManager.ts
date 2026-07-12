@@ -240,18 +240,18 @@ export class WebGLManager {
         programUniforms.set(uniformName, updateFunction);
     }
 
-    updateUniforms(programId: string, time: number): void {
+    updateUniforms(programId: string, time: number, width?: number, height?: number): void {
         const programUniforms = this.uniformUpdateFns.get(programId);
         if (!programUniforms) {
             return;
         }
 
         const canvas = this.gl.canvas as HTMLCanvasElement;
-        const width = canvas.width;
-        const height = canvas.height;
+        const resolvedWidth = width ?? canvas.width;
+        const resolvedHeight = height ?? canvas.height;
 
         programUniforms.forEach(updateFn => {
-            updateFn(time, width, height);
+            updateFn(time, resolvedWidth, resolvedHeight);
         });
     }
     setSize(
@@ -309,7 +309,7 @@ export class WebGLManager {
         }
     }
 
-    fastRender(programId: string, time: number, clear = true): void {
+    fastRender(programId: string, time: number, clear = true, width?: number, height?: number): void {
         const gl = this.gl;
 
         const resources = this.resources.get(programId);
@@ -322,7 +322,19 @@ export class WebGLManager {
             gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
-        this.updateUniforms(programId, time);
+        this.updateUniforms(programId, time, width, height);
+    }
+
+    readPixels(width: number, height: number): Uint8ClampedArray {
+        const gl = this.gl;
+
+        if (gl.isContextLost()) {
+            throw new Error('WebGLManager.readPixels: context is lost');
+        }
+
+        const pixels = new Uint8ClampedArray(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        return pixels;
     }
 
     setUniform<T extends UniformType>(

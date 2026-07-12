@@ -2,6 +2,8 @@ import type { RenderPass } from '@/core';
 import type { WebGLManager } from '@/core';
 import type { CompiledPass } from '@/core/lib/passPlanning';
 import { compilePass } from '@/core/lib/passPlanning';
+import { chainIsTimePure } from '@/core/lib/passPurity';
+import type { Vec4 } from '@/types';
 
 export class Passes {
     private webglManager: WebGLManager;
@@ -40,11 +42,45 @@ export class Passes {
         return this.passes.map(pass => compilePass(pass, isPingPong));
     }
 
-    execute(time: number): void {
+    private runCompiledPass(pass: CompiledPass, time: number, width: number, height: number): void {
+        const gl = this.webglManager.context;
+        const fbo = this.webglManager.fbo;
+
+        this.webglManager.prepareRender(pass.programId, pass.renderOptions);
+
+        for (const input of pass.inputs) {
+            let textureIndex = input.staticIndex;
+            if (input.isPingPong) {
+                textureIndex = input.pingPongUseReadIndex
+                    ? fbo.getReadIndex(input.id)
+                    : fbo.getWriteIndex(input.id);
+            }
+
+            fbo.bindTexture(input.id, input.textureUnit, textureIndex);
+            this.webglManager.setUniform(pass.programId, input.samplerName, input.textureUnit, 'sampler2D');
+        }
+
+        this.webglManager.updateUniforms(pass.programId, time, width, height);
+
+        for (const uniform of pass.uniforms) {
+            const value = typeof uniform.value === 'function'
+                ? uniform.value(time, width, height)
+                : uniform.value;
+
+            this.webglManager.setUniform(pass.programId, uniform.name, value, uniform.type);
+        }
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    execute(time: number, width?: number, height?: number): void {
         const gl = this.webglManager.context;
         const fbo = this.webglManager.fbo;
 
         this.compiled ??= this.compilePasses();
+
+        const resolvedWidth = width ?? gl.canvas.width;
+        const resolvedHeight = height ?? gl.canvas.height;
 
         for (const pass of this.compiled) {
             if (pass.outputFramebuffer !== null) {
@@ -57,36 +93,51 @@ export class Passes {
                 fbo.bindFramebuffer(null);
             }
 
-            this.webglManager.prepareRender(pass.programId, pass.renderOptions);
-
-            for (const input of pass.inputs) {
-                let textureIndex = input.staticIndex;
-                if (input.isPingPong) {
-                    textureIndex = input.pingPongUseReadIndex
-                        ? fbo.getReadIndex(input.id)
-                        : fbo.getWriteIndex(input.id);
-                }
-
-                fbo.bindTexture(input.id, input.textureUnit, textureIndex);
-                this.webglManager.setUniform(pass.programId, input.samplerName, input.textureUnit, 'sampler2D');
-            }
-
-            this.webglManager.updateUniforms(pass.programId, time);
-
-            for (const uniform of pass.uniforms) {
-                const value = typeof uniform.value === 'function'
-                    ? uniform.value(time, gl.canvas.width, gl.canvas.height)
-                    : uniform.value;
-
-                this.webglManager.setUniform(pass.programId, uniform.name, value, uniform.type);
-            }
-
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            this.runCompiledPass(pass, time, resolvedWidth, resolvedHeight);
 
             for (const id of pass.swapIds) {
                 fbo.swapTextures(id);
             }
         }
+    }
+
+    reset(color?: Vec4): void {
+        const gl = this.webglManager.context;
+        const fbo = this.webglManager.fbo;
+        const [r, g, b, a] = color ?? [0, 0, 0, 0];
+
+        for (const id of this.pingPongIds) {
+            const textureCount = fbo.getTextureCount(id);
+            for (let index = 0; index < textureCount; index++) {
+                fbo.bindFramebuffer(id, index);
+                gl.clearColor(r, g, b, a);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+            }
+        }
+
+        fbo.bindFramebuffer(null);
+    }
+
+    renderFinalPassTo(targetFboId: string, width: number, height: number, time: number): void {
+        const fbo = this.webglManager.fbo;
+
+        this.compiled ??= this.compilePasses();
+
+        if (this.compiled.length === 0) {
+            throw new Error('Passes.renderFinalPassTo: no passes to render');
+        }
+
+        const lastPass = this.compiled[this.compiled.length - 1];
+        if (lastPass.outputFramebuffer !== null) {
+            throw new Error('Passes.renderFinalPassTo: final pass does not render to canvas');
+        }
+
+        fbo.bindFramebuffer(targetFboId);
+        this.runCompiledPass(lastPass, time, width, height);
+    }
+
+    isTimePure(): boolean {
+        return chainIsTimePure(this.passes);
     }
 
     initializeResources(): void {

@@ -5,7 +5,7 @@ import type { FramebufferOptions, RenderOptions, RenderPass, ShaderProgramConfig
 import { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
 import { usePingPongPasses } from '@/react/hooks/usePingPongPasses';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
-import type { RenderControlProps, ShaderHandle, UniformParam } from '@/types';
+import type { PingPongShaderHandle, RenderControlProps, UniformParam } from '@/types';
 
 export interface BasePingPongShaderProps extends RenderControlProps {
     programId: string;
@@ -34,7 +34,7 @@ const RENDER_OPTIONS: RenderOptions = {
     clearColor: [0, 0, 0, 1]
 };
 
-const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongShaderProps>(({
+const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePingPongShaderProps>(({
     programId,
     shaderConfig,
     secondaryProgramId,

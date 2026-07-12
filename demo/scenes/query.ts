@@ -13,3 +13,15 @@ export const getIntQuery = (name: string, fallback: number): number => {
     }
     return parsed;
 };
+
+export const getFloatQuery = (name: string, fallback: number): number => {
+    const raw = getQueryString(name);
+    if (raw === null) {
+        return fallback;
+    }
+    const parsed = Number.parseFloat(raw);
+    if (Number.isNaN(parsed)) {
+        return fallback;
+    }
+    return parsed;
+};

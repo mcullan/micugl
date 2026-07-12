@@ -9,6 +9,7 @@ import { getQueryString } from './query';
 import { ReducedMotion } from './ReducedMotion';
 import { RerenderStorm } from './RerenderStorm';
 import { StaticIdle } from './StaticIdle';
+import { VisualFixed } from './VisualFixed';
 
 export const scenes: Record<string, ComponentType> = {
     'rerender-storm': RerenderStorm,
@@ -18,7 +19,8 @@ export const scenes: Record<string, ComponentType> = {
     'many-canvases': ManyCanvases,
     'many-canvases-devtools': ManyCanvasesDevtools,
     'devtools-debug': DevtoolsDebug,
-    'reduced-motion': ReducedMotion
+    'reduced-motion': ReducedMotion,
+    'visual-fixed': VisualFixed
 };
 
 export const getSceneComponent = (): ComponentType | null => {
