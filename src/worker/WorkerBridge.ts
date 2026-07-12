@@ -16,6 +16,7 @@ import type {
     UniformVector,
     WorkerCapabilities,
     WorkerInitConfig,
+    WorkerRenderOptions,
     WorkerToMain
 } from '@/worker/protocol';
 import {
@@ -61,6 +62,7 @@ export interface WorkerBridgeInit {
     frameloop: Frameloop;
     speed: number;
     active?: boolean;
+    renderOptions?: WorkerRenderOptions;
     contextAttributes?: WebGLContextAttributes;
     liveUniforms?: Record<string, string[]>;
     instancing?: InstancingConfig;
@@ -213,6 +215,7 @@ export class WorkerBridge {
             frameloop: init.frameloop,
             speed: init.speed,
             active: this.lastActive,
+            renderOptions: init.renderOptions,
             contextAttributes: init.contextAttributes
         };
 

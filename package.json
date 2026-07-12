@@ -31,15 +31,23 @@
       "types": "./dist/react/devtools/index.d.ts",
       "import": "./dist/devtools.mjs",
       "require": "./dist/devtools.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/workerEntry.d.ts",
+      "worker": "./dist/worker.mjs",
+      "import": "./dist/worker.mjs",
+      "default": "./dist/worker.mjs"
     }
   },
   "files": [
     "dist"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/worker.mjs"
+  ],
   "scripts": {
     "dev": "vite --config demo/vite.config.ts",
-    "build": "vite build && node scripts/assertTreeshaken.mjs",
+    "build": "vite build && vite build --config vite.worker.config.ts && node scripts/assertTreeshaken.mjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",

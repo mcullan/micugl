@@ -39,6 +39,8 @@ export type UniformScalar = number;
 export type UniformVector = number[];
 export type UniformValueMap = Record<string, UniformScalar | UniformVector>;
 
+export type WorkerRenderOptions = Pick<RenderOptions, 'clear'>;
+
 export interface UniformDescriptor {
     name: string;
     type: UniformType;
@@ -77,6 +79,7 @@ export interface WorkerInitConfig {
     frameloop: Frameloop;
     speed: number;
     active: boolean;
+    renderOptions?: WorkerRenderOptions;
     contextAttributes?: WebGLContextAttributes;
 }
 

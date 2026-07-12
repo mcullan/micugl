@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { WebGLManager } from '@/core/managers/WebGLManager';
-import { createCanvasStub } from '@/testing';
+import { createCanvasStub, createGLStub } from '@/testing';
 import type { ShaderProgramConfig } from '@/types';
 
 const CONFIG: ShaderProgramConfig = {
@@ -161,5 +161,32 @@ describe('WebGLManager updateBufferSub', () => {
         manager.createProgram('a', CONFIG);
 
         expect(() => { manager.updateBufferSub('a', 'offset', new Float32Array([1])) }).toThrow(/not found/);
+    });
+});
+
+describe('WebGLManager offscreen canvas', () => {
+    it('sizes an OffscreenCanvas without touching a style object it does not have', () => {
+        const offscreen = { width: 0, height: 0 } as unknown as OffscreenCanvas;
+        const { gl, viewportCalls } = createGLStub({ overrides: { canvas: offscreen } });
+        const manager = new WebGLManager({
+            getContext: () => gl
+        } as unknown as OffscreenCanvas);
+
+        expect(() => { manager.setSize(320, 240, 160, 120) }).not.toThrow();
+
+        expect(offscreen.width).toBe(320);
+        expect(offscreen.height).toBe(240);
+        expect(viewportCalls).toContainEqual([0, 0, 320, 240]);
+        expect(Object.keys(offscreen)).toEqual(['width', 'height']);
+    });
+
+    it('still applies the css display size to an HTMLCanvasElement', () => {
+        const { canvas } = createCanvasStub();
+        const manager = new WebGLManager(canvas);
+
+        manager.setSize(320, 240, 160, 120);
+
+        expect(canvas.style.width).toBe('160px');
+        expect(canvas.style.height).toBe('120px');
     });
 });
