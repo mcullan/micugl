@@ -18,6 +18,8 @@ export type {
     BufferData,
     FramebufferOptions,
     FramebufferResources,
+    InstanceAttribute,
+    InstancingConfig,
     PingPongState,
     RenderOptions,
     RenderPass,

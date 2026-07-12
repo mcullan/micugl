@@ -4,12 +4,13 @@
 
 export interface BufferData {
   buffer: WebGLBuffer;
-  data: 
-    Float32Array 
-    | Uint8Array 
-    | Uint16Array 
-    | Int8Array 
+  data:
+    Float32Array
+    | Uint8Array
+    | Uint16Array
+    | Int8Array
     | Int16Array;
+  allocatedByteLength: number;
 }
 
 export type UniformType = 
@@ -55,6 +56,19 @@ export interface AttributeConfig {
   stride: number;
   offset: number;
   instanced?: boolean;
+}
+
+export interface InstanceAttribute {
+  data: Float32Array | (() => Float32Array);
+  size: number;
+  usage?: 'static' | 'dynamic';
+  normalized?: boolean;
+  capacity?: number;
+}
+
+export interface InstancingConfig {
+  instanceCount: number | (() => number);
+  attributes: Record<string, InstanceAttribute>;
 }
 
 export interface ShaderResources {

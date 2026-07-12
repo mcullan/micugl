@@ -189,6 +189,9 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         ANGLE_instanced_arrays: {
             vertexAttribDivisorANGLE: (index: number, divisor: number): void => {
                 record('vertexAttribDivisorANGLE', [index, divisor]);
+            },
+            drawArraysInstancedANGLE: (mode: number, first: number, count: number, primcount: number): void => {
+                record('drawArraysInstancedANGLE', [mode, first, count, primcount]);
             }
         },
         WEBGL_lose_context: {
@@ -397,6 +400,9 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         },
         bufferData: (target: number, data: ArrayBufferView, usage: number): void => {
             record('bufferData', [target, data, usage]);
+        },
+        bufferSubData: (target: number, offset: number, data: ArrayBufferView): void => {
+            record('bufferSubData', [target, offset, data]);
         },
         drawArrays: (mode: number, first: number, count: number): void => {
             record('drawArrays', [mode, first, count]);
