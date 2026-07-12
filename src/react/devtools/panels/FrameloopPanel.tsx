@@ -50,7 +50,7 @@ export const FrameloopPanel = ({
             <div style={rowStyle}>
                 <span style={{ color: COLORS.dim }}>state</span>
                 <span style={{ color: paused === true ? COLORS.warn : COLORS.good }}>
-                    {paused === true ? 'paused' : 'running'} · {(speed ?? 1).toFixed(2)}x
+                    {paused === true ? 'paused' : 'running'} {'\u00b7'} {(speed ?? 1).toFixed(2)}x
                 </span>
             </div>
             <div style={rowStyle}>

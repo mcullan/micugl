@@ -145,7 +145,7 @@ export interface CanvasStubHandle extends GLStubHandle {
 
 const UNSTUBBED_METHOD_MESSAGE_SUFFIX =
     'This stub models capability probing, program/uniform/attribute accounting and ' +
-    'framebuffer-completeness only — it does not emulate rendering. Provide an override or file an issue.';
+    'framebuffer-completeness only \u2014 it does not emulate rendering. Provide an override or file an issue.';
 
 export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
     const resolvedConfig: Readonly<GLStubConfig> = { ...config };
