@@ -20,9 +20,10 @@ export {
     WebGLManager
 } from './core';
 export {
+    BaseInstancedShaderComponent,
     BasePingPongShaderComponent,
     BaseShaderComponent,
-    createCommonUpdaters, 
+    createCommonUpdaters,
     createUniformUpdater, 
     createUniformUpdaters,
     PingPongShaderEngine,

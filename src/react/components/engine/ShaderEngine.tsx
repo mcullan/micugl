@@ -19,13 +19,15 @@ import type {
 } from '@/core';
 import { captureFrame } from '@/core/lib/captureFrame';
 import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
+import { InstanceUploader } from '@/core/lib/instanceBuffers';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { useReducedMotion } from '@/react/hooks/useReducedMotion';
 import { useSaveData } from '@/react/hooks/useSaveData';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
-import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
+import { instancingContentKey, programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
+import { createDelegatingInstancingConfig } from '@/react/lib/instancingConfig';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { resolveMotionGate } from '@/react/lib/motionPolicy';
 import { createRecording } from '@/react/lib/record';
@@ -40,6 +42,7 @@ import {
 import { frameToMs } from '@/react/lib/timeKeeper';
 import type {
     Dpr,
+    InstancingConfig,
     RecordOptions,
     RenderControlProps,
     RenderToBlobOptions,
@@ -61,6 +64,7 @@ interface ShaderEngineProps extends RenderControlProps {
     style?: CSSProperties;
     uniformUpdaters?: Record<string, UniformUpdaterEntry[]>;
     useFastPath?: boolean;
+    instancing?: InstancingConfig;
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
 }
@@ -127,6 +131,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     height,
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
+    instancing,
     debug = false,
     debugPortRef,
     useDevicePixelRatio,
@@ -146,7 +151,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const motionGate = resolveMotionGate({ reducedMotionActive, saveDataActive, reducedMotion, saveData });
 
     const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
-    const contentKey = programConfigContentKey(keyProgramId, keyProgramConfig);
+    const contentKey = `${programConfigContentKey(keyProgramId, keyProgramConfig)}|${instancingContentKey(instancing)}`;
 
     const engineIdRef = useRef<string>('');
     if (!engineIdRef.current) {
@@ -160,14 +165,28 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const controllerRef = useRef<RenderLoop | null>(null);
     const observedSizeRef = useRef<ObservedSize | null>(null);
     const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const instanceUploaderRef = useRef<InstanceUploader | null>(null);
+    const instancingRef = useRef(instancing);
 
-    const initPropsRef = useRef({ programConfigs, uniformUpdaters });
+    const initPropsRef = useRef({ programConfigs, uniformUpdaters, instancing });
     const renderConfigRef = useRef({ useFastPath, renderOptions, renderCallback });
 
     const [epoch, setEpoch] = useState(0);
 
     const dprMin = Array.isArray(dpr) ? dpr[0] : dpr;
     const dprMax = Array.isArray(dpr) ? dpr[1] : dpr;
+
+    const drawFastPathGeometry = useCallback((gl: WebGLRenderingContext, manager: WebGLManager) => {
+        const uploader = instanceUploaderRef.current;
+        if (uploader) {
+            const count = uploader.upload();
+            if (count > 0) {
+                manager.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+            }
+            return;
+        }
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }, []);
 
     const renderFrame = useCallback((elapsed: number) => {
         if (!readyRef.current) return;
@@ -181,7 +200,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
 
         if (fast) {
             manager.fastRender(programId, elapsed, options.clear);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            drawFastPathGeometry(gl, manager);
         } else {
             const resources = manager.resources.get(programId);
             if (!resources) return;
@@ -189,7 +208,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             manager.prepareRender(programId, options);
             callback(elapsed, resources, gl);
         }
-    }, []);
+    }, [drawFastPathGeometry]);
 
     const captureStill = useCallback((options: RenderToBlobOptions | undefined) => {
         const opts = options ?? {};
@@ -227,7 +246,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                         throw new Error('ShaderEngine.renderToBlob: custom-resolution export requires useFastPath');
                     }
                     manager.fastRender(programId, timeMsArg, renderOpts.clear, w, h);
-                    manager.context.drawArrays(manager.context.TRIANGLE_STRIP, 0, 4);
+                    drawFastPathGeometry(manager.context, manager);
                 },
                 restoreDisplay: () => {
                     if (isDefaultDims && explicitFrame) {
@@ -243,7 +262,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         );
 
         return { ...result, type: opts.type, quality: opts.quality };
-    }, [renderFrame]);
+    }, [renderFrame, drawFastPathGeometry]);
 
     const applySize = useCallback(() => {
         const manager = managerRef.current;
@@ -307,8 +326,9 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const applySizeRef = useRef(applySize);
 
     useEffect(() => {
-        initPropsRef.current = { programConfigs, uniformUpdaters };
+        initPropsRef.current = { programConfigs, uniformUpdaters, instancing };
         renderConfigRef.current = { useFastPath, renderOptions, renderCallback };
+        instancingRef.current = instancing;
         applySizeRef.current = applySize;
     });
 
@@ -341,6 +361,46 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                 normalized: false, stride: 0, offset: 0
             });
             activeProgram.current = pid;
+
+            const instancingConfig = initPropsRef.current.instancing;
+            if (instancingConfig) {
+                if (!renderConfigRef.current.useFastPath) {
+                    throw new Error('ShaderEngine: instancing requires useFastPath');
+                }
+
+                const instancedAttributeConfigs = new Map(
+                    (cfg.attributes ?? [])
+                        .filter(attribute => attribute.instanced)
+                        .map(attribute => [attribute.name, attribute] as const)
+                );
+
+                const instancingAttributeConfigs = Object.keys(instancingConfig.attributes).map(name => {
+                    const attributeConfig = instancedAttributeConfigs.get(name);
+                    if (!attributeConfig) {
+                        throw new Error(
+                            `ShaderEngine: instancing attribute "${name}" must be declared with instanced: true in the program's attributeConfigs`
+                        );
+                    }
+                    return [name, attributeConfig] as const;
+                });
+
+                const delegatingConfig = createDelegatingInstancingConfig(instancingConfig, () => {
+                    const latest = instancingRef.current;
+                    if (!latest) {
+                        throw new Error('ShaderEngine: instancing prop was removed while active');
+                    }
+                    return latest;
+                });
+
+                const uploader = new InstanceUploader(manager, pid, delegatingConfig);
+                uploader.initialize();
+
+                for (const [name, attributeConfig] of instancingAttributeConfigs) {
+                    manager.setAttributeOnce(pid, name, attributeConfig);
+                }
+
+                instanceUploaderRef.current = uploader;
+            }
 
             const ups = initPropsRef.current.uniformUpdaters[pid] as UniformUpdaterEntry[] | undefined;
             ups?.forEach(u => {
@@ -403,6 +463,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             controllerRef.current?.stop();
             manager.destroyAll();
             activeProgram.current = null;
+            instanceUploaderRef.current = null;
             emitEngineUnmount(engineIdRef.current);
         };
     }, [contentKey, epoch, debugPortRef]);

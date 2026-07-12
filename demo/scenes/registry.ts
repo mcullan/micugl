@@ -2,9 +2,11 @@ import type { ComponentType } from 'react';
 
 import { DevtoolsDebug } from './DevtoolsDebug';
 import { ExportDemo } from './ExportDemo';
+import { InstancedParticles } from './InstancedParticles';
 import { ManyCanvases } from './ManyCanvases';
 import { ManyCanvasesDevtools } from './ManyCanvasesDevtools';
 import { Offscreen } from './Offscreen';
+import { ParticlesComponents } from './ParticlesComponents';
 import { PingPongSim } from './PingPongSim';
 import { getQueryString } from './query';
 import { ReducedMotion } from './ReducedMotion';
@@ -22,7 +24,9 @@ export const scenes: Record<string, ComponentType> = {
     'devtools-debug': DevtoolsDebug,
     'reduced-motion': ReducedMotion,
     'visual-fixed': VisualFixed,
-    'export-demo': ExportDemo
+    'export-demo': ExportDemo,
+    'instanced-particles': InstancedParticles,
+    'particles-components': ParticlesComponents
 };
 
 export const getSceneComponent = (): ComponentType | null => {

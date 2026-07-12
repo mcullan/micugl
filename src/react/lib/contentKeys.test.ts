@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
     framebuffersContentKey,
+    instancingContentKey,
     programConfigContentKey,
     programConfigsContentKey,
     singleProgramEntry
 } from '@/react/lib/contentKeys';
-import type { FramebufferOptions, ShaderProgramConfig } from '@/types';
+import type { FramebufferOptions, InstancingConfig, ShaderProgramConfig } from '@/types';
 
 const makeConfig = (overrides: Partial<ShaderProgramConfig> = {}): ShaderProgramConfig => ({
     vertexShader: 'attribute vec2 a_position; void main() { gl_Position = vec4(a_position, 0.0, 1.0); }',
@@ -177,5 +178,107 @@ describe('framebuffersContentKey', () => {
 
     it('is empty for an undefined record', () => {
         expect(framebuffersContentKey(undefined)).toBe('');
+    });
+});
+
+describe('instancingContentKey', () => {
+    const makeInstancing = (overrides: Partial<InstancingConfig> = {}): InstancingConfig => ({
+        instanceCount: 10,
+        attributes: {
+            a_offset: { data: new Float32Array([0, 0]), size: 2, usage: 'dynamic' }
+        },
+        ...overrides
+    });
+
+    it('is empty for an undefined config', () => {
+        expect(instancingContentKey(undefined)).toBe('');
+    });
+
+    it('is stable across re-created but structurally identical configs', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing());
+
+        expect(a).toBe(b);
+    });
+
+    it('is stable across different instanceCount values (number vs function)', () => {
+        const a = instancingContentKey(makeInstancing({ instanceCount: 10 }));
+        const b = instancingContentKey(makeInstancing({ instanceCount: () => 999 }));
+
+        expect(a).toBe(b);
+    });
+
+    it('is stable across different attribute data (data is excluded)', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing({
+            attributes: { a_offset: { data: new Float32Array([9, 9, 9, 9]), size: 2, usage: 'dynamic' } }
+        }));
+
+        expect(a).toBe(b);
+    });
+
+    it('changes when an attribute size changes', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing({
+            attributes: { a_offset: { data: new Float32Array([0, 0, 0]), size: 3, usage: 'dynamic' } }
+        }));
+
+        expect(a).not.toBe(b);
+    });
+
+    it('changes when usage changes', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing({
+            attributes: { a_offset: { data: new Float32Array([0, 0]), size: 2, usage: 'static' } }
+        }));
+
+        expect(a).not.toBe(b);
+    });
+
+    it('changes when normalized changes', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing({
+            attributes: { a_offset: { data: new Float32Array([0, 0]), size: 2, usage: 'dynamic', normalized: true } }
+        }));
+
+        expect(a).not.toBe(b);
+    });
+
+    it('changes when capacity changes', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing({
+            attributes: { a_offset: { data: new Float32Array([0, 0]), size: 2, usage: 'dynamic', capacity: 500 } }
+        }));
+
+        expect(a).not.toBe(b);
+    });
+
+    it('changes when an attribute is added or removed', () => {
+        const a = instancingContentKey(makeInstancing());
+        const b = instancingContentKey(makeInstancing({
+            attributes: {
+                a_offset: { data: new Float32Array([0, 0]), size: 2, usage: 'dynamic' },
+                a_color: { data: new Float32Array([1, 1, 1]), size: 3 }
+            }
+        }));
+
+        expect(a).not.toBe(b);
+    });
+
+    it('is independent of attribute declaration order', () => {
+        const a = instancingContentKey(makeInstancing({
+            attributes: {
+                a_offset: { data: new Float32Array([0, 0]), size: 2 },
+                a_color: { data: new Float32Array([1, 1, 1]), size: 3 }
+            }
+        }));
+        const b = instancingContentKey(makeInstancing({
+            attributes: {
+                a_color: { data: new Float32Array([1, 1, 1]), size: 3 },
+                a_offset: { data: new Float32Array([0, 0]), size: 2 }
+            }
+        }));
+
+        expect(a).toBe(b);
     });
 });
