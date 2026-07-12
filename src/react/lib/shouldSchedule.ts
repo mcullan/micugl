@@ -1,3 +1,4 @@
+import type { MotionGate } from '@/react/lib/motionPolicy';
 import type { Frameloop } from '@/types';
 
 export interface ScheduleInputs {
@@ -7,6 +8,7 @@ export interface ScheduleInputs {
     intersecting: boolean;
     pauseWhenHidden: boolean;
     pendingInvalidate: boolean;
+    motionGate: MotionGate;
 }
 
 export function shouldSchedule(inputs: ScheduleInputs): boolean {
@@ -16,6 +18,10 @@ export function shouldSchedule(inputs: ScheduleInputs): boolean {
 
     if (inputs.speed === 0) {
         return false;
+    }
+
+    if (inputs.motionGate !== 'none') {
+        return inputs.pendingInvalidate;
     }
 
     if (inputs.frameloop === 'always') {

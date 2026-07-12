@@ -6,6 +6,7 @@ import { ManyCanvasesDevtools } from './ManyCanvasesDevtools';
 import { Offscreen } from './Offscreen';
 import { PingPongSim } from './PingPongSim';
 import { getQueryString } from './query';
+import { ReducedMotion } from './ReducedMotion';
 import { RerenderStorm } from './RerenderStorm';
 import { StaticIdle } from './StaticIdle';
 
@@ -16,7 +17,8 @@ export const scenes: Record<string, ComponentType> = {
     'offscreen': Offscreen,
     'many-canvases': ManyCanvases,
     'many-canvases-devtools': ManyCanvasesDevtools,
-    'devtools-debug': DevtoolsDebug
+    'devtools-debug': DevtoolsDebug,
+    'reduced-motion': ReducedMotion
 };
 
 export const getSceneComponent = (): ComponentType | null => {

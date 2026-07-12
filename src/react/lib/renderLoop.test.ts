@@ -288,6 +288,94 @@ describe('RenderLoop speed and control', () => {
     });
 });
 
+describe('RenderLoop motion gate', () => {
+    it('stops scheduling continuous rAF when gated static in always mode', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        expect(h.pending).toBe(1);
+
+        h.loop.setMotionGate('static');
+        expect(h.pending).toBe(0);
+    });
+
+    it('renders exactly one frame per invalidate while gated, and elapsed does not advance across repeated invalidates', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        expect(h.renders).toEqual([0]);
+
+        h.loop.setMotionGate('static');
+        expect(h.pending).toBe(0);
+
+        h.loop.invalidate();
+        expect(h.pending).toBe(1);
+        h.flush(500);
+        expect(h.renders).toEqual([0, 0]);
+        expect(h.pending).toBe(0);
+
+        h.loop.invalidate();
+        expect(h.pending).toBe(1);
+        h.setNow(999999);
+        h.flush(999999);
+        expect(h.renders).toEqual([0, 0, 0]);
+        expect(h.pending).toBe(0);
+    });
+
+    it('setFrame while gated static renders synchronously at frameToMs(staticFrame)', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        h.loop.setMotionGate('static');
+        expect(h.pending).toBe(0);
+
+        h.loop.setFrame(120);
+        expect(h.renders[h.renders.length - 1]).toBe(2000);
+        expect(h.loop.getFrame()).toBe(120);
+        expect(h.pending).toBe(0);
+    });
+
+    it('lifting the gate after time has passed resumes from the frozen clock without a jump', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        expect(h.renders[0]).toBe(0);
+
+        h.loop.setMotionGate('static');
+        h.setNow(100000);
+        h.loop.invalidate();
+        h.flush(100016);
+        expect(h.renders[1]).toBe(0);
+
+        h.loop.setMotionGate('none');
+        expect(h.pending).toBe(1);
+        h.flush(100032);
+        expect(h.renders[2]).toBe(0);
+
+        h.flush(100048);
+        expect(h.renders[3]).toBe(16);
+    });
+
+    it('a pause gate freezes the clock at its current value rather than resetting it', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        h.flush(32);
+        expect(h.renders[1]).toBe(16);
+
+        h.loop.setMotionGate('pause');
+        h.loop.invalidate();
+        h.setNow(500);
+        h.flush(500);
+        expect(h.renders[2]).toBe(16);
+
+        h.loop.invalidate();
+        h.setNow(999999);
+        h.flush(999999);
+        expect(h.renders[3]).toBe(16);
+    });
+});
+
 describe('RenderLoop introspection getters', () => {
     it('reports the configured frameloop mode and reacts to setFrameloop', () => {
         const h = harness({ frameloop: 'demand' });
@@ -303,6 +391,21 @@ describe('RenderLoop introspection getters', () => {
 
         h.loop.setSpeed(0.5);
         expect(h.loop.getSpeed()).toBe(0.5);
+    });
+
+    it('reports the motion gate and reacts to setMotionGate, no-op when unchanged', () => {
+        const h = harness({ frameloop: 'always' });
+        expect(h.loop.getMotionGate()).toBe('none');
+
+        h.loop.start();
+        h.flush(16);
+        h.loop.setMotionGate('static');
+        expect(h.loop.getMotionGate()).toBe('static');
+        expect(h.pending).toBe(0);
+
+        h.loop.setMotionGate('static');
+        expect(h.loop.getMotionGate()).toBe('static');
+        expect(h.pending).toBe(0);
     });
 
     it('reports paused before start and while hidden, unpaused once started and visible', () => {

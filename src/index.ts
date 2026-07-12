@@ -29,6 +29,8 @@ export {
     ShaderEngine,
     useDarkMode,
     usePingPongPasses,
+    useReducedMotion,
+    useSaveData,
     useUniformUpdaters
 } from './react';
 export type {
@@ -48,6 +50,7 @@ export type {
     Mat2,
     Mat3,
     Mat4,
+    MotionPolicy,
     PingPongState,
     RenderControlProps,
     RenderOptions,

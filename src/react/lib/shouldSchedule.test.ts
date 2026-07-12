@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { MotionGate } from '@/react/lib/motionPolicy';
 import type { ScheduleInputs } from '@/react/lib/shouldSchedule';
 import { shouldSchedule } from '@/react/lib/shouldSchedule';
 import type { Frameloop } from '@/types';
@@ -7,6 +8,7 @@ import type { Frameloop } from '@/types';
 const FRAMELOOPS: Frameloop[] = ['always', 'demand', 'never'];
 const BOOLS = [true, false];
 const SPEEDS = [1, 0];
+const MOTION_GATES: MotionGate[] = ['none', 'pause', 'static'];
 
 function expected(inputs: ScheduleInputs): boolean {
     if (inputs.pauseWhenHidden && (!inputs.documentVisible || !inputs.intersecting)) {
@@ -14,6 +16,9 @@ function expected(inputs: ScheduleInputs): boolean {
     }
     if (inputs.speed === 0) {
         return false;
+    }
+    if (inputs.motionGate !== 'none') {
+        return inputs.pendingInvalidate;
     }
     if (inputs.frameloop === 'always') {
         return true;
@@ -29,11 +34,14 @@ describe('shouldSchedule truth table', () => {
                     for (const intersecting of BOOLS) {
                         for (const pauseWhenHidden of BOOLS) {
                             for (const pendingInvalidate of BOOLS) {
-                                const inputs: ScheduleInputs = {
-                                    frameloop, speed, documentVisible,
-                                    intersecting, pauseWhenHidden, pendingInvalidate
-                                };
-                                expect(shouldSchedule(inputs)).toBe(expected(inputs));
+                                for (const motionGate of MOTION_GATES) {
+                                    const inputs: ScheduleInputs = {
+                                        frameloop, speed, documentVisible,
+                                        intersecting, pauseWhenHidden, pendingInvalidate,
+                                        motionGate
+                                    };
+                                    expect(shouldSchedule(inputs)).toBe(expected(inputs));
+                                }
                             }
                         }
                     }
@@ -49,7 +57,8 @@ const base: ScheduleInputs = {
     documentVisible: true,
     intersecting: true,
     pauseWhenHidden: true,
-    pendingInvalidate: false
+    pendingInvalidate: false,
+    motionGate: 'none'
 };
 
 describe('shouldSchedule precedence', () => {
@@ -93,5 +102,33 @@ describe('shouldSchedule precedence', () => {
         expect(shouldSchedule({
             ...base, frameloop: 'demand', pendingInvalidate: true, documentVisible: false
         })).toBe(false);
+    });
+
+    it('a motion gate suppresses continuous scheduling in always mode', () => {
+        expect(shouldSchedule({ ...base, motionGate: 'static' })).toBe(false);
+        expect(shouldSchedule({ ...base, motionGate: 'pause' })).toBe(false);
+    });
+
+    it('a motion gate still allows one coalesced repaint per invalidate', () => {
+        expect(shouldSchedule({ ...base, motionGate: 'static', pendingInvalidate: true })).toBe(true);
+        expect(shouldSchedule({ ...base, motionGate: 'pause', pendingInvalidate: true })).toBe(true);
+    });
+
+    it('hidden still wins over a motion gate with a pending invalidate', () => {
+        expect(shouldSchedule({
+            ...base, motionGate: 'static', pendingInvalidate: true, documentVisible: false
+        })).toBe(false);
+    });
+
+    it('speed zero still wins over a motion gate with a pending invalidate', () => {
+        expect(shouldSchedule({
+            ...base, motionGate: 'static', pendingInvalidate: true, speed: 0
+        })).toBe(false);
+    });
+
+    it('motionGate none preserves the pre-gate always/demand/never behavior', () => {
+        expect(shouldSchedule({ ...base, motionGate: 'none' })).toBe(true);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none', pendingInvalidate: false })).toBe(false);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none', pendingInvalidate: true })).toBe(true);
     });
 });

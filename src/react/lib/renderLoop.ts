@@ -1,3 +1,4 @@
+import type { MotionGate } from '@/react/lib/motionPolicy';
 import { shouldSchedule } from '@/react/lib/shouldSchedule';
 import {
     createTimeKeeper,
@@ -32,6 +33,7 @@ export class RenderLoop {
     private running = false;
     private handle: number | null = null;
     private cold = true;
+    private motionGate: MotionGate = 'none';
 
     constructor(deps: RenderLoopDeps) {
         this.deps = deps;
@@ -67,7 +69,8 @@ export class RenderLoop {
             documentVisible: this.documentVisible,
             intersecting: this.intersecting,
             pauseWhenHidden: this.pauseWhenHidden,
-            pendingInvalidate: this.pendingInvalidate
+            pendingInvalidate: this.pendingInvalidate,
+            motionGate: this.motionGate
         });
 
         if (should && this.handle === null) {
@@ -82,7 +85,9 @@ export class RenderLoop {
         this.handle = null;
         this.pendingInvalidate = false;
 
-        if (this.cold) {
+        if (this.motionGate !== 'none') {
+            this.time = syncTime(this.time, now);
+        } else if (this.cold) {
             this.time = syncTime(this.time, now);
             this.cold = false;
         } else {
@@ -133,6 +138,19 @@ export class RenderLoop {
 
     getSpeed(): number {
         return this.time.speed;
+    }
+
+    getMotionGate(): MotionGate {
+        return this.motionGate;
+    }
+
+    setMotionGate(gate: MotionGate): void {
+        if (this.motionGate === gate) {
+            return;
+        }
+        this.motionGate = gate;
+        this.cold = true;
+        this.evaluate();
     }
 
     isPaused(): boolean {
