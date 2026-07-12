@@ -15,12 +15,15 @@ import type {
     RenderPass,
     ShaderProgramConfig
 } from '@/core';
+import { CAPTURE_SCRATCH_FRAMEBUFFER_ID, captureFrame } from '@/core/lib/captureFrame';
+import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { useReducedMotion } from '@/react/hooks/useReducedMotion';
 import { useSaveData } from '@/react/hooks/useSaveData';
+import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { resolveMotionGate } from '@/react/lib/motionPolicy';
@@ -31,7 +34,8 @@ import {
     resolveDeviceResolution,
     resolveResolution
 } from '@/react/lib/resolution';
-import type { Dpr, RenderControlProps, ShaderHandle } from '@/types';
+import { frameToMs } from '@/react/lib/timeKeeper';
+import type { Dpr, PingPongShaderHandle, RenderControlProps, RenderToBlobOptions, SeedOptions } from '@/types';
 
 interface PingPongShaderEngineProps extends RenderControlProps {
     programConfigs: Record<string, ShaderProgramConfig>;
@@ -95,7 +99,7 @@ const emptyDebugState = (id: string): EngineDebugState => ({
     floatFilterDowngraded: false
 });
 
-const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEngineProps>(({
+const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongShaderEngineProps>(({
     programConfigs,
     passes,
     framebuffers,
@@ -154,6 +158,92 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
         if (!manager || !passSystem) return;
 
         passSystem.execute(elapsed);
+    }, []);
+
+    const resetSimulation = useCallback((seed?: SeedOptions) => {
+        const manager = managerRef.current;
+        const passSystem = passSystemRef.current;
+        if (!readyRef.current || !manager || !passSystem) {
+            throw new Error('PingPongShaderEngine.resetSimulation: engine is not ready');
+        }
+        if (manager.context.isContextLost()) {
+            throw new Error('PingPongShaderEngine.resetSimulation: WebGL context is lost');
+        }
+
+        passSystem.reset(seed?.color);
+        controllerRef.current?.invalidate();
+    }, []);
+
+    const captureStill = useCallback((options: RenderToBlobOptions | undefined) => {
+        const opts = options ?? {};
+        validateRenderToBlobOptions(opts);
+
+        const manager = managerRef.current;
+        const passSystem = passSystemRef.current;
+        if (!readyRef.current || !manager || !passSystem) {
+            throw new Error('PingPongShaderEngine.renderToBlob: engine is not ready');
+        }
+        if (manager.context.isContextLost()) {
+            throw new Error('PingPongShaderEngine.renderToBlob: WebGL context is lost');
+        }
+
+        const timePure = passSystem.isTimePure();
+        if (opts.frame !== undefined && !timePure && opts.steps === undefined) {
+            throw new Error(
+                'PingPongShaderEngine.renderToBlob: cannot deterministically render an explicit frame of an ' +
+                'accumulating simulation; provide seed + steps, or capture the current frame without frame'
+            );
+        }
+
+        const canvas = manager.context.canvas as HTMLCanvasElement;
+        const backingWidth = canvas.width;
+        const backingHeight = canvas.height;
+        const { width, height } = resolveExportDimensions(opts, backingWidth, backingHeight);
+
+        let timeMs: number;
+        let restoreAfter = false;
+
+        if (opts.steps !== undefined) {
+            const seed = opts.seed;
+            if (!seed) {
+                throw new Error('PingPongShaderEngine.renderToBlob: steps requires a seed');
+            }
+            passSystem.reset(seed.color);
+            const dtMs = 1000 / (opts.fps ?? 60);
+            for (let i = 0; i < opts.steps; i++) {
+                passSystem.execute(i * dtMs);
+            }
+            timeMs = (opts.steps - 1) * dtMs;
+        } else if (opts.frame !== undefined) {
+            timeMs = frameToMs(opts.frame);
+            passSystem.execute(timeMs);
+            restoreAfter = true;
+        } else {
+            timeMs = frameToMs(controllerRef.current?.getFrame() ?? 0);
+            passSystem.execute(timeMs);
+        }
+
+        const result = captureFrame(
+            {
+                manager,
+                renderDefault: () => undefined,
+                renderAtSize: (timeMsArg, w, h) => {
+                    passSystem.renderFinalPassTo(CAPTURE_SCRATCH_FRAMEBUFFER_ID, w, h, timeMsArg);
+                },
+                restoreDisplay: () => {
+                    if (restoreAfter) {
+                        passSystem.execute(frameToMs(controllerRef.current?.getFrame() ?? 0));
+                    }
+                }
+            },
+            timeMs,
+            width,
+            height,
+            backingWidth,
+            backingHeight
+        );
+
+        return { ...result, type: opts.type, quality: opts.quality };
     }, []);
 
     const applySize = useCallback(() => {
@@ -494,8 +584,17 @@ const PingPongShaderEngineComponent = forwardRef<ShaderHandle, PingPongShaderEng
         setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
         getFrame: () => controllerRef.current?.getFrame() ?? 0,
         start: () => { controllerRef.current?.start() },
-        stop: () => { controllerRef.current?.stop() }
-    }), []);
+        stop: () => { controllerRef.current?.stop() },
+        resetSimulation: (seed?: SeedOptions) => { resetSimulation(seed) },
+        renderToBlob: async (options?: RenderToBlobOptions) => {
+            const { pixels, width, height, type, quality } = captureStill(options);
+            return pixelsToBlob(pixels, width, height, type, quality);
+        },
+        renderToDataURL: (options?: RenderToBlobOptions) => {
+            const { pixels, width, height, type, quality } = captureStill(options);
+            return Promise.resolve(pixelsToDataURL(pixels, width, height, type, quality));
+        }
+    }), [resetSimulation, captureStill]);
 
     return (
         <canvas

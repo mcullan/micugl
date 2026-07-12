@@ -17,11 +17,14 @@ import type {
     UniformType,
     UniformUpdateFn
 } from '@/core';
+import { captureFrame } from '@/core/lib/captureFrame';
+import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { useReducedMotion } from '@/react/hooks/useReducedMotion';
 import { useSaveData } from '@/react/hooks/useSaveData';
+import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { resolveMotionGate } from '@/react/lib/motionPolicy';
@@ -32,7 +35,8 @@ import {
     resolveDeviceResolution,
     resolveResolution
 } from '@/react/lib/resolution';
-import type { Dpr, RenderControlProps, ShaderHandle } from '@/types';
+import { frameToMs } from '@/react/lib/timeKeeper';
+import type { Dpr, RenderControlProps, RenderToBlobOptions, ShaderHandle } from '@/types';
 
 interface UniformUpdaterEntry {
     name: string;
@@ -177,6 +181,60 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             callback(elapsed, resources, gl);
         }
     }, []);
+
+    const captureStill = useCallback((options: RenderToBlobOptions | undefined) => {
+        const opts = options ?? {};
+
+        if (opts.seed !== undefined || opts.steps !== undefined) {
+            throw new Error('ShaderEngine.renderToBlob: no simulation to seed');
+        }
+        validateRenderToBlobOptions(opts);
+
+        const manager = managerRef.current;
+        if (!readyRef.current || !manager) {
+            throw new Error('ShaderEngine.renderToBlob: engine is not ready');
+        }
+        if (manager.context.isContextLost()) {
+            throw new Error('ShaderEngine.renderToBlob: WebGL context is lost');
+        }
+
+        const canvas = manager.context.canvas as HTMLCanvasElement;
+        const backingWidth = canvas.width;
+        const backingHeight = canvas.height;
+
+        const { width, height } = resolveExportDimensions(opts, backingWidth, backingHeight);
+        const isDefaultDims = width === backingWidth && height === backingHeight;
+        const explicitFrame = opts.frame !== undefined;
+        const timeMs = frameToMs(opts.frame ?? controllerRef.current?.getFrame() ?? 0);
+
+        const result = captureFrame(
+            {
+                manager,
+                renderDefault: timeMsArg => { renderFrame(timeMsArg) },
+                renderAtSize: (timeMsArg, w, h) => {
+                    const { useFastPath: fast, renderOptions: renderOpts } = renderConfigRef.current;
+                    const programId = activeProgram.current;
+                    if (!fast || !programId) {
+                        throw new Error('ShaderEngine.renderToBlob: custom-resolution export requires useFastPath');
+                    }
+                    manager.fastRender(programId, timeMsArg, renderOpts.clear, w, h);
+                    manager.context.drawArrays(manager.context.TRIANGLE_STRIP, 0, 4);
+                },
+                restoreDisplay: () => {
+                    if (isDefaultDims && explicitFrame) {
+                        renderFrame(frameToMs(controllerRef.current?.getFrame() ?? 0));
+                    }
+                }
+            },
+            timeMs,
+            width,
+            height,
+            backingWidth,
+            backingHeight
+        );
+
+        return { ...result, type: opts.type, quality: opts.quality };
+    }, [renderFrame]);
 
     const applySize = useCallback(() => {
         const manager = managerRef.current;
@@ -485,8 +543,16 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
         getFrame: () => controllerRef.current?.getFrame() ?? 0,
         start: () => { controllerRef.current?.start() },
-        stop: () => { controllerRef.current?.stop() }
-    }), []);
+        stop: () => { controllerRef.current?.stop() },
+        renderToBlob: async (options?: RenderToBlobOptions) => {
+            const { pixels, width, height, type, quality } = captureStill(options);
+            return pixelsToBlob(pixels, width, height, type, quality);
+        },
+        renderToDataURL: (options?: RenderToBlobOptions) => {
+            const { pixels, width, height, type, quality } = captureStill(options);
+            return Promise.resolve(pixelsToDataURL(pixels, width, height, type, quality));
+        }
+    }), [captureStill]);
 
     return (
         <canvas

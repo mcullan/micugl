@@ -12,7 +12,7 @@ import { dirname } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  { ignores: ['dist', '.claude/**'] },
   {
     extends: [
       eslint.configs.recommended,

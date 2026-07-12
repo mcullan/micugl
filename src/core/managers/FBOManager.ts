@@ -261,6 +261,14 @@ export class FBOManager {
         return (resources.currentTextureIndex + 1) % resources.textures.length;
     }
 
+    getTextureCount(id: string): number {
+        const resources = this.resources.get(id);
+        if (!resources) {
+            throw new Error(`Framebuffer with id ${id} not found`);
+        }
+        return resources.textures.length;
+    }
+
     getPingPongIndices(id: string): { read: number; write: number } {
         const resources = this.resources.get(id);
 

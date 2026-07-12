@@ -1,10 +1,18 @@
+import { useEffect, useRef } from 'react';
+
 import { createShaderConfig } from '../../src/core/lib/createShaderConfig';
 import { vec3 } from '../../src/core/lib/vectorUtils';
 import { PingPongShaderEngine } from '../../src/react/components/engine/PingPongShaderEngine';
 import { usePingPongPasses } from '../../src/react/hooks/usePingPongPasses';
-import type { ShaderProgramConfig } from '../../src/types';
+import type { PingPongShaderHandle, ShaderProgramConfig } from '../../src/types';
 import { getIntQuery } from './query';
 import { PINGPONG_RENDER, PINGPONG_SIMULATION, PINGPONG_VERTEX } from './shaders';
+
+declare global {
+    interface Window {
+        __pingpongHandle?: PingPongShaderHandle;
+    }
+}
 
 const simulationConfig = createShaderConfig({
     vertexShader: PINGPONG_VERTEX,
@@ -31,6 +39,14 @@ const programConfigs: Record<string, ShaderProgramConfig> = {
 
 export const PingPongSim = () => {
     const iterations = getIntQuery('iterations', 4);
+    const handleRef = useRef<PingPongShaderHandle>(null);
+
+    useEffect(() => {
+        window.__pingpongHandle = handleRef.current ?? undefined;
+        return () => {
+            window.__pingpongHandle = undefined;
+        };
+    }, []);
 
     const { passes, framebuffers } = usePingPongPasses({
         programId: 'pingpong-sim',
@@ -54,6 +70,7 @@ export const PingPongSim = () => {
 
     return (
         <PingPongShaderEngine
+            ref={handleRef}
             programConfigs={programConfigs}
             passes={passes}
             framebuffers={framebuffers}
