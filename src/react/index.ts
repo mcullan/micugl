@@ -4,5 +4,7 @@ export { PingPongShaderEngine } from './components/engine/PingPongShaderEngine';
 export { ShaderEngine } from './components/engine/ShaderEngine';
 export { useDarkMode } from './hooks/useDarkMode';
 export { usePingPongPasses } from './hooks/usePingPongPasses';
+export { useReducedMotion } from './hooks/useReducedMotion';
+export { useSaveData } from './hooks/useSaveData';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
 export { createCommonUpdaters, createUniformUpdater, createUniformUpdaters } from './lib/createUniformUpdater';

@@ -87,6 +87,8 @@ export type Fit = 'window' | 'element';
 
 export type Dpr = number | [number, number];
 
+export type MotionPolicy = 'static-frame' | 'pause' | 'ignore';
+
 export interface ShaderHandle {
   invalidate: () => void;
   setFrame: (frame: number) => void;
@@ -106,6 +108,9 @@ export interface RenderControlProps {
   height?: number;
   pixelRatio?: number;
   useDevicePixelRatio?: boolean;
+  reducedMotion?: MotionPolicy;
+  saveData?: MotionPolicy;
+  staticFrame?: number;
 }
 
 export interface WebGLExtensionTypes {

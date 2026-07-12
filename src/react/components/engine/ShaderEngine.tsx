@@ -20,8 +20,11 @@ import type {
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
+import { useReducedMotion } from '@/react/hooks/useReducedMotion';
+import { useSaveData } from '@/react/hooks/useSaveData';
 import { programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
+import { resolveMotionGate } from '@/react/lib/motionPolicy';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import {
     DEFAULT_DPR,
@@ -120,8 +123,15 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     pauseWhenHidden = true,
     dpr = DEFAULT_DPR,
     maxPixelCount = DEFAULT_MAX_PIXEL_COUNT,
-    fit = 'window'
+    fit = 'window',
+    reducedMotion = 'static-frame',
+    saveData = 'static-frame',
+    staticFrame = 0
 }, ref) => {
+    const reducedMotionActive = useReducedMotion();
+    const saveDataActive = useSaveData();
+    const motionGate = resolveMotionGate({ reducedMotionActive, saveDataActive, reducedMotion, saveData });
+
     const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
     const contentKey = programConfigContentKey(keyProgramId, keyProgramConfig);
 
@@ -412,6 +422,16 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         controller.setSpeed(speed);
         controller.setPauseWhenHidden(pauseWhenHidden);
     }, [frameloop, speed, pauseWhenHidden]);
+
+    useEffect(() => {
+        const controller = controllerRef.current;
+        if (!controller) return;
+
+        controller.setMotionGate(motionGate);
+        if (motionGate === 'static') {
+            controller.setFrame(staticFrame);
+        }
+    }, [motionGate, staticFrame]);
 
     useEffect(() => {
         if (!debug) return;

@@ -98,3 +98,25 @@ export default function App() {
 - **useUniformUpdaters(programId, uniforms)** → React memoized uniform updaters
 - **usePingPongPasses(options)** → { passes, framebuffers } for engine
 - **useDarkMode()** → boolean dark‑mode flag
+- **useReducedMotion()** → boolean, live `prefers-reduced-motion: reduce` state
+- **useSaveData()** → boolean, live `navigator.connection.saveData` state
+
+## Reduced motion & Save-Data
+
+Both engines respect `prefers-reduced-motion` and the Save-Data hint **on by default**
+(`reducedMotion="static-frame"`, `saveData="static-frame"`). This is a pre-1.0 behavior
+change: a canvas rendered for a user with either preference active now freezes on a single
+deterministic frame instead of animating continuously.
+
+- `reducedMotion` / `saveData`: `'static-frame' | 'pause' | 'ignore'` (default `'static-frame'`
+  for both). When either axis is active, the most restrictive configured policy wins.
+- `'static-frame'` draws one poster frame (at `staticFrame`, default `0`) and stops the
+  continuous render loop entirely; `invalidate()` calls are ignored.
+- `'pause'` freezes the clock at its current value but keeps responding to `invalidate()` —
+  useful for content that should stay interactive (theme changes, resize) without
+  autonomous time-driven motion.
+- `'ignore'` opts the axis out entirely: `<BaseShaderComponent reducedMotion="ignore" saveData="ignore" />`
+  restores unconditional animation regardless of OS/network preference.
+- `staticFrame` (default `0`) is the poster frame number, on the same 60fps timebase as
+  `setFrame`/`ShaderHandle`. Pick a frame that looks good as a static image for shaders
+  that are dull at frame 0.

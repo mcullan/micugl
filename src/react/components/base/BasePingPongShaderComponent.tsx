@@ -59,6 +59,9 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
     dpr,
     maxPixelCount,
     fit,
+    reducedMotion,
+    saveData,
+    staticFrame,
     customPasses,
     renderOptions = RENDER_OPTIONS
 }, ref) => {
@@ -108,6 +111,9 @@ const BasePingPongShaderComponentImpl = forwardRef<ShaderHandle, BasePingPongSha
             dpr={dpr}
             maxPixelCount={maxPixelCount}
             fit={fit}
+            reducedMotion={reducedMotion}
+            saveData={saveData}
+            staticFrame={staticFrame}
         />
     );
 });

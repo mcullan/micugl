@@ -46,6 +46,9 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     dpr,
     maxPixelCount,
     fit,
+    reducedMotion,
+    saveData,
+    staticFrame,
     className = '',
     style,
     renderOptions = RENDER_OPTIONS
@@ -72,6 +75,9 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
             dpr={dpr}
             maxPixelCount={maxPixelCount}
             fit={fit}
+            reducedMotion={reducedMotion}
+            saveData={saveData}
+            staticFrame={staticFrame}
             className={className}
             style={style}
             useFastPath={true}
