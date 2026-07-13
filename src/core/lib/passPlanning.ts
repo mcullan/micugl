@@ -53,7 +53,7 @@ export function compilePass(pass: RenderPass, isPingPong: (id: string) => boolea
     const inputs: CompiledInput[] = pass.inputTextures.map(texture => ({
         id: texture.id,
         textureUnit: texture.textureUnit,
-        samplerName: texture.samplerName ?? `u_${texture.id}`,
+        samplerName: texture.samplerName,
         isPingPong: isPingPong(texture.id),
         pingPongUseReadIndex: texture.bindingType === 'read' || texture.bindingType === 'readwrite',
         staticIndex: texture.bindingType === 'read' ? 0 : 1

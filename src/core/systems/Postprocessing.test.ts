@@ -1,30 +1,35 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { WebGLManager } from '@/core/managers/WebGLManager';
+import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { PostProcessEffect } from '@/core/systems/Postprocessing';
 import { Postprocessing } from '@/core/systems/Postprocessing';
-import type { ShaderProgramConfig } from '@/types';
+import type { GLStubHandle } from '@/testing';
+import { createCanvasStub } from '@/testing';
+import type { FramebufferOptions, UniformType } from '@/types';
 
-const SHADER_CONFIG: ShaderProgramConfig = {
-    vertexShader: '',
-    fragmentShader: '',
-    uniforms: []
+const WIDTH = 64;
+const HEIGHT = 32;
+
+const FRAMEBUFFERS: FramebufferOptions = { width: WIDTH, height: HEIGHT, textureCount: 1 };
+
+const ACTIVE_UNIFORMS: Record<string, UniformType> = {
+    u_texture0: 'sampler2D',
+    u_amount: 'float'
 };
 
-function createManagerStub(): WebGLManager {
-    const resources = new Map<string, object>();
+const SHADER_CONFIG = createShaderConfig({
+    vertexShader: 'void main() {}',
+    fragmentShader: 'void main() {}',
+    uniformNames: { u_texture0: 'sampler2D', u_amount: 'float' }
+});
 
-    const stub = {
-        resources,
-        createProgram: (id: string): void => { resources.set(id, {}) },
-        destroy: (id: string): void => { resources.delete(id) },
-        fbo: {
-            createFramebuffer: (): void => undefined,
-            destroy: (): void => undefined
-        }
-    };
-
-    return stub as unknown as WebGLManager;
+function createManager(): { manager: WebGLManager; stub: GLStubHandle } {
+    const stub = createCanvasStub({ activeUniforms: ACTIVE_UNIFORMS });
+    const manager = new WebGLManager(stub.canvas);
+    manager.setSize(WIDTH, HEIGHT, WIDTH, HEIGHT);
+    manager.fbo.createFramebuffer('input', FRAMEBUFFERS);
+    return { manager, stub };
 }
 
 function makeEffect(id: string, enabled: boolean): PostProcessEffect {
@@ -32,9 +37,17 @@ function makeEffect(id: string, enabled: boolean): PostProcessEffect {
         id,
         programId: `${id}-program`,
         shaderConfig: SHADER_CONFIG,
-        uniforms: {},
+        uniforms: { amount: { type: 'float', value: 0.25 } },
         enabled
     };
+}
+
+function uploadsOf(stub: GLStubHandle, name: string): unknown[] {
+    const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
+    if (location === null) {
+        return [];
+    }
+    return stub.uniformCalls.filter(call => call.location === location).map(call => call.value);
 }
 
 describe('Postprocessing pass caching', () => {
@@ -43,12 +56,12 @@ describe('Postprocessing pass caching', () => {
     let bloom: PostProcessEffect;
 
     beforeEach(() => {
-        post = new Postprocessing(createManagerStub());
+        post = new Postprocessing(createManager().manager);
         blur = makeEffect('blur', true);
         bloom = makeEffect('bloom', true);
         post.registerEffect(blur);
         post.registerEffect(bloom);
-        post.createChain('chain', ['blur', 'bloom'], 'input', null);
+        post.createChain('chain', ['blur', 'bloom'], 'input', null, FRAMEBUFFERS);
     });
 
     it('returns the same cached array across calls when nothing changes', () => {
@@ -93,7 +106,7 @@ describe('Postprocessing pass caching', () => {
 
 describe('Postprocessing removeEffect program lifecycle', () => {
     it('keeps a shared program alive until the last effect using it is removed', () => {
-        const manager = createManagerStub();
+        const { manager } = createManager();
         const post = new Postprocessing(manager);
 
         const a: PostProcessEffect = {
@@ -112,5 +125,62 @@ describe('Postprocessing removeEffect program lifecycle', () => {
 
         post.removeEffect('b');
         expect(manager.resources.has('shared')).toBe(false);
+    });
+});
+
+describe('the sampler and the effect uniforms Postprocessing uploads for every effect', () => {
+    it('reach GL with their real values, once the chain has been built', () => {
+        const { manager, stub } = createManager();
+        const post = new Postprocessing(manager);
+
+        post.registerEffect(makeEffect('blur', true));
+        post.createChain('chain', ['blur'], 'input', null, FRAMEBUFFERS);
+
+        stub.reset();
+        post.process('chain', 0);
+
+        expect(uploadsOf(stub, 'u_texture0')).toEqual([0]);
+        expect(uploadsOf(stub, 'u_amount')).toEqual([0.25]);
+        expect(stub.uniformCalls.some(call => call.location === null)).toBe(false);
+    });
+
+    it('throw when the effect shader never declared the sampler, instead of rendering black by accident', () => {
+        const { manager } = createManager();
+        const post = new Postprocessing(manager);
+
+        post.registerEffect({
+            id: 'blur',
+            programId: 'blur-program',
+            shaderConfig: createShaderConfig({
+                vertexShader: 'void main() {}',
+                fragmentShader: 'void main() {}',
+                uniformNames: { u_amount: 'float' }
+            }),
+            uniforms: { amount: { type: 'float', value: 0.25 } },
+            enabled: true
+        });
+        post.createChain('chain', ['blur'], 'input', null, FRAMEBUFFERS);
+
+        expect(() => post.generatePasses('chain', 0)).toThrow(/Uniform "u_texture0".*never declared/s);
+    });
+
+    it('throw when an effect uniform was never declared by the effect shader', () => {
+        const { manager } = createManager();
+        const post = new Postprocessing(manager);
+
+        post.registerEffect({
+            id: 'blur',
+            programId: 'blur-program',
+            shaderConfig: createShaderConfig({
+                vertexShader: 'void main() {}',
+                fragmentShader: 'void main() {}',
+                uniformNames: { u_texture0: 'sampler2D' }
+            }),
+            uniforms: { amount: { type: 'float', value: 0.25 } },
+            enabled: true
+        });
+        post.createChain('chain', ['blur'], 'input', null, FRAMEBUFFERS);
+
+        expect(() => post.generatePasses('chain', 0)).toThrow(/Uniform "u_amount".*never declared/s);
     });
 });

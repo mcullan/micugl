@@ -40,6 +40,8 @@ export {
     useUniformUpdaters
 } from './react';
 export type {
+    ActiveUniform,
+    ActiveUniformTypes,
     AttributeConfig,
     AttributeType,
     AudioSourceSpec,
@@ -96,6 +98,7 @@ export type {
     UniformTypeMap,
     UniformUpdateFn,
     UniformUpdaterDef,
+    UniformUploadCall,
     UniformValue,
     Vec2,
     Vec3,

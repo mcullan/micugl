@@ -9,7 +9,7 @@ describe('planPassSwaps', () => {
     it('swaps the output framebuffer once for a read-input ping-pong pass', () => {
         const pass: RenderPass = {
             programId: 'sim',
-            inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+            inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
             outputFramebuffer: 'fb-b'
         };
 
@@ -19,7 +19,7 @@ describe('planPassSwaps', () => {
     it('swaps a readwrite self-feedback framebuffer exactly once, not twice', () => {
         const pass: RenderPass = {
             programId: 'sim',
-            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite' }],
+            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite', samplerName: 'u_texture0' }],
             outputFramebuffer: 'state'
         };
 
@@ -29,7 +29,7 @@ describe('planPassSwaps', () => {
     it('swaps output and a distinct readwrite input separately', () => {
         const pass: RenderPass = {
             programId: 'sim',
-            inputTextures: [{ id: 'feedback', textureUnit: 1, bindingType: 'readwrite' }],
+            inputTextures: [{ id: 'feedback', textureUnit: 1, bindingType: 'readwrite', samplerName: 'u_texture1' }],
             outputFramebuffer: 'target'
         };
 
@@ -39,7 +39,7 @@ describe('planPassSwaps', () => {
     it('does not swap non-ping-pong ids', () => {
         const pass: RenderPass = {
             programId: 'sim',
-            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite' }],
+            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite', samplerName: 'u_texture0' }],
             outputFramebuffer: 'state'
         };
 
@@ -49,7 +49,7 @@ describe('planPassSwaps', () => {
     it('does not swap when rendering to the screen', () => {
         const pass: RenderPass = {
             programId: 'render',
-            inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+            inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
             outputFramebuffer: null
         };
 
@@ -58,19 +58,18 @@ describe('planPassSwaps', () => {
 });
 
 describe('compilePass', () => {
-    it('resolves the sampler name from the binding, defaulting to u_<id>', () => {
+    it('carries the sampler name of each binding through, independent of the framebuffer id', () => {
         const pass: RenderPass = {
             programId: 'sim',
             inputTextures: [
                 { id: 'sim-fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' },
-                { id: 'noise', textureUnit: 1, bindingType: 'read' }
+                { id: 'noise', textureUnit: 1, bindingType: 'read', samplerName: 'u_noise' }
             ],
             outputFramebuffer: null
         };
 
         const compiled = compilePass(pass, allPingPong);
-        expect(compiled.inputs[0].samplerName).toBe('u_texture0');
-        expect(compiled.inputs[1].samplerName).toBe('u_noise');
+        expect(compiled.inputs.map(input => input.samplerName)).toEqual(['u_texture0', 'u_noise']);
     });
 
     it('flattens pass uniforms into an ordered entry array once', () => {
@@ -93,9 +92,9 @@ describe('compilePass', () => {
         const pass: RenderPass = {
             programId: 'sim',
             inputTextures: [
-                { id: 'a', textureUnit: 0, bindingType: 'read' },
-                { id: 'b', textureUnit: 1, bindingType: 'write' },
-                { id: 'c', textureUnit: 2, bindingType: 'readwrite' }
+                { id: 'a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' },
+                { id: 'b', textureUnit: 1, bindingType: 'write', samplerName: 'u_texture1' },
+                { id: 'c', textureUnit: 2, bindingType: 'readwrite', samplerName: 'u_texture2' }
             ],
             outputFramebuffer: null
         };

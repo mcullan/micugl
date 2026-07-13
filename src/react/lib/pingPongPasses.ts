@@ -3,9 +3,26 @@ import type {
     FramebufferOptions,
     RenderPass,
     RenderPassUniformValue,
+    ShaderProgramConfig,
+    UniformConfig,
     UniformType,
     UniformUpdaterDef
 } from '@/types';
+
+export const PING_PONG_SAMPLER: UniformConfig = { name: 'u_texture0', type: 'sampler2D' };
+
+export function declarePingPongSampler(
+    configs: Record<string, ShaderProgramConfig>
+): Record<string, ShaderProgramConfig> {
+    return Object.fromEntries(
+        Object.entries(configs).map(([id, config]) => {
+            if (config.uniforms.some(uniform => uniform.name === PING_PONG_SAMPLER.name)) {
+                return [id, config];
+            }
+            return [id, { ...config, uniforms: [...config.uniforms, PING_PONG_SAMPLER] }];
+        })
+    );
+}
 
 export interface PingPongRenderOptions {
     clear?: boolean;
@@ -102,7 +119,7 @@ export function buildPasses(
 
         passes.push({
             programId: currentProgramId,
-            inputTextures: [{ id: sourceId, textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
+            inputTextures: [{ id: sourceId, textureUnit: 0, bindingType: 'read', samplerName: PING_PONG_SAMPLER.name }],
             outputFramebuffer: targetId,
             uniforms: passUniformsFrom(updaters),
             renderOptions
@@ -118,7 +135,7 @@ export function buildPasses(
 
     passes.push({
         programId: finalProgramId,
-        inputTextures: [{ id: lastTarget, textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
+        inputTextures: [{ id: lastTarget, textureUnit: 0, bindingType: 'read', samplerName: PING_PONG_SAMPLER.name }],
         outputFramebuffer: null,
         uniforms: passUniformsFrom(finalUpdaters),
         renderOptions

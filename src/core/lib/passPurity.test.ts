@@ -35,7 +35,7 @@ describe('chainIsTimePure', () => {
     it('is stateful for a readwrite self-feedback accumulator', () => {
         const passes: RenderPass[] = [{
             programId: 'sim',
-            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite' }],
+            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite', samplerName: 'u_texture0' }],
             outputFramebuffer: 'state'
         }];
 
@@ -45,7 +45,7 @@ describe('chainIsTimePure', () => {
     it('is stateful when a pass reads an id before anything writes it', () => {
         const passes: RenderPass[] = [{
             programId: 'render',
-            inputTextures: [{ id: 'never-written', textureUnit: 0, bindingType: 'read' }],
+            inputTextures: [{ id: 'never-written', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
             outputFramebuffer: null
         }];
 
@@ -62,7 +62,7 @@ describe('chainIsTimePure', () => {
             },
             {
                 programId: 'render',
-                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
                 outputFramebuffer: null
             }
         ];
@@ -75,7 +75,7 @@ describe('chainIsTimePure', () => {
             { programId: 'seed', inputTextures: [], outputFramebuffer: 'fb-a' },
             {
                 programId: 'render',
-                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
                 outputFramebuffer: null
             }
         ];
@@ -94,7 +94,7 @@ describe('chainIsTimePure', () => {
             },
             {
                 programId: 'render',
-                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
                 outputFramebuffer: null
             }
         ];

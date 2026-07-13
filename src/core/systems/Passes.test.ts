@@ -11,6 +11,12 @@ const CONFIG: ShaderProgramConfig = {
     uniforms: []
 };
 
+const SAMPLER_CONFIG: ShaderProgramConfig = {
+    vertexShader: '',
+    fragmentShader: '',
+    uniforms: [{ name: 'u_texture0', type: 'sampler2D' }]
+};
+
 describe('Passes.reset', () => {
     it('clears every texture index of each output framebuffer and restores the null binding', () => {
         const { canvas, calls, reset: resetStub } = createCanvasStub();
@@ -56,7 +62,7 @@ describe('Passes.renderFinalPassTo', () => {
         const { canvas, calls } = createCanvasStub();
         const manager = new WebGLManager(canvas);
         manager.createProgram('seed', CONFIG);
-        manager.createProgram('render', CONFIG);
+        manager.createProgram('render', SAMPLER_CONFIG);
         manager.fbo.createFramebuffer('fb-a', { width: 4, height: 4, textureCount: 2 });
         manager.fbo.createFramebuffer('scratch', { width: 8, height: 8, textureCount: 1 });
 
@@ -118,7 +124,7 @@ describe('Passes.isTimePure', () => {
 
         passSystem.addPass({
             programId: 'seed',
-            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite' }],
+            inputTextures: [{ id: 'state', textureUnit: 0, bindingType: 'readwrite', samplerName: 'u_texture0' }],
             outputFramebuffer: 'state'
         });
 

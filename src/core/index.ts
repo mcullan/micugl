@@ -16,6 +16,8 @@ export { WebGLManager } from '@/core/managers/WebGLManager';
 export { Passes } from '@/core/systems/Passes';
 export { Postprocessing } from '@/core/systems/Postprocessing';
 export type {
+    ActiveUniform,
+    ActiveUniformTypes,
     AttributeConfig,
     BufferData,
     FramebufferOptions,
@@ -35,6 +37,7 @@ export type {
     UniformConfig,
     UniformType,
     UniformUpdateFn,
+    UniformUploadCall,
     WebGLExtensionName,
     WebGLExtensionTypes
 } from '@/types';
