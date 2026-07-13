@@ -1,3 +1,4 @@
+import type { InvalidationKind } from '@/core/lib/frameInvalidation';
 import type { MotionGate } from '@/react/lib/motionPolicy';
 import { shouldSchedule } from '@/react/lib/shouldSchedule';
 import {
@@ -29,7 +30,8 @@ export class RenderLoop {
     private pauseWhenHidden: boolean;
     private documentVisible = true;
     private intersecting = true;
-    private pendingInvalidate = false;
+    private pendingDiscrete = false;
+    private pendingContinuous = false;
     private running = false;
     private handle: number | null = null;
     private cold = true;
@@ -69,7 +71,8 @@ export class RenderLoop {
             documentVisible: this.documentVisible,
             intersecting: this.intersecting,
             pauseWhenHidden: this.pauseWhenHidden,
-            pendingInvalidate: this.pendingInvalidate,
+            pendingDiscrete: this.pendingDiscrete,
+            pendingContinuous: this.pendingContinuous,
             motionGate: this.motionGate
         });
 
@@ -83,7 +86,8 @@ export class RenderLoop {
 
     private frame = (now: number): void => {
         this.handle = null;
-        this.pendingInvalidate = false;
+        this.pendingDiscrete = false;
+        this.pendingContinuous = false;
 
         if (this.motionGate !== 'none') {
             this.time = syncTime(this.time, now);
@@ -116,8 +120,12 @@ export class RenderLoop {
         this.evaluate();
     }
 
-    invalidate(): void {
-        this.pendingInvalidate = true;
+    invalidate(kind: InvalidationKind = 'discrete'): void {
+        if (kind === 'continuous') {
+            this.pendingContinuous = true;
+        } else {
+            this.pendingDiscrete = true;
+        }
         this.evaluate();
     }
 
@@ -126,6 +134,12 @@ export class RenderLoop {
         this.cold = true;
         this.deps.render(elapsedMs(this.time));
         this.evaluate();
+    }
+
+    pinFrame(frame: number): void {
+        this.time = setTimeFrame(this.time, frame, this.deps.now());
+        this.cold = true;
+        this.invalidate();
     }
 
     getFrame(): number {

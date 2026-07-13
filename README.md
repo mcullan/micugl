@@ -249,6 +249,31 @@ deterministic frame instead of animating continuously.
   `setFrame`/`ShaderHandle`. Pick a frame that looks good as a static image for shaders
   that are dull at frame 0.
 
+### What repaints the poster, and what freezes
+
+Under a `static-frame` or `pause` gate the render loop is off, so the canvas only repaints
+when something asks for a **discrete** repaint — a "one thing changed, show it once" event:
+a changed plain uniform value (theme, resize, a prop-driven `u_color`), a snapped transition,
+a devtools override. A per-frame **continuous** stream — a live audio level, a webcam frame,
+anything that wants the *next* frame of an ongoing animation — is suppressed by the gate; it
+never schedules a frame while gated.
+
+That distinction is carried by `InvalidationKind` on the `FrameInvalidation` you connect to a
+custom uniform (see [Waking a `demand` engine from your own value
+producer](#waking-a-demand-engine-from-your-own-value-producer)):
+
+- `request()` (or `request('discrete')`) — "a value changed, repaint the poster." Fires under
+  a gate. Use it for producers that emit on discrete state changes.
+- `request('continuous')` — "I want the next frame of a stream." Suppressed under a gate. Use
+  it for a source you sample every frame (a `requestVideoFrameCallback` webcam, an rAF loop).
+
+A gated audio visualizer follows the same rule: while a source is running the poster **freezes
+at the last sampled values** (the driver keeps analysing for any un-gated engine sharing it,
+but this engine will not schedule frames), and `stop()` drains the bands to zero and repaints
+that drained poster once, because stopping is a discrete state change. If the visualizer *is*
+the point of the page and should animate for everyone, opt the component out with
+`reducedMotion="ignore"` / `saveData="ignore"` — there is no per-source override.
+
 ## Uniform transitions
 
 Give a uniform param a `transition` and a change to its `value` animates to the new value
@@ -478,6 +503,15 @@ identity, so an inline `createFrameInvalidation()` or `combineFrameInvalidation(
 during render would connect and dispose on every render. Memoize it (or hold it in a ref), as
 above. `combineFrameInvalidation` merges several producers into one when a uniform is woken by
 more than one source.
+
+`request()` takes an optional `InvalidationKind`. A producer that emits when a discrete thing
+changed — a pointer moved, a websocket message arrived — calls `request()` (its default,
+`'discrete'`), and its repaint reaches the canvas even under a reduced-motion gate. A producer
+that samples a continuous stream every frame — a `requestVideoFrameCallback` webcam, an rAF
+loop — calls `request('continuous')`, which drives `frameloop='demand'` at full rate but is
+suppressed while the component is motion-gated, so a reduced-motion user gets the poster instead
+of a live stream. When in doubt, `request()`: repainting a poster once is the safe default. See
+[What repaints the poster, and what freezes](#what-repaints-the-poster-and-what-freezes).
 
 ## Worker rendering (OffscreenCanvas)
 

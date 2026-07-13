@@ -1,18 +1,20 @@
+export type InvalidationKind = 'discrete' | 'continuous';
+
 export interface FrameInvalidation {
-    connect(invalidate: () => void): () => void;
-    request(): void;
+    connect(invalidate: (kind: InvalidationKind) => void): () => void;
+    request(kind?: InvalidationKind): void;
 }
 
 export function createFrameInvalidation(): FrameInvalidation {
-    const listeners = new Set<() => void>();
+    const listeners = new Set<(kind: InvalidationKind) => void>();
 
     return {
         connect(invalidate) {
             listeners.add(invalidate);
             return () => { listeners.delete(invalidate) };
         },
-        request() {
-            listeners.forEach(listener => { listener() });
+        request(kind = 'discrete') {
+            listeners.forEach(listener => { listener(kind) });
         }
     };
 }
@@ -23,8 +25,8 @@ export function combineFrameInvalidation(sources: FrameInvalidation[]): FrameInv
             const disposers = sources.map(source => source.connect(invalidate));
             return () => { disposers.forEach(dispose => { dispose() }) };
         },
-        request() {
-            sources.forEach(source => { source.request() });
+        request(kind) {
+            sources.forEach(source => { source.request(kind) });
         }
     };
 }

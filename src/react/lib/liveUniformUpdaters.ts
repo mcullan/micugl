@@ -169,6 +169,63 @@ export function collectLiveValues(uniforms: Record<string, UniformParam>): LiveV
     return values;
 }
 
+export type PosterSnapshot = Record<string, number | number[]>;
+
+function copyPosterValue(value: UniformValue<UniformType>): number | number[] {
+    if (typeof value === 'number') {
+        return value;
+    }
+    return Array.from(value as ArrayLike<number>);
+}
+
+export function collectPosterValues(uniforms: Record<string, UniformParam>): PosterSnapshot {
+    const snapshot: PosterSnapshot = {};
+    for (const [name, param] of Object.entries(uniforms)) {
+        if (typeof param.value === 'function' || param.transition) {
+            continue;
+        }
+        snapshot[normalizeUniformName(name)] = copyPosterValue(param.value);
+    }
+    return snapshot;
+}
+
+function posterValueChanged(a: number | number[], b: number | number[]): boolean {
+    const aArray = Array.isArray(a);
+    const bArray = Array.isArray(b);
+    if (aArray !== bArray) {
+        return true;
+    }
+    if (!aArray || !bArray) {
+        return !Object.is(a, b);
+    }
+    if (a.length !== b.length) {
+        return true;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (!Object.is(a[i], b[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+export function posterValuesChanged(prev: PosterSnapshot, next: PosterSnapshot): boolean {
+    const prevKeys = Object.keys(prev);
+    const nextKeys = Object.keys(next);
+    if (prevKeys.length !== nextKeys.length) {
+        return true;
+    }
+    for (const key of nextKeys) {
+        if (!Object.prototype.hasOwnProperty.call(prev, key)) {
+            return true;
+        }
+        if (posterValueChanged(prev[key], next[key])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 export function collectInvalidations(uniforms: Record<string, UniformParam>): FrameInvalidation[] {
     const sources: FrameInvalidation[] = [];
     for (const param of Object.values(uniforms)) {

@@ -18,12 +18,12 @@ function expected(inputs: ScheduleInputs): boolean {
         return false;
     }
     if (inputs.motionGate !== 'none') {
-        return inputs.pendingInvalidate;
+        return inputs.pendingDiscrete;
     }
     if (inputs.frameloop === 'always') {
         return true;
     }
-    return inputs.pendingInvalidate;
+    return inputs.pendingDiscrete || inputs.pendingContinuous;
 }
 
 describe('shouldSchedule truth table', () => {
@@ -33,14 +33,17 @@ describe('shouldSchedule truth table', () => {
                 for (const documentVisible of BOOLS) {
                     for (const intersecting of BOOLS) {
                         for (const pauseWhenHidden of BOOLS) {
-                            for (const pendingInvalidate of BOOLS) {
-                                for (const motionGate of MOTION_GATES) {
-                                    const inputs: ScheduleInputs = {
-                                        frameloop, speed, documentVisible,
-                                        intersecting, pauseWhenHidden, pendingInvalidate,
-                                        motionGate
-                                    };
-                                    expect(shouldSchedule(inputs)).toBe(expected(inputs));
+                            for (const pendingDiscrete of BOOLS) {
+                                for (const pendingContinuous of BOOLS) {
+                                    for (const motionGate of MOTION_GATES) {
+                                        const inputs: ScheduleInputs = {
+                                            frameloop, speed, documentVisible,
+                                            intersecting, pauseWhenHidden,
+                                            pendingDiscrete, pendingContinuous,
+                                            motionGate
+                                        };
+                                        expect(shouldSchedule(inputs)).toBe(expected(inputs));
+                                    }
                                 }
                             }
                         }
@@ -57,7 +60,8 @@ const base: ScheduleInputs = {
     documentVisible: true,
     intersecting: true,
     pauseWhenHidden: true,
-    pendingInvalidate: false,
+    pendingDiscrete: false,
+    pendingContinuous: false,
     motionGate: 'none'
 };
 
@@ -88,19 +92,21 @@ describe('shouldSchedule precedence', () => {
         expect(shouldSchedule({ ...base, speed: -1 })).toBe(true);
     });
 
-    it('demand mode schedules only when an invalidate is pending', () => {
-        expect(shouldSchedule({ ...base, frameloop: 'demand', pendingInvalidate: false })).toBe(false);
-        expect(shouldSchedule({ ...base, frameloop: 'demand', pendingInvalidate: true })).toBe(true);
+    it('demand mode schedules on a pending discrete or continuous request', () => {
+        expect(shouldSchedule({ ...base, frameloop: 'demand' })).toBe(false);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', pendingDiscrete: true })).toBe(true);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', pendingContinuous: true })).toBe(true);
     });
 
-    it('never mode schedules only when an invalidate is pending', () => {
-        expect(shouldSchedule({ ...base, frameloop: 'never', pendingInvalidate: false })).toBe(false);
-        expect(shouldSchedule({ ...base, frameloop: 'never', pendingInvalidate: true })).toBe(true);
+    it('never mode schedules on a pending discrete or continuous request', () => {
+        expect(shouldSchedule({ ...base, frameloop: 'never' })).toBe(false);
+        expect(shouldSchedule({ ...base, frameloop: 'never', pendingDiscrete: true })).toBe(true);
+        expect(shouldSchedule({ ...base, frameloop: 'never', pendingContinuous: true })).toBe(true);
     });
 
-    it('hidden overrides a pending invalidate in demand mode', () => {
+    it('hidden overrides a pending request in demand mode', () => {
         expect(shouldSchedule({
-            ...base, frameloop: 'demand', pendingInvalidate: true, documentVisible: false
+            ...base, frameloop: 'demand', pendingDiscrete: true, documentVisible: false
         })).toBe(false);
     });
 
@@ -109,26 +115,35 @@ describe('shouldSchedule precedence', () => {
         expect(shouldSchedule({ ...base, motionGate: 'pause' })).toBe(false);
     });
 
-    it('a motion gate still allows one coalesced repaint per invalidate', () => {
-        expect(shouldSchedule({ ...base, motionGate: 'static', pendingInvalidate: true })).toBe(true);
-        expect(shouldSchedule({ ...base, motionGate: 'pause', pendingInvalidate: true })).toBe(true);
+    it('a motion gate schedules on a pending discrete request but never on a continuous one', () => {
+        expect(shouldSchedule({ ...base, motionGate: 'static', pendingDiscrete: true })).toBe(true);
+        expect(shouldSchedule({ ...base, motionGate: 'pause', pendingDiscrete: true })).toBe(true);
+        expect(shouldSchedule({ ...base, motionGate: 'static', pendingContinuous: true })).toBe(false);
+        expect(shouldSchedule({ ...base, motionGate: 'pause', pendingContinuous: true })).toBe(false);
     });
 
-    it('hidden still wins over a motion gate with a pending invalidate', () => {
+    it('a continuous request alongside a discrete one still schedules under a gate', () => {
         expect(shouldSchedule({
-            ...base, motionGate: 'static', pendingInvalidate: true, documentVisible: false
+            ...base, motionGate: 'static', pendingDiscrete: true, pendingContinuous: true
+        })).toBe(true);
+    });
+
+    it('hidden still wins over a motion gate with a pending discrete request', () => {
+        expect(shouldSchedule({
+            ...base, motionGate: 'static', pendingDiscrete: true, documentVisible: false
         })).toBe(false);
     });
 
-    it('speed zero still wins over a motion gate with a pending invalidate', () => {
+    it('speed zero still wins over a motion gate with a pending discrete request', () => {
         expect(shouldSchedule({
-            ...base, motionGate: 'static', pendingInvalidate: true, speed: 0
+            ...base, motionGate: 'static', pendingDiscrete: true, speed: 0
         })).toBe(false);
     });
 
     it('motionGate none preserves the pre-gate always/demand/never behavior', () => {
         expect(shouldSchedule({ ...base, motionGate: 'none' })).toBe(true);
-        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none', pendingInvalidate: false })).toBe(false);
-        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none', pendingInvalidate: true })).toBe(true);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none' })).toBe(false);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none', pendingContinuous: true })).toBe(true);
+        expect(shouldSchedule({ ...base, frameloop: 'demand', motionGate: 'none', pendingDiscrete: true })).toBe(true);
     });
 });

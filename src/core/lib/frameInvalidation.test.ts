@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { InvalidationKind } from '@/core/lib/frameInvalidation';
 import { combineFrameInvalidation, createFrameInvalidation } from '@/core/lib/frameInvalidation';
 
 describe('createFrameInvalidation', () => {
@@ -42,6 +43,27 @@ describe('createFrameInvalidation', () => {
         const invalidation = createFrameInvalidation();
         expect(() => { invalidation.request() }).not.toThrow();
     });
+
+    it('fans the requested kind out to listeners', () => {
+        const invalidation = createFrameInvalidation();
+        const kinds: InvalidationKind[] = [];
+        invalidation.connect(kind => { kinds.push(kind) });
+
+        invalidation.request('continuous');
+        invalidation.request('discrete');
+
+        expect(kinds).toEqual(['continuous', 'discrete']);
+    });
+
+    it('a bare request() resolves to discrete at the listener', () => {
+        const invalidation = createFrameInvalidation();
+        const kinds: InvalidationKind[] = [];
+        invalidation.connect(kind => { kinds.push(kind) });
+
+        invalidation.request();
+
+        expect(kinds).toEqual(['discrete']);
+    });
 });
 
 describe('combineFrameInvalidation', () => {
@@ -71,6 +93,36 @@ describe('combineFrameInvalidation', () => {
         combined.request();
 
         expect(calls).toEqual(['a', 'b']);
+    });
+
+    it('forwards a source request kind through to a combined listener', () => {
+        const sourceA = createFrameInvalidation();
+        const sourceB = createFrameInvalidation();
+        const combined = combineFrameInvalidation([sourceA, sourceB]);
+
+        const kinds: InvalidationKind[] = [];
+        combined.connect(kind => { kinds.push(kind) });
+
+        sourceA.request('continuous');
+        sourceB.request('discrete');
+        sourceB.request();
+
+        expect(kinds).toEqual(['continuous', 'discrete', 'discrete']);
+    });
+
+    it('forwards a combined request kind down to every source listener', () => {
+        const sourceA = createFrameInvalidation();
+        const sourceB = createFrameInvalidation();
+        const combined = combineFrameInvalidation([sourceA, sourceB]);
+
+        const kinds: InvalidationKind[] = [];
+        sourceA.connect(kind => { kinds.push(kind) });
+        sourceB.connect(kind => { kinds.push(kind) });
+
+        combined.request('continuous');
+        combined.request();
+
+        expect(kinds).toEqual(['continuous', 'continuous', 'discrete', 'discrete']);
     });
 
     it('the disposer from connect() disconnects from every source', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { createShaderConfig } from '../../src/core/lib/createShaderConfig';
 import { BaseShaderComponent } from '../../src/react/components/base/BaseShaderComponent';
@@ -6,7 +6,25 @@ import { useReducedMotion } from '../../src/react/hooks/useReducedMotion';
 import { useSaveData } from '../../src/react/hooks/useSaveData';
 import type { MotionPolicy, ShaderHandle, UniformParam } from '../../src/types';
 import { getIntQuery, getQueryString } from './query';
-import { QUAD_VERTEX, WAVE_FRAGMENT } from './shaders';
+import { QUAD_VERTEX } from './shaders';
+
+const TINT_FRAGMENT = `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_tint;
+    varying vec2 v_uv;
+    void main() {
+        vec2 uv = v_uv;
+        float w = 0.5 + 0.5 * sin(uv.x * 10.0 + u_time);
+        float g = 0.5 + 0.5 * cos(uv.y * 10.0 - u_time);
+        vec3 base = vec3(w, g, 1.0 - w * g);
+        vec3 tint = vec3(u_tint, 1.0 - u_tint, 0.5);
+        gl_FragColor = vec4(mix(base, tint, 0.5), 1.0);
+    }
+`;
+
+const TINTS = [0, 0.25, 0.5, 0.75, 1];
 
 declare global {
     interface Window {
@@ -16,10 +34,9 @@ declare global {
 
 const config = createShaderConfig({
     vertexShader: QUAD_VERTEX,
-    fragmentShader: WAVE_FRAGMENT
+    fragmentShader: TINT_FRAGMENT,
+    uniformNames: { u_tint: 'float' }
 });
-
-const uniforms: Record<string, UniformParam> = {};
 
 const MOTION_POLICIES: MotionPolicy[] = ['static-frame', 'pause', 'ignore'];
 
@@ -37,6 +54,11 @@ export const ReducedMotion = () => {
     const policy = readPolicy();
     const staticFrame = getIntQuery('staticFrame', 0);
     const handleRef = useRef<ShaderHandle>(null);
+    const [tintIndex, setTintIndex] = useState(0);
+
+    const uniforms: Record<string, UniformParam> = {
+        u_tint: { type: 'float', value: TINTS[tintIndex] }
+    };
 
     useEffect(() => {
         window.__reducedMotionHandle = handleRef.current ?? undefined;
@@ -74,6 +96,14 @@ export const ReducedMotion = () => {
                 <div>useSaveData(): {String(saveDataActive)}</div>
                 <div>reducedMotion policy: {policy}</div>
                 <div>staticFrame: {staticFrame}</div>
+                <div>u_tint: {TINTS[tintIndex].toFixed(2)}</div>
+                <button
+                    type='button'
+                    onClick={() => { setTintIndex(index => (index + 1) % TINTS.length) }}
+                    style={{ marginTop: '6px', fontFamily: 'monospace', fontSize: '12px' }}
+                >
+                    cycle u_tint
+                </button>
             </div>
         </div>
     );

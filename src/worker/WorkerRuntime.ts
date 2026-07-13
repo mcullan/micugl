@@ -1,3 +1,4 @@
+import type { InvalidationKind } from '@/core/lib/frameInvalidation';
 import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
@@ -97,6 +98,7 @@ export class WorkerRuntime {
     private renderWidth = 0;
     private renderHeight = 0;
     private pendingFrames = 0;
+    private pendingFrameKind: InvalidationKind = 'discrete';
     private active = false;
     private contextLost = false;
     private failed = false;
@@ -147,7 +149,7 @@ export class WorkerRuntime {
                 this.setActive(loop, message.active);
                 break;
             case 'invalidate':
-                this.invalidate(loop, message.frames);
+                this.invalidate(loop, message.frames, message.kind);
                 break;
             case 'setFrameloop':
                 loop.setFrameloop(message.mode);
@@ -481,7 +483,7 @@ export class WorkerRuntime {
         }
     }
 
-    private invalidate(loop: RenderLoop, frames: number | undefined): void {
+    private invalidate(loop: RenderLoop, frames: number | undefined, kind: InvalidationKind = 'discrete'): void {
         const requested = frames ?? 1;
         if (!Number.isInteger(requested) || requested < 1) {
             throw new Error(
@@ -491,7 +493,8 @@ export class WorkerRuntime {
         }
 
         this.pendingFrames = Math.max(this.pendingFrames, requested);
-        loop.invalidate();
+        this.pendingFrameKind = kind;
+        loop.invalidate(kind);
     }
 
     private readonly renderTick = (elapsed: number): void => {
@@ -511,7 +514,7 @@ export class WorkerRuntime {
 
         this.pendingFrames -= 1;
         if (this.pendingFrames > 0) {
-            this.loop?.invalidate();
+            this.loop?.invalidate(this.pendingFrameKind);
         }
     }
 
