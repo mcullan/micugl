@@ -363,7 +363,7 @@ export function createAudioAnalyserDriver(
         level = sum / bands.length;
 
         lastAnalysedTime = timeMs;
-        invalidation.request();
+        invalidation.request('continuous');
     }
 
     function adoptOptions(next: ResolvedAnalyserOptions): void {

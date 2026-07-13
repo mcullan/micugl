@@ -7,7 +7,8 @@ export interface ScheduleInputs {
     documentVisible: boolean;
     intersecting: boolean;
     pauseWhenHidden: boolean;
-    pendingInvalidate: boolean;
+    pendingDiscrete: boolean;
+    pendingContinuous: boolean;
     motionGate: MotionGate;
 }
 
@@ -21,12 +22,12 @@ export function shouldSchedule(inputs: ScheduleInputs): boolean {
     }
 
     if (inputs.motionGate !== 'none') {
-        return inputs.pendingInvalidate;
+        return inputs.pendingDiscrete;
     }
 
     if (inputs.frameloop === 'always') {
         return true;
     }
 
-    return inputs.pendingInvalidate;
+    return inputs.pendingDiscrete || inputs.pendingContinuous;
 }

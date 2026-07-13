@@ -286,3 +286,120 @@ describe('worker ping-pong pipeline, driven by the real pass and uniform builder
         expect(worker).toEqual(main);
     });
 });
+
+interface SingleWorkerHarness {
+    bridge: WorkerBridge;
+    gl: GLStubHandle;
+    tick: (now: number) => void;
+    pending: () => number;
+    errors: string[];
+}
+
+function createSingleWorker(uniforms: Record<string, UniformParam>): SingleWorkerHarness {
+    const canvas = {
+        width: WIDTH,
+        height: HEIGHT,
+        getContext: (): WebGLRenderingContext => stub.gl,
+        addEventListener: (): void => undefined,
+        removeEventListener: (): void => undefined
+    };
+    const offscreen = canvas as unknown as OffscreenCanvas;
+    const stub = createGLStub({ ...GL_STUB_CONFIG, overrides: { canvas: offscreen } });
+
+    const scheduled = new Map<number, (now: number) => void>();
+    let nextHandle = 1;
+    const errors: string[] = [];
+    const listeners: ((event: WorkerBridgeMessageEvent<WorkerToMain>) => void)[] = [];
+
+    const host: WorkerRuntimeHost = {
+        postMessage: message => { listeners.forEach(listener => { listener({ data: message }) }) },
+        requestAnimationFrame: callback => {
+            const handle = nextHandle;
+            nextHandle += 1;
+            scheduled.set(handle, callback);
+            return handle;
+        },
+        cancelAnimationFrame: handle => { scheduled.delete(handle) },
+        now: () => 0
+    };
+
+    const runtime = new WorkerRuntime(host);
+    const transport: WorkerTransport = {
+        postMessage: (message: MainToWorker) => { runtime.handleMessage(message) },
+        addEventListener: (_type, listener) => { listeners.push(listener) }
+    };
+
+    const bridge = new WorkerBridge(
+        transport,
+        {
+            canvas: offscreen,
+            kind: 'single',
+            programConfigs: { [PROGRAM_ID]: CONFIG },
+            uniforms: normalizeWorkerPrograms({ [PROGRAM_ID]: uniforms }),
+            skipDefaultUniforms: false,
+            frameloop: 'always',
+            speed: 1,
+            active: true
+        },
+        { onError: message => { errors.push(message) } }
+    );
+
+    const tick = (now: number): void => {
+        const callbacks = Array.from(scheduled.values());
+        scheduled.clear();
+        callbacks.forEach(callback => { callback(now) });
+    };
+
+    stub.reset();
+    return { bridge, gl: stub, tick, pending: () => scheduled.size, errors };
+}
+
+describe('a motion-gated single-mode worker', () => {
+    it('a continuous invalidate under a static gate draws nothing', async () => {
+        const worker = createSingleWorker(simUniforms());
+
+        worker.bridge.setMotionGate('static');
+        worker.tick(0);
+        worker.gl.reset();
+
+        worker.bridge.invalidate(undefined, 'continuous');
+        await Promise.resolve();
+        expect(worker.pending()).toBe(0);
+        worker.tick(16);
+
+        expect(worker.errors).toEqual([]);
+        expect(uniformStateAtEachDraw(worker.gl)).toHaveLength(0);
+    });
+
+    it('a discrete invalidate after new values draws once with the new values', async () => {
+        const worker = createSingleWorker(simUniforms());
+
+        worker.bridge.setMotionGate('static');
+        worker.tick(0);
+        worker.gl.reset();
+
+        worker.bridge.setUniformValues(PROGRAM_ID, { u_intensity: 0.9 });
+        worker.bridge.invalidate(undefined, 'discrete');
+        await Promise.resolve();
+        expect(worker.pending()).toBe(1);
+        worker.tick(16);
+
+        expect(worker.errors).toEqual([]);
+        const draws = uniformStateAtEachDraw(worker.gl);
+        expect(draws).toHaveLength(1);
+        expect(draws[0].u_intensity).toBe(0.9);
+    });
+
+    it('a static poster drawn after the values are posted paints the posted values, not the init default', () => {
+        const worker = createSingleWorker(simUniforms());
+
+        worker.bridge.setMotionGate('static');
+        worker.bridge.setUniformValues(PROGRAM_ID, { u_intensity: 0.9 });
+        worker.bridge.renderFrame(0);
+
+        expect(worker.errors).toEqual([]);
+        const draws = uniformStateAtEachDraw(worker.gl);
+        expect(draws).toHaveLength(1);
+        expect(draws[0].u_intensity).toBe(0.9);
+    });
+});

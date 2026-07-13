@@ -19,7 +19,7 @@ import type {
 } from '@/core';
 import { captureFrame } from '@/core/lib/captureFrame';
 import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
-import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
+import type { FrameInvalidation, InvalidationKind } from '@/core/lib/frameInvalidation';
 import { InstanceUploader } from '@/core/lib/instanceBuffers';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
@@ -451,14 +451,14 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         renderFrame(elapsed);
     }, [postLiveUniforms, renderFrame]);
 
-    const invalidateAll = useCallback(() => {
+    const invalidateAll = useCallback((kind: InvalidationKind = 'discrete') => {
         if (workerActiveRef.current) {
             postLiveUniforms(frameToMs(controllerRef.current?.getFrame() ?? 0));
-            controllerRef.current?.invalidate();
-            bridgeRef.current?.invalidate();
+            controllerRef.current?.invalidate(kind);
+            bridgeRef.current?.invalidate(undefined, kind);
             return;
         }
-        controllerRef.current?.invalidate();
+        controllerRef.current?.invalidate(kind);
     }, [postLiveUniforms]);
 
     const startSamplerLoop = useCallback(() => {
@@ -770,7 +770,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
 
         controller.setMotionGate(motionGate);
         if (motionGate === 'static') {
-            controller.setFrame(staticFrame);
+            controller.pinFrame(staticFrame);
         }
     }, [motionGate, staticFrame]);
 

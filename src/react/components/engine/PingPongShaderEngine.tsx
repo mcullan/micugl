@@ -18,7 +18,7 @@ import type {
 } from '@/core';
 import { CAPTURE_SCRATCH_FRAMEBUFFER_ID, captureFrame } from '@/core/lib/captureFrame';
 import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
-import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
+import type { FrameInvalidation, InvalidationKind } from '@/core/lib/frameInvalidation';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
@@ -405,12 +405,12 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
 
     const applySizeRef = useRef(applySize);
 
-    const invalidateAll = useCallback(() => {
+    const invalidateAll = useCallback((kind: InvalidationKind = 'discrete') => {
         if (workerActiveRef.current) {
-            bridgeRef.current?.invalidate();
+            bridgeRef.current?.invalidate(undefined, kind);
             return;
         }
-        controllerRef.current?.invalidate();
+        controllerRef.current?.invalidate(kind);
     }, []);
 
     const session = useWorkerBridge({
@@ -697,7 +697,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
 
         controller.setMotionGate(motionGate);
         if (motionGate === 'static') {
-            controller.setFrame(staticFrame);
+            controller.pinFrame(staticFrame);
         }
     }, [motionGate, staticFrame]);
 

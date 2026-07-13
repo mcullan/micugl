@@ -376,6 +376,86 @@ describe('RenderLoop motion gate', () => {
     });
 });
 
+describe('RenderLoop invalidation kind under a gate', () => {
+    it('schedules for a discrete request but never for a continuous one while gated', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        h.loop.setMotionGate('static');
+        expect(h.pending).toBe(0);
+
+        h.loop.invalidate('continuous');
+        expect(h.pending).toBe(0);
+
+        h.loop.invalidate('discrete');
+        expect(h.pending).toBe(1);
+        h.flush(500);
+        expect(h.renders).toEqual([0, 0]);
+        expect(h.pending).toBe(0);
+    });
+
+    it('a continuous and a discrete request in the same window both clear when the frame fires', () => {
+        const h = harness({ frameloop: 'demand' });
+        h.loop.start();
+        h.flush(16);
+        expect(h.pending).toBe(0);
+
+        h.loop.invalidate('continuous');
+        h.loop.invalidate('discrete');
+        expect(h.pending).toBe(1);
+
+        h.flush(32);
+        expect(h.renders).toHaveLength(2);
+        expect(h.pending).toBe(0);
+    });
+
+    it('without a gate a continuous request schedules a demand frame', () => {
+        const h = harness({ frameloop: 'demand' });
+        h.loop.start();
+        h.flush(16);
+        expect(h.pending).toBe(0);
+
+        h.loop.invalidate('continuous');
+        expect(h.pending).toBe(1);
+        h.flush(32);
+        expect(h.renders).toHaveLength(2);
+    });
+});
+
+describe('RenderLoop pinFrame', () => {
+    it('pins the clock and schedules a frame without rendering synchronously', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        h.loop.setMotionGate('static');
+        expect(h.renders).toEqual([0]);
+        expect(h.pending).toBe(0);
+
+        h.loop.pinFrame(120);
+        expect(h.renders).toEqual([0]);
+        expect(h.loop.getFrame()).toBe(120);
+        expect(h.pending).toBe(1);
+
+        h.flush(999999);
+        expect(h.renders).toEqual([0, 2000]);
+        expect(h.pending).toBe(0);
+    });
+
+    it('unlike setFrame, pinFrame does not paint before the scheduled frame', () => {
+        const h = harness({ frameloop: 'always' });
+        h.loop.start();
+        h.flush(16);
+        h.loop.setMotionGate('static');
+
+        const before = h.renders.length;
+        h.loop.pinFrame(60);
+        expect(h.renders.length).toBe(before);
+
+        h.loop.setFrame(60);
+        expect(h.renders.length).toBe(before + 1);
+    });
+});
+
 describe('RenderLoop introspection getters', () => {
     it('reports the configured frameloop mode and reacts to setFrameloop', () => {
         const h = harness({ frameloop: 'demand' });

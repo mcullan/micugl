@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { validateAudioOptions } from '@/core/lib/audioBands';
+import type { InvalidationKind } from '@/core/lib/frameInvalidation';
 import type { AudioAnalyserDriverDeps } from '@/react/lib/audioAnalyserDriver';
 import { createAudioAnalyserDriver } from '@/react/lib/audioAnalyserDriver';
 import type { FakeAnalyser, FakeStream, FakeTrack } from '@/react/lib/fakeWebAudio';
@@ -825,5 +826,51 @@ describe('audio driver reconfigure', () => {
         expect(harness.driver.bandsScratch).toHaveLength(2);
         expect(harness.driver.status).toBe('idle');
         expect(harness.context.analysers).toHaveLength(0);
+    });
+});
+
+describe('audio driver invalidation kind', () => {
+    function kindHarness(): { driver: ReturnType<typeof createAudioAnalyserDriver>; kinds: InvalidationKind[]; context: FakeContext } {
+        const context = new FakeContext();
+        const { stream } = createFakeStream();
+        const driver = createAudioAnalyserDriver({ type: 'mic' }, validateAudioOptions(TWO_BAND_LINEAR), {
+            createContext: () => asContext(context),
+            getUserMedia: () => Promise.resolve(stream)
+        });
+        const kinds: InvalidationKind[] = [];
+        driver.invalidation.connect(kind => { kinds.push(kind) });
+        return { driver, kinds, context };
+    }
+
+    it('analyseIfNeeded emits continuous while start, stop and reconfigure emit discrete', async () => {
+        const harness = kindHarness();
+
+        await harness.driver.start();
+        expect(harness.kinds).toEqual(['discrete']);
+
+        latestAnalyser(harness.context).spectrum = LOW_HALF;
+        harness.driver.analyseIfNeeded(16);
+        harness.driver.analyseIfNeeded(32);
+        expect(harness.kinds).toEqual(['discrete', 'continuous', 'continuous']);
+
+        harness.driver.reconfigure(validateAudioOptions({ ...TWO_BAND_LINEAR, fftSize: 128 }));
+        expect(harness.kinds[harness.kinds.length - 1]).toBe('discrete');
+
+        harness.driver.stop();
+        expect(harness.kinds[harness.kinds.length - 1]).toBe('discrete');
+    });
+
+    it('a start failure emits discrete so the poster shows the error state', async () => {
+        const context = new FakeContext();
+        const driver = createAudioAnalyserDriver({ type: 'mic' }, validateAudioOptions(TWO_BAND_LINEAR), {
+            createContext: () => asContext(context),
+            getUserMedia: () => Promise.reject(new Error('denied'))
+        });
+        const kinds: InvalidationKind[] = [];
+        driver.invalidation.connect(kind => { kinds.push(kind) });
+
+        await driver.start().catch(() => undefined);
+
+        expect(kinds).toEqual(['discrete']);
     });
 });

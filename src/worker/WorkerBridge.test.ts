@@ -463,7 +463,40 @@ describe('WorkerBridge invalidate coalescing', () => {
         await Promise.resolve();
 
         expect(fake.postMessage).toHaveBeenCalledTimes(1);
-        expect(fake.postMessage).toHaveBeenCalledWith({ type: 'invalidate', frames: 3 }, undefined);
+        expect(fake.postMessage).toHaveBeenCalledWith(
+            { type: 'invalidate', frames: 3, kind: 'discrete' },
+            undefined
+        );
+    });
+
+    it('coalesces a mixed discrete and continuous window into a discrete message', async () => {
+        const fake = createFakeTransport();
+        const bridge = new WorkerBridge(fake.transport, baseInit());
+        fake.postMessage.mockClear();
+
+        bridge.invalidate(undefined, 'continuous');
+        bridge.invalidate(undefined, 'discrete');
+        await Promise.resolve();
+
+        expect(fake.postMessage).toHaveBeenCalledWith(
+            { type: 'invalidate', frames: 1, kind: 'discrete' },
+            undefined
+        );
+    });
+
+    it('keeps a purely continuous window continuous across the boundary', async () => {
+        const fake = createFakeTransport();
+        const bridge = new WorkerBridge(fake.transport, baseInit());
+        fake.postMessage.mockClear();
+
+        bridge.invalidate(undefined, 'continuous');
+        bridge.invalidate(undefined, 'continuous');
+        await Promise.resolve();
+
+        expect(fake.postMessage).toHaveBeenCalledWith(
+            { type: 'invalidate', frames: 1, kind: 'continuous' },
+            undefined
+        );
     });
 
     it('throws instead of posting a garbage frame count across the boundary', () => {
@@ -490,7 +523,10 @@ describe('WorkerBridge invalidate coalescing', () => {
         bridge.invalidate(5);
         await Promise.resolve();
         expect(fake.postMessage).toHaveBeenCalledTimes(2);
-        expect(fake.postMessage).toHaveBeenLastCalledWith({ type: 'invalidate', frames: 5 }, undefined);
+        expect(fake.postMessage).toHaveBeenLastCalledWith(
+            { type: 'invalidate', frames: 5, kind: 'discrete' },
+            undefined
+        );
     });
 });
 

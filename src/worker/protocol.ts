@@ -1,3 +1,4 @@
+import type { InvalidationKind } from '@/core/lib/frameInvalidation';
 import type { MotionGate } from '@/react/lib/motionPolicy';
 import type {
     FramebufferOptions,
@@ -97,7 +98,7 @@ export type MainToWorker =
     | { type: 'setPasses'; passes: SerializableRenderPass[] }
     | { type: 'resize'; renderWidth: number; renderHeight: number }
     | { type: 'setActive'; active: boolean }
-    | { type: 'invalidate'; frames?: number }
+    | { type: 'invalidate'; frames?: number; kind?: InvalidationKind }
     | { type: 'setFrameloop'; mode: Frameloop }
     | { type: 'setSpeed'; speed: number }
     | { type: 'setMotionGate'; gate: MotionGate }

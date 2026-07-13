@@ -1,4 +1,4 @@
-export type { FrameInvalidation } from './core';
+export type { FrameInvalidation, InvalidationKind } from './core';
 export {
     combineFrameInvalidation,
     createFrameInvalidation,

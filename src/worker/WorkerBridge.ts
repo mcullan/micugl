@@ -1,3 +1,4 @@
+import type { InvalidationKind } from '@/core/lib/frameInvalidation';
 import type { MotionGate } from '@/react/lib/motionPolicy';
 import type {
     FramebufferOptions,
@@ -200,6 +201,7 @@ export class WorkerBridge {
     private lastActive: boolean;
     private pendingResize: { renderWidth: number; renderHeight: number } | null = null;
     private pendingInvalidateFrames: number | null = null;
+    private pendingInvalidateKind: InvalidationKind | null = null;
     private invalidateScheduled = false;
     private readonly lastPostedValues = new Map<string, UniformValueMap>();
 
@@ -337,7 +339,7 @@ export class WorkerBridge {
         this.post({ type: 'setActive', active });
     }
 
-    invalidate(frames?: number): void {
+    invalidate(frames?: number, kind: InvalidationKind = 'discrete'): void {
         if (this.disposed) {
             return;
         }
@@ -350,6 +352,8 @@ export class WorkerBridge {
             );
         }
         this.pendingInvalidateFrames = Math.max(this.pendingInvalidateFrames ?? 0, requested);
+        this.pendingInvalidateKind =
+            kind === 'discrete' || this.pendingInvalidateKind === 'discrete' ? 'discrete' : 'continuous';
 
         if (this.invalidateScheduled) {
             return;
@@ -359,11 +363,13 @@ export class WorkerBridge {
         queueMicrotask(() => {
             this.invalidateScheduled = false;
             const framesToSend = this.pendingInvalidateFrames;
+            const kindToSend = this.pendingInvalidateKind ?? 'discrete';
             this.pendingInvalidateFrames = null;
+            this.pendingInvalidateKind = null;
             if (framesToSend === null || this.disposed) {
                 return;
             }
-            this.post({ type: 'invalidate', frames: framesToSend });
+            this.post({ type: 'invalidate', frames: framesToSend, kind: kindToSend });
         });
     }
 

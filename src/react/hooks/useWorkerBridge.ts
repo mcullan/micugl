@@ -152,11 +152,12 @@ export function useWorkerBridge(options: UseWorkerBridgeOptions): WorkerBridgeSe
             current.bridgeRef.current = bridge;
 
             bridge.setMotionGate(current.motionGate);
+
+            current.onConnected?.();
+
             if (current.motionGate === 'static') {
                 bridge.renderFrame(frameToMs(current.staticFrame));
             }
-
-            current.onConnected?.();
         };
 
         void connect().catch((cause: unknown) => {

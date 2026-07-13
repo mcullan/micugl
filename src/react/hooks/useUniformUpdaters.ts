@@ -8,10 +8,13 @@ import {
     collectInvalidations,
     collectLiveValues,
     collectNonReproducible,
+    collectPosterValues,
     createUniformDebugPort,
     type LiveValues,
     mergeOverrides,
     parseUniformStructureKey,
+    type PosterSnapshot,
+    posterValuesChanged,
     type UniformDebugPort,
     type UniformDescriptor,
     uniformDescriptors,
@@ -60,19 +63,32 @@ export const useUniformUpdaters = (
     const runtime = runtimeRef.current;
 
     const relayedRef = useRef(new Map<FrameInvalidation, () => void>());
+    const posterRef = useRef<PosterSnapshot | null>(null);
 
     useEffect(() => {
         const base = collectLiveValues(uniforms);
+        const nextPoster = collectPosterValues(uniforms);
+        const previousPoster = posterRef.current;
+        posterRef.current = nextPoster;
+
         baseValuesRef.current = base;
         valuesRef.current = mergeOverrides(base, overridesRef.current);
         runtime.applyTargets(uniforms, motionGate);
+
+        if (
+            motionGate !== 'none'
+            && previousPoster !== null
+            && posterValuesChanged(previousPoster, nextPoster)
+        ) {
+            runtime.invalidation.request();
+        }
 
         const relayed = relayedRef.current;
         const sources = collectInvalidations(uniforms);
 
         for (const source of sources) {
             if (!relayed.has(source)) {
-                relayed.set(source, source.connect(() => { runtime.invalidation.request() }));
+                relayed.set(source, source.connect(kind => { runtime.invalidation.request(kind) }));
             }
         }
         for (const [source, dispose] of relayed) {
