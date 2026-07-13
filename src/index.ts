@@ -1,5 +1,7 @@
 export type { FrameInvalidation } from './core';
 export {
+    combineFrameInvalidation,
+    createFrameInvalidation,
     createShaderConfig,
     createTypedFloat32Array,
     FBOManager,
@@ -20,15 +22,17 @@ export {
     vec4,
     WebGLManager
 } from './core';
+export type { AudioAnalyserDriverDeps, AudioUniformsResult } from './react';
 export {
     BaseInstancedShaderComponent,
     BasePingPongShaderComponent,
     BaseShaderComponent,
     createCommonUpdaters,
-    createUniformUpdater, 
+    createUniformUpdater,
     createUniformUpdaters,
     PingPongShaderEngine,
     ShaderEngine,
+    useAudioUniforms,
     useDarkMode,
     usePingPongPasses,
     useReducedMotion,
@@ -38,6 +42,11 @@ export {
 export type {
     AttributeConfig,
     AttributeType,
+    AudioSourceSpec,
+    AudioStatus,
+    AudioUniformNames,
+    AudioUniformsOptions,
+    BandLayout,
     BufferData,
     Dpr,
     EasingFn,

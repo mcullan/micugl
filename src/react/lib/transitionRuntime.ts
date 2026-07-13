@@ -8,9 +8,9 @@ import {
     sampleMotion
 } from '@/core/lib/motionDrivers';
 import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
+import type { SpringsInFlight } from '@/react/lib/captureLiveness';
 import { normalizeUniformName } from '@/react/lib/liveUniformUpdaters';
 import type { MotionGate } from '@/react/lib/motionPolicy';
-import type { SpringsInFlight } from '@/react/lib/springCapture';
 import type { UniformParam, UniformType, UniformValue } from '@/types';
 
 export interface TransitionRuntime {

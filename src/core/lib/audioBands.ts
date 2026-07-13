@@ -10,8 +10,12 @@ export interface ResolvedAudioNames {
     level: string;
 }
 
+const BAND_COUNTS = [1, 2, 3, 4] as const;
+
+export type BandCount = (typeof BAND_COUNTS)[number];
+
 export interface ResolvedAnalyserOptions {
-    bands: number;
+    bands: BandCount;
     fftSize: number;
     smoothingTimeConstant: number;
     attack: number;
@@ -44,6 +48,10 @@ const BAND_LAYOUTS: Record<BandLayout, true> = { log: true, linear: true };
 
 function isPowerOfTwo(value: number): boolean {
     return Number.isInteger(value) && value > 0 && (value & (value - 1)) === 0;
+}
+
+function isBandCount(value: number): value is BandCount {
+    return (BAND_COUNTS as readonly number[]).includes(value);
 }
 
 function partitionBins(rawEdges: number[], lo: number, hi: number, bands: number): BandRange[] {
@@ -188,7 +196,7 @@ function validateName(value: string, key: string): void {
 
 export function validateAudioOptions(options: AudioUniformsOptions = {}): ResolvedAudioOptions {
     const bands = options.bands ?? DEFAULT_BANDS;
-    if (!Number.isInteger(bands) || bands < 1 || bands > MAX_BANDS) {
+    if (!isBandCount(bands)) {
         throw new Error(
             `micugl audio: "bands" must be an integer between 1 and ${MAX_BANDS}, received ${JSON.stringify(options.bands)}. `
             + `The bands are packed into one float/vec2/vec3/vec4 uniform, which holds at most ${MAX_BANDS} components. `

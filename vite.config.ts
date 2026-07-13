@@ -37,7 +37,7 @@ export default defineConfig({
             tsconfigPath:  './tsconfig.json',
             outDir:             'dist',
             entryRoot:         'src',
-            exclude: ['**/*.test.ts', '**/*.test.tsx'],
+            exclude: ['**/*.test.ts', '**/*.test.tsx', '**/fakeWebAudio.ts'],
         })
     ]
 });

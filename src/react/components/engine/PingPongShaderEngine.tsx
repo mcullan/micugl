@@ -27,6 +27,8 @@ import { useMotionGate } from '@/react/hooks/useMotionGate';
 import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
 import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
+import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
+import { nonReproducibleCaptureMessage } from '@/react/lib/captureLiveness';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { createRecording } from '@/react/lib/record';
@@ -38,8 +40,6 @@ import {
     resolveDeviceResolution,
     resolveResolution
 } from '@/react/lib/resolution';
-import type { SpringsInFlight } from '@/react/lib/springCapture';
-import { springInFlightMessage } from '@/react/lib/springCapture';
 import { frameToMs } from '@/react/lib/timeKeeper';
 import type { WorkerBlock, WorkerProgramUniforms } from '@/react/lib/workerMode';
 import {
@@ -74,7 +74,7 @@ interface PingPongShaderEngineBaseProps extends Omit<RenderControlProps, 'worker
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
     invalidation?: FrameInvalidation;
-    springsInFlight?: SpringsInFlight;
+    capturesAreNonReproducible?: CapturesAreNonReproducible;
 }
 
 export type PingPongShaderEngineWorkerProps =
@@ -157,7 +157,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     workerUniforms,
     workerCustomPasses = false,
     invalidation,
-    springsInFlight,
+    capturesAreNonReproducible,
     worker,
     createWorker,
     useDevicePixelRatio,
@@ -255,8 +255,9 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         }
 
         const stepsTheClock = opts.frame !== undefined || opts.steps !== undefined;
-        if (stepsTheClock && springsInFlight?.()) {
-            throw new Error(springInFlightMessage('PingPongShaderEngine', 'renderToBlob'));
+        const blocker = stepsTheClock ? capturesAreNonReproducible?.() : null;
+        if (blocker) {
+            throw new Error(nonReproducibleCaptureMessage('PingPongShaderEngine', 'renderToBlob', blocker));
         }
 
         const timePure = passSystem.isTimePure();
@@ -316,7 +317,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         );
 
         return { ...result, type: opts.type, quality: opts.quality };
-    }, [springsInFlight]);
+    }, [capturesAreNonReproducible]);
 
     const applySize = useCallback(() => {
         const canvas = canvasRef.current;
@@ -799,8 +800,9 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             if (manager.context.isContextLost()) {
                 throw new Error('PingPongShaderEngine.renderSequence: WebGL context is lost');
             }
-            if (springsInFlight?.()) {
-                throw new Error(springInFlightMessage('PingPongShaderEngine', 'renderSequence'));
+            const blocker = capturesAreNonReproducible?.();
+            if (blocker) {
+                throw new Error(nonReproducibleCaptureMessage('PingPongShaderEngine', 'renderSequence', blocker));
             }
             const canvas = manager.context.canvas as HTMLCanvasElement;
             const controller = controllerRef.current;
@@ -825,7 +827,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
                 }
             });
         }
-    }, [workerActive, resetSimulation, captureStill, setStopped, invalidateAll, springsInFlight]);
+    }, [workerActive, resetSimulation, captureStill, setStopped, invalidateAll, capturesAreNonReproducible]);
 
     if (workerActive && block) {
         throw new Error(workerBlockMessage('PingPongShaderEngine', block));

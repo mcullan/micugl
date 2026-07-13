@@ -28,6 +28,8 @@ import { useMotionGate } from '@/react/hooks/useMotionGate';
 import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
 import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
+import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
+import { nonReproducibleCaptureMessage } from '@/react/lib/captureLiveness';
 import { instancingContentKey, programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
 import { createDelegatingInstancingConfig } from '@/react/lib/instancingConfig';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
@@ -40,8 +42,6 @@ import {
     resolveDeviceResolution,
     resolveResolution
 } from '@/react/lib/resolution';
-import type { SpringsInFlight } from '@/react/lib/springCapture';
-import { springInFlightMessage } from '@/react/lib/springCapture';
 import { frameToMs } from '@/react/lib/timeKeeper';
 import type { WorkerBlock, WorkerProgramUniforms } from '@/react/lib/workerMode';
 import {
@@ -85,7 +85,7 @@ interface ShaderEngineBaseProps extends Omit<RenderControlProps, 'worker' | 'cre
     debugPortRef?: RefObject<UniformDebugPort | null>;
     workerSkipDefaultUniforms?: boolean;
     invalidation?: FrameInvalidation;
-    springsInFlight?: SpringsInFlight;
+    capturesAreNonReproducible?: CapturesAreNonReproducible;
 }
 
 export type ShaderEngineWorkerProps =
@@ -175,7 +175,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     workerSkipDefaultUniforms = false,
     liveUniforms,
     invalidation,
-    springsInFlight,
+    capturesAreNonReproducible,
     worker,
     createWorker,
     useDevicePixelRatio,
@@ -212,6 +212,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const bridgeRef = useRef<WorkerBridge | null>(null);
     const renderSizeRef = useRef({ renderWidth: 0, renderHeight: 0 });
     const workerActiveRef = useRef(false);
+    const samplingRef = useRef(false);
 
     const [epoch, setEpoch] = useState(0);
 
@@ -290,8 +291,9 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         }
 
         const explicitFrame = opts.frame !== undefined;
-        if (explicitFrame && springsInFlight?.()) {
-            throw new Error(springInFlightMessage('ShaderEngine', 'renderToBlob'));
+        const blocker = explicitFrame ? capturesAreNonReproducible?.() : null;
+        if (blocker) {
+            throw new Error(nonReproducibleCaptureMessage('ShaderEngine', 'renderToBlob', blocker));
         }
 
         const canvas = manager.context.canvas as HTMLCanvasElement;
@@ -329,7 +331,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         );
 
         return { ...result, type: opts.type, quality: opts.quality };
-    }, [renderFrame, drawFastPathGeometry, springsInFlight]);
+    }, [renderFrame, drawFastPathGeometry, capturesAreNonReproducible]);
 
     const commitSize = useCallback((
         resolution: { renderWidth: number; renderHeight: number },
@@ -427,13 +429,18 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const postLiveUniforms = useCallback((elapsed: number) => {
         const bridge = bridgeRef.current;
         const { programs, programId, names } = liveRef.current;
-        if (!bridge || !programs || names.length === 0) return;
+        if (!bridge || !programs || names.length === 0 || samplingRef.current) return;
 
         const { renderWidth, renderHeight } = renderSizeRef.current;
-        bridge.setUniformValues(
-            programId,
-            sampleLiveUniforms(names, programs[programId], elapsed, renderWidth, renderHeight)
-        );
+        samplingRef.current = true;
+        try {
+            bridge.setUniformValues(
+                programId,
+                sampleLiveUniforms(names, programs[programId], elapsed, renderWidth, renderHeight)
+            );
+        } finally {
+            samplingRef.current = false;
+        }
     }, []);
 
     const driveFrame = useCallback((elapsed: number) => {
@@ -876,8 +883,9 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             if (options.seed !== undefined) {
                 throw new Error('ShaderEngine.renderSequence: no simulation to seed');
             }
-            if (springsInFlight?.()) {
-                throw new Error(springInFlightMessage('ShaderEngine', 'renderSequence'));
+            const blocker = capturesAreNonReproducible?.();
+            if (blocker) {
+                throw new Error(nonReproducibleCaptureMessage('ShaderEngine', 'renderSequence', blocker));
             }
             const canvas = manager.context.canvas as HTMLCanvasElement;
             const controller = controllerRef.current;
@@ -899,7 +907,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         invalidateAll,
         startSamplerLoop,
         setStopped,
-        springsInFlight
+        capturesAreNonReproducible
     ]);
 
     if (workerActive && block) {

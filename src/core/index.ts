@@ -1,6 +1,7 @@
 export { createTypedFloat32Array,mat2, mat3, mat4, vec2, vec3, vec4 } from './lib/vectorUtils';
 export { createShaderConfig } from '@/core/lib/createShaderConfig';
 export type { FrameInvalidation } from '@/core/lib/frameInvalidation';
+export { combineFrameInvalidation, createFrameInvalidation } from '@/core/lib/frameInvalidation';
 export {
     GL_CLAMP_TO_EDGE,
     GL_FLOAT,

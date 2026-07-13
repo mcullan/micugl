@@ -1,3 +1,5 @@
+import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
+
 // ===================================================
 // WebGL Data
 // ===================================================
@@ -334,6 +336,8 @@ export interface UniformParam<T extends UniformType = UniformType> {
   value: UniformValue<T>;
   type: T;
   transition?: UniformTransitionConfig;
+  invalidation?: FrameInvalidation;
+  nonReproducible?: () => boolean;
 }
 
 export type UniformParamMap = { [K in UniformType]: UniformParam<K> };

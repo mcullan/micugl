@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 
+import { AudioBars } from './AudioBars';
 import { DevtoolsDebug } from './DevtoolsDebug';
 import { ExportDemo } from './ExportDemo';
 import { InstancedParticles } from './InstancedParticles';
@@ -27,6 +28,7 @@ export const scenes: Record<string, ComponentType> = {
     'devtools-debug': DevtoolsDebug,
     'reduced-motion': ReducedMotion,
     'transitions': Transitions,
+    'audio-bars': AudioBars,
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
     'instanced-particles': InstancedParticles,

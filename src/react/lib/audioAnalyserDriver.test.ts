@@ -3,126 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { validateAudioOptions } from '@/core/lib/audioBands';
 import type { AudioAnalyserDriverDeps } from '@/react/lib/audioAnalyserDriver';
 import { createAudioAnalyserDriver } from '@/react/lib/audioAnalyserDriver';
+import type { FakeAnalyser, FakeStream, FakeTrack } from '@/react/lib/fakeWebAudio';
+import {
+    asContext,
+    asElement,
+    createFakeStream,
+    FakeContext,
+    FakeSourceNode,
+    HIGH_HALF,
+    latestAnalyser,
+    LOW_HALF
+} from '@/react/lib/fakeWebAudio';
 import type { AudioSourceSpec, AudioUniformsOptions } from '@/types';
-
-type Spectrum = (bin: number, binCount: number) => number;
-
-class FakeAnalyser {
-    fftSize = 2048;
-    smoothingTimeConstant = 0.8;
-    reads = 0;
-    spectrum: Spectrum = () => 0;
-    private minValue = -100;
-    private maxValue = -30;
-
-    get minDecibels(): number { return this.minValue }
-    set minDecibels(value: number) {
-        if (value >= this.maxValue) {
-            throw new Error(`IndexSizeError: minDecibels ${value} is not below maxDecibels ${this.maxValue}`);
-        }
-        this.minValue = value;
-    }
-
-    get maxDecibels(): number { return this.maxValue }
-    set maxDecibels(value: number) {
-        if (value <= this.minValue) {
-            throw new Error(`IndexSizeError: maxDecibels ${value} is not above minDecibels ${this.minValue}`);
-        }
-        this.maxValue = value;
-    }
-
-    get frequencyBinCount(): number { return this.fftSize / 2 }
-
-    getByteFrequencyData(target: Uint8Array): void {
-        this.reads += 1;
-        for (let i = 0; i < target.length; i++) {
-            target[i] = this.spectrum(i, target.length);
-        }
-    }
-}
-
-class FakeSourceNode {
-    connections: unknown[] = [];
-    constructor(public context: FakeContext) {}
-    connect(target: unknown): void { this.connections.push(target) }
-    disconnect(target: unknown): void { this.connections = this.connections.filter(entry => entry !== target) }
-}
-
-class FakeContext {
-    state: AudioContextState = 'suspended';
-    sampleRate = 48000;
-    destination = { id: 'destination' };
-    analysers: FakeAnalyser[] = [];
-    streamSources: FakeSourceNode[] = [];
-    elementSources: FakeSourceNode[] = [];
-    resumeCalls = 0;
-    closeCalls = 0;
-    bindThrows = false;
-    deferResume = false;
-    releaseResume: (() => void) | null = null;
-
-    createAnalyser(): FakeAnalyser {
-        const analyser = new FakeAnalyser();
-        this.analysers.push(analyser);
-        return analyser;
-    }
-
-    createMediaStreamSource(_stream: MediaStream): FakeSourceNode {
-        const node = new FakeSourceNode(this);
-        this.streamSources.push(node);
-        return node;
-    }
-
-    createMediaElementSource(_element: HTMLMediaElement): FakeSourceNode {
-        if (this.bindThrows) {
-            throw new Error('InvalidStateError: HTMLMediaElement already connected to a different MediaElementSourceNode');
-        }
-        const node = new FakeSourceNode(this);
-        this.elementSources.push(node);
-        return node;
-    }
-
-    resume(): Promise<void> {
-        this.resumeCalls += 1;
-        if (this.deferResume) {
-            return new Promise<void>(resolve => {
-                this.releaseResume = () => {
-                    this.state = 'running';
-                    resolve();
-                };
-            });
-        }
-        this.state = 'running';
-        return Promise.resolve();
-    }
-
-    close(): Promise<void> {
-        this.closeCalls += 1;
-        this.state = 'closed';
-        return Promise.resolve();
-    }
-}
-
-function createFakeStream(): { stream: MediaStream; tracks: { stopped: boolean }[] } {
-    const tracks = [
-        { stopped: false, stop() { this.stopped = true } },
-        { stopped: false, stop() { this.stopped = true } }
-    ];
-    return { stream: { getTracks: () => tracks } as unknown as MediaStream, tracks };
-}
-
-function asContext(context: FakeContext): AudioContext {
-    return context as unknown as AudioContext;
-}
-
-function asElement(id: string): HTMLMediaElement {
-    return { id } as unknown as HTMLMediaElement;
-}
 
 interface Harness {
     driver: ReturnType<typeof createAudioAnalyserDriver>;
     context: FakeContext;
-    tracks: { stopped: boolean }[];
+    tracks: FakeTrack[];
     requests: number[];
     analyser: () => FakeAnalyser;
 }
@@ -148,12 +45,9 @@ function createHarness(
         context,
         tracks,
         requests,
-        analyser: () => context.analysers[context.analysers.length - 1]
+        analyser: () => latestAnalyser(context)
     };
 }
-
-const LOW_HALF: Spectrum = (bin, binCount) => (bin < binCount / 2 ? 255 : 0);
-const HIGH_HALF: Spectrum = (bin, binCount) => (bin < binCount / 2 ? 0 : 255);
 
 const TWO_BAND_LINEAR: AudioUniformsOptions = {
     bands: 2,
@@ -247,25 +141,60 @@ describe('the audio analyser driver, reading a fake analyser whose spectrum the 
         expect(harness.driver.bandsScratch[0]).toBeLessThan(0.9);
     });
 
-    it('a clock that steps backwards freezes the envelope rather than poisoning it', async () => {
+    it('a clock that steps backwards is ignored outright: it reads nothing and cannot steal envelope time', async () => {
+        const rewound = createHarness(TWO_BAND_LINEAR);
+        const control = createHarness(TWO_BAND_LINEAR);
+        await rewound.driver.start();
+        await control.driver.start();
+        rewound.analyser().spectrum = LOW_HALF;
+        control.analyser().spectrum = LOW_HALF;
+
+        for (const harness of [rewound, control]) {
+            harness.driver.analyseIfNeeded(0);
+            harness.driver.analyseIfNeeded(32);
+        }
+        const settled = rewound.driver.bandsScratch[0];
+        expect(settled).toBeGreaterThan(0);
+        expect(control.driver.bandsScratch[0]).toBe(settled);
+
+        const readsBefore = rewound.analyser().reads;
+        rewound.driver.analyseIfNeeded(16);
+        rewound.driver.analyseIfNeeded(32);
+
+        expect(rewound.analyser().reads).toBe(readsBefore);
+        expect(rewound.driver.bandsScratch[0]).toBe(settled);
+
+        rewound.driver.analyseIfNeeded(48);
+        control.driver.analyseIfNeeded(48);
+
+        expect(rewound.driver.bandsScratch[0]).toBeGreaterThan(settled);
+        expect(rewound.driver.bandsScratch[0]).toBe(control.driver.bandsScratch[0]);
+        expect(Number.isFinite(rewound.driver.level)).toBe(true);
+    });
+
+    it('a non-finite frame time analyses nothing and cannot freeze the driver at NaN', async () => {
         const harness = createHarness(TWO_BAND_LINEAR);
         await harness.driver.start();
-        const analyser = harness.analyser();
-        analyser.spectrum = LOW_HALF;
+        harness.analyser().spectrum = LOW_HALF;
+
+        harness.driver.analyseIfNeeded(Number.NaN);
+        expect(harness.analyser().reads).toBe(0);
+        expect(harness.driver.bandsScratch[0]).toBe(0);
 
         harness.driver.analyseIfNeeded(0);
         harness.driver.analyseIfNeeded(32);
         const settled = harness.driver.bandsScratch[0];
         expect(settled).toBeGreaterThan(0);
 
-        harness.driver.analyseIfNeeded(16);
+        harness.driver.analyseIfNeeded(Number.NaN);
+        harness.driver.analyseIfNeeded(Number.POSITIVE_INFINITY);
 
         expect(harness.driver.bandsScratch[0]).toBe(settled);
-        expect(harness.driver.level).toBe(settled / 2);
 
-        harness.driver.analyseIfNeeded(32);
+        harness.driver.analyseIfNeeded(48);
 
         expect(harness.driver.bandsScratch[0]).toBeGreaterThan(settled);
+        expect(harness.driver.bandsScratch.every(value => Number.isFinite(value))).toBe(true);
         expect(Number.isFinite(harness.driver.level)).toBe(true);
     });
 
@@ -563,6 +492,82 @@ describe('audio driver lifecycle', () => {
         expect(harness.context.analysers).toHaveLength(1);
         expect(harness.context.streamSources).toHaveLength(1);
         expect(harness.requests).toHaveLength(1);
+    });
+
+    it('start() -> stop() -> start() while the prompt is still open adopts the grant it already asked for', async () => {
+        const context = new FakeContext();
+        const { stream, tracks } = createFakeStream();
+        let grants = 0;
+        let contexts = 0;
+        let grant: (value: MediaStream) => void = () => undefined;
+
+        const driver = createAudioAnalyserDriver({ type: 'mic' }, validateAudioOptions(), {
+            createContext: () => {
+                contexts += 1;
+                return asContext(context);
+            },
+            getUserMedia: () => {
+                grants += 1;
+                return new Promise<MediaStream>(resolve => { grant = resolve });
+            }
+        });
+
+        const first = driver.start();
+        expect(driver.status).toBe('starting');
+
+        driver.stop();
+        expect(driver.status).toBe('stopped');
+
+        const second = driver.start();
+        expect(driver.status).toBe('starting');
+        expect(grants).toBe(1);
+
+        grant(stream);
+        await Promise.all([first, second]);
+
+        expect(grants).toBe(1);
+        expect(contexts).toBe(1);
+        expect(driver.status).toBe('running');
+        expect(context.analysers).toHaveLength(1);
+        expect(context.streamSources).toHaveLength(1);
+        expect(context.streamSources[0].connections).toEqual([latestAnalyser(context)]);
+        expect(context.closeCalls).toBe(0);
+        expect(tracks.every(track => !track.stopped)).toBe(true);
+    });
+
+    it('stop() then start() AFTER the graph is live tears the first one down and opens exactly one more', async () => {
+        const contexts: FakeContext[] = [];
+        const grants: FakeStream[] = [];
+
+        const driver = createAudioAnalyserDriver({ type: 'mic' }, validateAudioOptions(), {
+            createContext: () => {
+                const context = new FakeContext();
+                contexts.push(context);
+                return asContext(context);
+            },
+            getUserMedia: () => {
+                const grant = createFakeStream();
+                grants.push(grant);
+                return Promise.resolve(grant.stream);
+            }
+        });
+
+        await driver.start();
+        driver.stop();
+
+        expect(grants).toHaveLength(1);
+        expect(grants[0].tracks.every(track => track.stopped)).toBe(true);
+        expect(contexts[0].closeCalls).toBe(1);
+
+        await driver.start();
+
+        expect(driver.status).toBe('running');
+        expect(grants).toHaveLength(2);
+        expect(contexts).toHaveLength(2);
+        expect(grants[1].tracks.every(track => track.stopped)).toBe(false);
+        expect(contexts[1].analysers).toHaveLength(1);
+        expect(contexts[1].resumeCalls).toBe(1);
+        expect(contexts[1].streamSources[0].connections).toEqual([latestAnalyser(contexts[1])]);
     });
 
     it('stop() during starting cancels the attempt and releases the microphone it was granted', async () => {

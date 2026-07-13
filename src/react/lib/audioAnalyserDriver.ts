@@ -14,7 +14,7 @@ export interface AudioAnalyserDriver {
     stop(): void;
     analyseIfNeeded(timeMs: number): void;
     reconfigure(options: ResolvedAnalyserOptions): void;
-    subscribe(onChange: () => void): () => void;
+    subscribe: (onChange: () => void) => () => void;
     readonly bandsScratch: Float32Array;
     readonly level: number;
     readonly status: AudioStatus;
@@ -45,6 +45,8 @@ type DriverState =
     | { kind: 'running'; graph: AudioGraph }
     | { kind: 'stopped' }
     | { kind: 'error'; error: Error };
+
+type DesiredState = 'running' | 'stopped';
 
 interface ElementBinding {
     context: AudioContext;
@@ -160,15 +162,26 @@ export function createAudioAnalyserDriver(
 
     let currentOptions = options;
     let state: DriverState = { kind: 'idle' };
+    let desired: DesiredState = 'stopped';
     let bands = new Float32Array(currentOptions.bands);
     let raw = new Float32Array(currentOptions.bands);
     let level = 0;
     let lastAnalysedTime: number | null = null;
-    let generation = 0;
+
+    function notify(): void {
+        listeners.forEach(listener => { listener() });
+    }
 
     function setState(next: DriverState): void {
         state = next;
-        listeners.forEach(listener => { listener() });
+        notify();
+    }
+
+    function readStatus(): AudioStatus {
+        if (state.kind === 'starting' && desired === 'stopped') {
+            return 'stopped';
+        }
+        return state.kind;
     }
 
     function resetBands(): void {
@@ -225,58 +238,68 @@ export function createAudioAnalyserDriver(
         return { context: source.context, mayCloseContext: false, sourceNode: source.node, stream: null };
     }
 
-    async function beginStart(myGeneration: number): Promise<void> {
+    async function beginStart(): Promise<void> {
         let acquired: SourceGraph | null = null;
+        let started: AudioGraph | null = null;
+        let failure: Error | null = null;
+
         try {
             acquired = await acquireSource();
 
-            if (myGeneration !== generation) {
-                releaseSource(acquired);
-                return;
-            }
-
-            if (acquired.context.state === 'suspended') {
+            if (desired === 'running' && acquired.context.state === 'suspended') {
                 await acquired.context.resume();
             }
 
-            if (myGeneration !== generation) {
-                releaseSource(acquired);
-                return;
+            if (desired === 'running') {
+                const analysis = buildAnalysis(acquired.context, currentOptions);
+                acquired.sourceNode.connect(analysis.analyser);
+                started = { ...acquired, analysis };
             }
-
-            const analysis = buildAnalysis(acquired.context, currentOptions);
-            acquired.sourceNode.connect(analysis.analyser);
-
-            resetBands();
-            const graph: AudioGraph = { ...acquired, analysis };
-            acquired = null;
-            setState({ kind: 'running', graph });
-            invalidation.request();
         } catch (cause) {
-            if (acquired !== null) {
-                releaseSource(acquired);
-            }
-
-            const error = toError(cause);
-            if (myGeneration === generation) {
-                resetBands();
-                setState({ kind: 'error', error });
-                invalidation.request();
-            }
-            throw error;
+            failure = toError(cause);
         }
+
+        if (started === null && acquired !== null) {
+            releaseSource(acquired);
+        }
+
+        if (failure !== null) {
+            resetBands();
+            if (desired === 'running') {
+                desired = 'stopped';
+                setState({ kind: 'error', error: failure });
+            } else {
+                setState({ kind: 'stopped' });
+            }
+            invalidation.request();
+            throw failure;
+        }
+
+        if (started === null) {
+            setState({ kind: 'stopped' });
+            return;
+        }
+
+        resetBands();
+        setState({ kind: 'running', graph: started });
+        invalidation.request();
     }
 
     function start(): Promise<void> {
+        const wasStopping = desired === 'stopped';
+        desired = 'running';
+
         if (state.kind === 'running') {
             return Promise.resolve();
         }
         if (state.kind === 'starting') {
+            if (wasStopping) {
+                notify();
+            }
             return state.pending;
         }
 
-        generation += 1;
-        const run = beginStart(generation);
+        const run = beginStart();
         keepRejectionHandled(run);
         setState({ kind: 'starting', pending: run });
 
@@ -284,23 +307,37 @@ export function createAudioAnalyserDriver(
     }
 
     function stop(): void {
-        if (state.kind !== 'running' && state.kind !== 'starting') {
+        const wasStarting = desired === 'running';
+        desired = 'stopped';
+
+        if (state.kind === 'starting') {
+            if (!wasStarting) {
+                return;
+            }
+            resetBands();
+            notify();
+            invalidation.request();
             return;
         }
 
-        generation += 1;
-
-        if (state.kind === 'running') {
-            releaseGraph(state.graph);
+        if (state.kind !== 'running') {
+            return;
         }
 
+        releaseGraph(state.graph);
         resetBands();
         setState({ kind: 'stopped' });
         invalidation.request();
     }
 
     function analyseIfNeeded(timeMs: number): void {
-        if (state.kind !== 'running' || timeMs === lastAnalysedTime) {
+        if (state.kind !== 'running') {
+            return;
+        }
+        if (!Number.isFinite(timeMs)) {
+            return;
+        }
+        if (lastAnalysedTime !== null && !(timeMs > lastAnalysedTime)) {
             return;
         }
 
@@ -362,13 +399,13 @@ export function createAudioAnalyserDriver(
         stop,
         analyseIfNeeded,
         reconfigure,
-        subscribe(onChange) {
+        subscribe: onChange => {
             listeners.add(onChange);
             return () => { listeners.delete(onChange) };
         },
         get bandsScratch() { return bands },
         get level() { return level },
-        get status() { return state.kind },
+        get status() { return readStatus() },
         get error() { return state.kind === 'error' ? state.error : null },
         invalidation
     };

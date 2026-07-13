@@ -1,4 +1,6 @@
+import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
+import type { NonReproducible } from '@/react/lib/captureLiveness';
 import { createCommonUpdaters } from '@/react/lib/createUniformUpdater';
 import type { TransitionRuntime } from '@/react/lib/transitionRuntime';
 import type {
@@ -165,6 +167,26 @@ export function collectLiveValues(uniforms: Record<string, UniformParam>): LiveV
         values[normalizeUniformName(name)] = param.value;
     }
     return values;
+}
+
+export function collectInvalidations(uniforms: Record<string, UniformParam>): FrameInvalidation[] {
+    const sources: FrameInvalidation[] = [];
+    for (const param of Object.values(uniforms)) {
+        if (param.invalidation && !sources.includes(param.invalidation)) {
+            sources.push(param.invalidation);
+        }
+    }
+    return sources;
+}
+
+export function collectNonReproducible(uniforms: Record<string, UniformParam>): NonReproducible[] {
+    const sources: NonReproducible[] = [];
+    for (const param of Object.values(uniforms)) {
+        if (param.nonReproducible && !sources.includes(param.nonReproducible)) {
+            sources.push(param.nonReproducible);
+        }
+    }
+    return sources;
 }
 
 export function uniformStructureKey(descriptors: UniformDescriptor[], skipDefaults: boolean): string {

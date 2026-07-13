@@ -59,7 +59,7 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     renderOptions = RENDER_OPTIONS
 }, ref) => {
     const programConfigs = { [programId]: shaderConfig };
-    const { updaters, port, invalidation, springsInFlight } = useUniformUpdaters(
+    const { updaters, port, invalidation, capturesAreNonReproducible } = useUniformUpdaters(
         programId,
         uniforms,
         { skipDefaultUniforms, reducedMotion, saveData }
@@ -79,7 +79,7 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
             uniformUpdaters={updaters}
             debugPortRef={debugPortRef}
             invalidation={invalidation}
-            springsInFlight={springsInFlight}
+            capturesAreNonReproducible={capturesAreNonReproducible}
             {...workerProps}
             workerSkipDefaultUniforms={skipDefaultUniforms}
             width={width}
