@@ -159,9 +159,31 @@ that. Two supported fixes, both first-class:
    />
    ```
 
-If the worker cannot be constructed (no `OffscreenCanvas` support, or a CSP that forbids it),
-micugl logs once, explains the remedy, and renders on the main thread instead. The canvas is
-never transferred in that case, so the fallback is complete: same picture, no worker.
+If the worker cannot be started, micugl logs once, explains the remedy, and renders on the main
+thread instead: same picture, no worker. Two ways that happens, and they are detected at
+different moments:
+
+- **No `OffscreenCanvas` / `Worker` support**: decided before anything is transferred.
+- **A CSP that forbids the worker**: Chromium does *not* throw from `new Worker(blob:...)` — it
+  blocks the worker asynchronously, so a page under a strict CSP hands back a `Worker` object
+  whose script never runs. micugl only learns this when that worker fires `error` without ever
+  having started, which is necessarily after the canvas was transferred to it. micugl then
+  discards the transferred canvas, mounts a fresh one, and renders on the main thread.
+
+A component that has fallen back stays on the main thread for the rest of its life, even if you
+toggle `worker` back on: whatever stopped the worker from starting (no support, a CSP) will not
+have changed. Remount the component if you need it to try again.
+
+The fallback is always safe because **worker mode's uniform rules are a strict subset of
+main-thread mode's**: anything that can run in a worker can also run on the main thread, so
+falling back can only cost you the threading benefit, never the picture.
+
+Those two are the *only* fallbacks. A worker that started and then threw an uncaught error is a
+bug, not a configuration problem, so micugl surfaces it: the error is thrown from the
+component's render (catchable by an error boundary) and there is no fallback, because a fallback
+would hide it. The two cases are told apart by the `error` event itself — a worker whose script
+was never allowed to run fires a bare `Event`, while a worker that ran and threw fires an
+`ErrorEvent` carrying the exception's message.
 
 ### Uniforms in worker mode
 
@@ -211,12 +233,29 @@ In worker mode they throw, naming the remedy (turn worker mode off on that compo
   main thread. Drive the clock instead with `setFrame(frame)`.
 - Devtools (`debug`): there is no main-thread context to inspect. `debug` + `worker` logs once
   and inspects nothing.
-- Instancing, and a custom `renderCallback` on `ShaderEngine` (worker mode requires the fast
-  path). Both throw under `worker={true}`.
+- A custom `renderCallback` on `ShaderEngine`: worker mode requires the fast path, so it throws
+  under `worker={true}`.
+- Instancing: `worker` and `instancing` together are a **compile error** on `ShaderEngine` (the
+  worker props are a discriminated union), and throw at runtime if the types are bypassed.
 
 `invalidate()`, `setFrame()`, `start()`, `stop()`, `frameloop`, `speed`, `pauseWhenHidden`,
 `dpr`, `fit`, `reducedMotion` / `saveData` and the IntersectionObserver / visibility pausing all
 work exactly as they do on the main thread.
+
+### Seeing it work
+
+The demo app has a side-by-side scene: the same shader rendered by a worker component and a
+main-thread component, with a button that blocks the main thread with a synchronous busy loop.
+The worker canvas keeps animating through the block; the main-thread canvas freezes.
+
+```
+bun run dev
+# then open /?scene=worker-jank
+```
+
+`?scene=worker-context-loss` renders a worker component whose worker is built by a
+`createWorker` prop (a real module worker, no blob), and exposes hooks that force a WebGL
+context loss and restore inside the worker.
 
 ## Deterministic capture
 
@@ -416,3 +455,27 @@ script), drive the canvas with Playwright instead of `renderSequence`:
    ```
    ffmpeg -framerate 30 -i frame_%d.png -pix_fmt yuv420p out.mp4
    ```
+
+## Development
+
+| Script                | What it does                                                            |
+| --------------------- | ----------------------------------------------------------------------- |
+| `bun run dev`         | demo app (scenes live in `demo/scenes`, selected with `?scene=`)         |
+| `bun run typecheck`   | `tsc --noEmit`                                                          |
+| `bun run lint`        | eslint (`strictTypeChecked`, no `eslint-disable`, ASCII-only source)     |
+| `bun run test`        | vitest: pure-logic + jsdom component tests                               |
+| `bun run build`       | library build + worker build + tree-shaking assertions                   |
+| `bun run bench`       | Playwright GL-counter benchmarks over the demo scenes (`bench/`)         |
+| `bun run test:e2e`    | Playwright browser tests for worker mode (`e2e/`)                        |
+
+CI runs `typecheck + lint + test + build`. `bench` and `test:e2e` need a browser, so they are
+run on demand rather than in the gate.
+
+`test:e2e` is the only place the real `transferControlToOffscreen()` path is exercised: jsdom
+has no OffscreenCanvas, so the component tests stub it. It boots two servers — the dev server
+(React in dev mode, so `StrictMode` double-invokes effects) and a production build served by
+`vite preview` (where the worker really is an inlined blob, as it is for consumers) — and every
+worker assertion is gated behind positive proof that a worker is driving the canvas: a `Worker`
+was constructed, the canvas throws `InvalidStateError` from `getContext` because it was
+transferred, and no main-thread GL context exists for it. A silent fallback to main-thread
+rendering fails those tests instead of quietly passing them.

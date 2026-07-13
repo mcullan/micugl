@@ -12,7 +12,14 @@ import {
     workerModeSupported
 } from '@/react/lib/workerMode';
 import type { Frameloop, WorkerMode } from '@/types';
-import { createMicuglWorker } from '@/worker/createWorker';
+import {
+    createMicuglWorker,
+    inlineWorkerNeverStartedMessage,
+    logWorkerIssue,
+    overrideWorkerCrashedMessage,
+    overrideWorkerNeverStartedMessage,
+    workerCrashedMessage
+} from '@/worker/createWorker';
 import type { WorkerBridgeInit } from '@/worker/WorkerBridge';
 import { WorkerBridge, workerTransport } from '@/worker/WorkerBridge';
 
@@ -85,6 +92,27 @@ export function useWorkerBridge(options: UseWorkerBridgeOptions): WorkerBridgeSe
 
         let cancelled = false;
         let created: Worker | null = null;
+        let ready = false;
+
+        const onWorkerError = (event: Event): void => {
+            if (cancelled) return;
+
+            const override = optionsRef.current.createWorker !== undefined;
+            const thrown = event instanceof ErrorEvent ? event.message : '';
+
+            if (thrown === '' && !ready) {
+                logWorkerIssue(override
+                    ? overrideWorkerNeverStartedMessage()
+                    : inlineWorkerNeverStartedMessage());
+                setFallback(true);
+                return;
+            }
+
+            const detail = thrown === '' ? 'no detail given' : thrown;
+            setError(new Error(override
+                ? overrideWorkerCrashedMessage(detail)
+                : workerCrashedMessage(detail)));
+        };
 
         const connect = async (): Promise<void> => {
             const instance = await createMicuglWorker({ createWorker: optionsRef.current.createWorker });
@@ -99,6 +127,8 @@ export function useWorkerBridge(options: UseWorkerBridgeOptions): WorkerBridgeSe
             }
 
             created = instance;
+            instance.addEventListener('error', onWorkerError);
+
             const current = optionsRef.current;
 
             const { renderWidth, renderHeight } = current.measure();
@@ -114,7 +144,10 @@ export function useWorkerBridge(options: UseWorkerBridgeOptions): WorkerBridgeSe
             const bridge = new WorkerBridge(
                 workerTransport(instance),
                 { ...init, canvas: offscreen },
-                { onError: message => { setError(new Error(message)) } }
+                {
+                    onReady: () => { ready = true },
+                    onError: message => { setError(new Error(message)) }
+                }
             );
             current.bridgeRef.current = bridge;
 
@@ -133,6 +166,7 @@ export function useWorkerBridge(options: UseWorkerBridgeOptions): WorkerBridgeSe
 
         return () => {
             cancelled = true;
+            created?.removeEventListener('error', onWorkerError);
             const current = optionsRef.current;
             const bridge = current.bridgeRef.current;
             current.bridgeRef.current = null;

@@ -13,6 +13,8 @@ import { ReducedMotion } from './ReducedMotion';
 import { RerenderStorm } from './RerenderStorm';
 import { StaticIdle } from './StaticIdle';
 import { VisualFixed } from './VisualFixed';
+import { WorkerContextLoss } from './WorkerContextLoss';
+import { WorkerJank } from './WorkerJank';
 
 export const scenes: Record<string, ComponentType> = {
     'rerender-storm': RerenderStorm,
@@ -26,7 +28,9 @@ export const scenes: Record<string, ComponentType> = {
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
     'instanced-particles': InstancedParticles,
-    'particles-components': ParticlesComponents
+    'particles-components': ParticlesComponents,
+    'worker-jank': WorkerJank,
+    'worker-context-loss': WorkerContextLoss
 };
 
 export const getSceneComponent = (): ComponentType | null => {

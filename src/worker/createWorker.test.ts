@@ -5,11 +5,15 @@ import {
     blobWorkerFailedMessage,
     createOnceLogger,
     createWorkerWithDeps,
+    inlineWorkerNeverStartedMessage,
     isWorkerModeSupported,
+    overrideWorkerCrashedMessage,
     overrideWorkerFailedMessage,
+    overrideWorkerNeverStartedMessage,
     requireInlineWorkerConstructor,
     unsupportedMessage,
-    unusableInlineWorkerMessage
+    unusableInlineWorkerMessage,
+    workerCrashedMessage
 } from '@/worker/createWorker';
 
 const WORKER = { name: 'worker' } as unknown as Worker;
@@ -195,6 +199,29 @@ describe('createWorkerWithDeps createWorker override', () => {
         expect(worker).toBeNull();
         expect(custom).not.toHaveBeenCalled();
         expect(log).toHaveBeenCalledWith(unsupportedMessage());
+    });
+});
+
+describe('worker error messages', () => {
+    it('blames a blob CSP only for the worker micugl built itself', () => {
+        expect(inlineWorkerNeverStartedMessage()).toContain('worker-src \'self\' blob:');
+        expect(overrideWorkerNeverStartedMessage()).not.toContain('blob:');
+        expect(overrideWorkerNeverStartedMessage()).toContain('createWorker() factory');
+    });
+
+    it('never offers a main-thread fallback for a worker that started and then threw', () => {
+        const inline = workerCrashedMessage('u_level is not a function');
+        const override = overrideWorkerCrashedMessage('u_level is not a function');
+
+        for (const message of [inline, override]) {
+            expect(message).toContain('u_level is not a function');
+            expect(message).toContain('not falling back to the main thread');
+            expect(message).not.toContain('Content-Security-Policy');
+        }
+
+        expect(inline).toContain('this build of micugl is broken');
+        expect(override).toContain('createWorker() factory');
+        expect(override).not.toContain('micugl is broken');
     });
 });
 

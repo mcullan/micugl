@@ -72,6 +72,33 @@ export function overrideWorkerFailedMessage(error: unknown): string {
         + `origin, with "worker-src 'self'" in your CSP. ${MAIN_THREAD_FALLBACK}`;
 }
 
+export function inlineWorkerNeverStartedMessage(): string {
+    return 'micugl worker: the render worker was constructed but its script never started, so it can never '
+        + 'drive the canvas. The usual cause is a Content-Security-Policy that forbids blob: workers: Chromium '
+        + 'blocks such a worker asynchronously rather than throwing from the Worker constructor. Remedy: add '
+        + `"worker-src 'self' blob:" to your CSP. ${ESCAPE_HATCHES} ${MAIN_THREAD_FALLBACK}`;
+}
+
+export function overrideWorkerNeverStartedMessage(): string {
+    return 'micugl worker: the worker returned by the createWorker() factory you passed never started its '
+        + 'script, so it can never drive the canvas. micugl did not build this worker and cannot fix it: make '
+        + 'the factory return a worker your page is allowed to load and that resolves to a real script, for '
+        + 'example new Worker(new URL(\'micugl/worker\', import.meta.url), { type: \'module\' }) served from '
+        + `your own origin, with "worker-src 'self'" in your CSP. ${MAIN_THREAD_FALLBACK}`;
+}
+
+export function workerCrashedMessage(detail: string): string {
+    return `micugl worker: the render worker threw an uncaught error (${detail}). The worker runtime reports `
+        + 'its own failures as messages, so an uncaught error means this build of micugl is broken. micugl is '
+        + 'not falling back to the main thread, because that would hide the failure. Please report it.';
+}
+
+export function overrideWorkerCrashedMessage(detail: string): string {
+    return 'micugl worker: the worker returned by the createWorker() factory you passed threw an uncaught error '
+        + `(${detail}). The error came from that worker's own code, which micugl did not build and cannot fix. `
+        + 'micugl is not falling back to the main thread, because that would hide the failure.';
+}
+
 export function unusableInlineWorkerMessage(): string {
     return 'micugl worker: the inlined worker module has no default export to construct, so a worker built '
         + 'from it would run no code and paint nothing. This build of micugl is broken: its '
@@ -122,11 +149,11 @@ export async function createWorkerWithDeps(
     }
 }
 
-const defaultLog = createOnceLogger(message => { console.error(message) });
+export const logWorkerIssue = createOnceLogger(message => { console.error(message) });
 
 const defaultDeps: WorkerFactoryDeps = {
     loadInlineWorker: () => import('@/worker/workerEntry?worker&inline'),
-    log: defaultLog
+    log: logWorkerIssue
 };
 
 export function createMicuglWorker(options: CreateWorkerOptions = {}): Promise<Worker | null> {

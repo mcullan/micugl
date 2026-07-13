@@ -176,7 +176,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['bench/**/*.{ts,tsx}', 'playwright.config.ts'],
+    files: ['bench/**/*.{ts,tsx}', 'e2e/**/*.{ts,tsx}', 'playwright.config.ts'],
     languageOptions: {
       globals: {
         ...globals.browser,

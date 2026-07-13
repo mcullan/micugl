@@ -44,6 +44,20 @@ export const GRADIENT_FRAGMENT = `
     }
 `;
 
+export const WORKER_BARS_FRAGMENT = `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform vec3 u_color;
+    varying vec2 v_uv;
+    void main() {
+        float bars = step(0.5, fract(v_uv.x * 4.0 - u_time * 3.0));
+        float pulse = 0.5 + 0.5 * sin(u_time * 1.7 + v_uv.y * 6.0);
+        vec3 col = mix(u_color * 0.08, u_color, bars) * (0.3 + 0.7 * pulse);
+        gl_FragColor = vec4(col, 1.0);
+    }
+`;
+
 export const PINGPONG_VERTEX = `
     attribute vec2 a_position;
     varying vec2 v_texCoord;

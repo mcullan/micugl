@@ -56,9 +56,17 @@ interface WorkerHarness {
     frames: FrameQueue;
     errors: string[];
     uploads: (name: string) => unknown[];
+    transfers: () => number;
+    mainThreadContexts: () => number;
+    failToStart: () => void;
+    crash: (message: string) => void;
 }
 
-function createWorkerHarness(): WorkerHarness {
+interface WorkerHarnessOptions {
+    startsScript?: boolean;
+}
+
+function createWorkerHarness({ startsScript = true }: WorkerHarnessOptions = {}): WorkerHarness {
     const offscreenCanvas = {
         width: 0,
         height: 0,
@@ -72,6 +80,10 @@ function createWorkerHarness(): WorkerHarness {
     const frames = createFrameQueue();
     const errors: string[] = [];
     const listeners: ((event: MessageEvent<WorkerToMain>) => void)[] = [];
+    const errorListeners: ((event: Event) => void)[] = [];
+
+    let transferCount = 0;
+    let mainThreadContextCount = 0;
 
     const host: WorkerRuntimeHost = {
         postMessage: message => {
@@ -88,9 +100,17 @@ function createWorkerHarness(): WorkerHarness {
     const runtime = new WorkerRuntime(host);
 
     const worker = {
-        postMessage: (message: MainToWorker) => { runtime.handleMessage(message) },
-        addEventListener: (_type: string, listener: (event: MessageEvent<WorkerToMain>) => void) => {
-            listeners.push(listener);
+        postMessage: (message: MainToWorker) => {
+            if (startsScript) {
+                runtime.handleMessage(message);
+            }
+        },
+        addEventListener: (type: string, listener: (event: never) => void) => {
+            if (type === 'error') {
+                errorListeners.push(listener as (event: Event) => void);
+                return;
+            }
+            listeners.push(listener as (event: MessageEvent<WorkerToMain>) => void);
         },
         removeEventListener: () => undefined,
         terminate: () => undefined
@@ -101,9 +121,16 @@ function createWorkerHarness(): WorkerHarness {
     (HTMLCanvasElement.prototype as unknown as {
         transferControlToOffscreen: () => OffscreenCanvas;
     }).transferControlToOffscreen = function transferControlToOffscreen(this: HTMLCanvasElement) {
+        transferCount += 1;
         offscreenCanvas.width = this.width;
         offscreenCanvas.height = this.height;
         return offscreen;
+    };
+    (HTMLCanvasElement.prototype as unknown as {
+        getContext: () => WebGLRenderingContext;
+    }).getContext = function getContext() {
+        mainThreadContextCount += 1;
+        return stub.gl;
     };
 
     return {
@@ -116,6 +143,14 @@ function createWorkerHarness(): WorkerHarness {
             return stub.uniformCalls
                 .filter(call => call.location === location)
                 .map(call => call.value);
+        },
+        transfers: () => transferCount,
+        mainThreadContexts: () => mainThreadContextCount,
+        failToStart: () => {
+            errorListeners.forEach(listener => { listener(new Event('error')) });
+        },
+        crash: (message: string) => {
+            errorListeners.forEach(listener => { listener(new ErrorEvent('error', { message })) });
         }
     };
 }
@@ -224,6 +259,72 @@ describe('BaseShaderComponent in worker mode', () => {
 
             expect(worker.errors).toEqual([]);
             expect(worker.uploads('u_level')).toEqual([0, 0.75]);
+        });
+
+    it('falls back to a fresh main-thread canvas when the worker never starts its script', async () => {
+        const worker = createWorkerHarness({ startsScript: false });
+        const handleRef = { current: null as ShaderHandle | null };
+
+        await mount(
+            <Scene
+                worker={worker}
+                handleRef={handleRef}
+                uniforms={{ level: { type: 'float', value: 0.5 } }}
+                frameloop='always'
+            />
+        );
+
+        const transferred = container.querySelector('canvas');
+        expect(worker.transfers()).toBe(1);
+        expect(worker.mainThreadContexts()).toBe(0);
+        expect(mainFrames.pending()).toBe(0);
+
+        await act(async () => {
+            worker.failToStart();
+            await Promise.resolve();
+        });
+
+        const replacement = container.querySelector('canvas');
+        expect(replacement).not.toBe(transferred);
+        expect(worker.transfers()).toBe(1);
+        expect(worker.mainThreadContexts()).toBe(1);
+
+        act(() => { mainFrames.tick(16) });
+
+        expect(worker.errors).toEqual([]);
+        expect(worker.uploads('u_level')).toEqual([0.5]);
+    });
+
+    it('surfaces an uncaught worker error instead of blaming a CSP and falling back to the main thread',
+        async () => {
+            const worker = createWorkerHarness({ startsScript: false });
+            const handleRef = { current: null as ShaderHandle | null };
+
+            await mount(
+                <Scene
+                    worker={worker}
+                    handleRef={handleRef}
+                    uniforms={{ level: { type: 'float', value: 0.5 } }}
+                    frameloop='always'
+                />
+            );
+
+            let failure: Error | null = null;
+            try {
+                await act(async () => {
+                    worker.crash('u_level is not a function');
+                    await Promise.resolve();
+                });
+            } catch (error) {
+                failure = error as Error;
+            }
+
+            expect(failure?.message).toContain('u_level is not a function');
+            expect(failure?.message).toContain('createWorker() factory');
+            expect(failure?.message).not.toContain('Content-Security-Policy');
+            expect(failure?.message).not.toContain('Rendering on the main thread');
+            expect(worker.mainThreadContexts()).toBe(0);
+            expect(worker.transfers()).toBe(1);
         });
 
     it('starts the sampler loop when liveUniforms is switched on after the worker connected', async () => {
