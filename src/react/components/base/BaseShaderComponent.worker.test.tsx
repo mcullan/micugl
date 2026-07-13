@@ -7,6 +7,8 @@ import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
 import type { GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
+import type { FrameQueue } from '@/testing/frameQueue';
+import { createFrameQueue } from '@/testing/frameQueue';
 import type { Frameloop, ShaderHandle, UniformParam } from '@/types';
 import type { MainToWorker, WorkerToMain } from '@/worker/protocol';
 import type { WorkerRuntimeHost } from '@/worker/WorkerRuntime';
@@ -21,34 +23,6 @@ const CONFIG = createShaderConfig({
     fragmentShader: 'void main() {}',
     uniformNames: { u_level: 'float' }
 });
-
-interface FrameQueue {
-    schedule: (callback: (now: number) => void) => number;
-    cancel: (handle: number) => void;
-    pending: () => number;
-    tick: (now: number) => void;
-}
-
-function createFrameQueue(): FrameQueue {
-    const scheduled = new Map<number, (now: number) => void>();
-    let nextHandle = 1;
-
-    return {
-        schedule: callback => {
-            const handle = nextHandle;
-            nextHandle += 1;
-            scheduled.set(handle, callback);
-            return handle;
-        },
-        cancel: handle => { scheduled.delete(handle) },
-        pending: () => scheduled.size,
-        tick: now => {
-            const callbacks = Array.from(scheduled.values());
-            scheduled.clear();
-            callbacks.forEach(callback => { callback(now) });
-        }
-    };
-}
 
 interface WorkerHarness {
     createWorker: () => Worker;
@@ -222,6 +196,23 @@ describe('BaseShaderComponent in worker mode', () => {
                 frameloop='always'
             />
         )).rejects.toThrow(/u_ghost/);
+
+        expect(worker.frames.pending()).toBe(0);
+        expect(mainFrames.pending()).toBe(0);
+    });
+
+    it('throws once, in render, for a uniform with a "transition", instead of silently ignoring it', async () => {
+        const worker = createWorkerHarness();
+        const handleRef = { current: null as ShaderHandle | null };
+
+        await expect(mount(
+            <Scene
+                worker={worker}
+                handleRef={handleRef}
+                uniforms={{ level: { type: 'float', value: 0, transition: { duration: 300 } } }}
+                frameloop='always'
+            />
+        )).rejects.toThrow(/u_level/);
 
         expect(worker.frames.pending()).toBe(0);
         expect(mainFrames.pending()).toBe(0);

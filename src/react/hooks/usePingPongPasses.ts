@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { combineFrameInvalidation, type FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
 import { combineUniformDebugPorts, type UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import {
@@ -11,7 +12,7 @@ import {
     serializeFramebufferOptions,
     serializeRenderOptions
 } from '@/react/lib/pingPongPasses';
-import type { FramebufferOptions, RenderPass, UniformParam } from '@/types';
+import type { FramebufferOptions, MotionPolicy, RenderPass, UniformParam } from '@/types';
 
 interface PingPongPassesOptions {
     programId: string;
@@ -23,12 +24,15 @@ interface PingPongPassesOptions {
     renderOptions?: PingPongRenderOptions;
     customPasses?: RenderPass[];
     framebuffers?: Record<string, FramebufferOptions>;
+    reducedMotion?: MotionPolicy;
+    saveData?: MotionPolicy;
 }
 
 const EMPTY_UNIFORMS: Record<string, UniformParam> = {};
 
 export interface PingPongPassesWithPort extends PingPongPassesResult {
     port: UniformDebugPort;
+    invalidation: FrameInvalidation;
 }
 
 export const usePingPongPasses = ({
@@ -40,12 +44,15 @@ export const usePingPongPasses = ({
     framebufferOptions = DEFAULT_FRAMEBUFFER_OPTIONS,
     renderOptions = DEFAULT_RENDER_OPTIONS,
     customPasses,
-    framebuffers
+    framebuffers,
+    reducedMotion,
+    saveData
 }: PingPongPassesOptions): PingPongPassesWithPort => {
-    const primary = useUniformUpdaters(programId, uniforms);
+    const primary = useUniformUpdaters(programId, uniforms, { reducedMotion, saveData });
     const secondary = useUniformUpdaters(
         secondaryProgramId ?? `${programId}-secondary`,
-        secondaryUniforms
+        secondaryUniforms,
+        { reducedMotion, saveData }
     );
 
     const framebufferKey = serializeFramebufferOptions(framebufferOptions);
@@ -86,5 +93,10 @@ export const usePingPongPasses = ({
         [primary.port, secondary.port]
     );
 
-    return { ...passesResult, port };
+    const invalidation = useMemo(
+        () => combineFrameInvalidation([primary.invalidation, secondary.invalidation]),
+        [primary.invalidation, secondary.invalidation]
+    );
+
+    return { ...passesResult, port, invalidation };
 };

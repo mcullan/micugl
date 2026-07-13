@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
 import { vec2, vec3 } from '@/core/lib/vectorUtils';
 import {
     buildLiveUpdaters,
@@ -10,13 +11,17 @@ import {
     mergeOverrides,
     normalizeUniformName,
     parseUniformStructureKey,
-    type UniformDebugPortRefs,
+    type UniformDebugPortOptions,
     type UniformDescriptor,
     uniformDescriptors,
     uniformStructureKey,
     validateOverrideValue
 } from '@/react/lib/liveUniformUpdaters';
+import type { TransitionRuntime } from '@/react/lib/transitionRuntime';
+import { createTransitionRuntime } from '@/react/lib/transitionRuntime';
 import type { UniformParam } from '@/types';
+
+const noTransitions = (): TransitionRuntime => createTransitionRuntime(() => false);
 
 describe('normalizeUniformName', () => {
     it('prefixes bare names with u_', () => {
@@ -104,7 +109,12 @@ describe('buildLiveUpdaters', () => {
         const valuesRef: { current: LiveValues } = {
             current: { u_color: vec3([1, 2, 3]) }
         };
-        const updaters = buildLiveUpdaters([{ name: 'u_color', type: 'vec3' }], true, valuesRef);
+        const updaters = buildLiveUpdaters(
+            [{ name: 'u_color', type: 'vec3' }],
+            true,
+            valuesRef,
+            noTransitions()
+        );
         const updater = updaters.find(u => u.name === 'u_color');
 
         expect(updater?.updateFn()).toEqual(vec3([1, 2, 3]));
@@ -117,7 +127,12 @@ describe('buildLiveUpdaters', () => {
         const valuesRef: { current: LiveValues } = {
             current: { u_wave: (time?: number) => vec2([time ?? 0, 0]) }
         };
-        const updaters = buildLiveUpdaters([{ name: 'u_wave', type: 'vec2' }], true, valuesRef);
+        const updaters = buildLiveUpdaters(
+            [{ name: 'u_wave', type: 'vec2' }],
+            true,
+            valuesRef,
+            noTransitions()
+        );
         const updater = updaters.find(u => u.name === 'u_wave');
 
         expect(updater?.updateFn(2)).toEqual(vec2([2, 0]));
@@ -126,19 +141,50 @@ describe('buildLiveUpdaters', () => {
 
     it('injects u_time and u_resolution defaults unless skipped', () => {
         const valuesRef: { current: LiveValues } = { current: {} };
-        const withDefaults = buildLiveUpdaters([], false, valuesRef);
+        const withDefaults = buildLiveUpdaters([], false, valuesRef, noTransitions());
 
         expect(withDefaults.map(u => u.name)).toEqual(['u_time', 'u_resolution']);
 
-        const skipped = buildLiveUpdaters([], true, valuesRef);
+        const skipped = buildLiveUpdaters([], true, valuesRef, noTransitions());
         expect(skipped).toEqual([]);
     });
 
     it('does not inject a default that the caller already declares', () => {
         const valuesRef: { current: LiveValues } = { current: { u_time: 3 } };
-        const updaters = buildLiveUpdaters([{ name: 'u_time', type: 'float' }], false, valuesRef);
+        const updaters = buildLiveUpdaters(
+            [{ name: 'u_time', type: 'float' }],
+            false,
+            valuesRef,
+            noTransitions()
+        );
 
         expect(updaters.map(u => u.name)).toEqual(['u_resolution', 'u_time']);
+    });
+
+    it('a non-null sample wins over the plain ref value', () => {
+        const valuesRef: { current: LiveValues } = { current: { u_swirl: 10 } };
+        const runtime: TransitionRuntime = {
+            applyTargets: () => undefined,
+            sample: (name, timeMs) => name === 'u_swirl' && timeMs < 100 ? 4.5 : null,
+            invalidation: createFrameInvalidation()
+        };
+        const updaters = buildLiveUpdaters([{ name: 'u_swirl', type: 'float' }], true, valuesRef, runtime);
+        const updater = updaters.find(u => u.name === 'u_swirl');
+
+        expect(updater?.updateFn(50)).toBe(4.5);
+    });
+
+    it('a settled (null) sample falls through to the plain ref value', () => {
+        const valuesRef: { current: LiveValues } = { current: { u_swirl: 10 } };
+        const runtime: TransitionRuntime = {
+            applyTargets: () => undefined,
+            sample: () => null,
+            invalidation: createFrameInvalidation()
+        };
+        const updaters = buildLiveUpdaters([{ name: 'u_swirl', type: 'float' }], true, valuesRef, runtime);
+        const updater = updaters.find(u => u.name === 'u_swirl');
+
+        expect(updater?.updateFn(200)).toBe(10);
     });
 });
 
@@ -221,15 +267,36 @@ describe('validateOverrideValue', () => {
     });
 });
 
-function createPortRefs(descriptors: UniformDescriptor[], base: LiveValues): UniformDebugPortRefs {
+function createPortRefs(descriptors: UniformDescriptor[], base: LiveValues): UniformDebugPortOptions {
     const baseValuesRef = { current: base };
     const overridesRef: { current: LiveValues } = { current: {} };
     const valuesRef: { current: LiveValues } = { current: { ...base } };
     const descriptorsRef = { current: descriptors };
-    return { descriptorsRef, baseValuesRef, overridesRef, valuesRef };
+    return { descriptorsRef, baseValuesRef, overridesRef, valuesRef, onChange: () => undefined };
 }
 
 describe('createUniformDebugPort', () => {
+    it('setOverride and clearOverride both notify onChange, so the engine repaints on demand', () => {
+        const refs = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
+        const changes: number[] = [];
+        const port = createUniformDebugPort({ ...refs, onChange: () => { changes.push(1) } });
+
+        port.setOverride('u_a', 5);
+        expect(changes).toHaveLength(1);
+
+        port.clearOverride('u_a');
+        expect(changes).toHaveLength(2);
+    });
+
+    it('does not notify onChange when setOverride throws', () => {
+        const refs = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
+        const changes: number[] = [];
+        const port = createUniformDebugPort({ ...refs, onChange: () => { changes.push(1) } });
+
+        expect(() => { port.setOverride('u_a', NaN) }).toThrow(/finite number/);
+        expect(changes).toHaveLength(0);
+    });
+
     it('lists uniforms with current value and overridden flag', () => {
         const refs = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
         const port = createUniformDebugPort(refs);
@@ -266,7 +333,13 @@ describe('createUniformDebugPort', () => {
         const overridesRef: { current: LiveValues } = { current: {} };
         const valuesRef = { current: mergeOverrides(base, {}) };
         const descriptorsRef = { current: [{ name: 'u_a', type: 'float' } as UniformDescriptor] };
-        const port = createUniformDebugPort({ descriptorsRef, baseValuesRef, overridesRef, valuesRef });
+        const port = createUniformDebugPort({
+            descriptorsRef,
+            baseValuesRef,
+            overridesRef,
+            valuesRef,
+            onChange: () => undefined
+        });
 
         expect(valuesRef.current).toBe(baseValuesRef.current);
 

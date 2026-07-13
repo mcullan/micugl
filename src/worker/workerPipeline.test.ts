@@ -17,6 +17,7 @@ import {
     DEFAULT_FRAMEBUFFER_OPTIONS,
     DEFAULT_RENDER_OPTIONS
 } from '@/react/lib/pingPongPasses';
+import { createTransitionRuntime } from '@/react/lib/transitionRuntime';
 import { normalizeWorkerPrograms, stripPassUniforms, workerPingPongUniforms } from '@/react/lib/workerMode';
 import type { GLStubConfig, GLStubHandle } from '@/testing';
 import { createCanvasStub, createGLStub } from '@/testing';
@@ -57,7 +58,8 @@ function realUpdaters(
 ): Record<string, UniformUpdaterDef[]> {
     const parsed = parseUniformStructureKey(uniformStructureKey(uniformDescriptors(uniforms), false));
     const valuesRef = { current: collectLiveValues(uniforms) };
-    return { [programId]: buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef) };
+    const runtime = createTransitionRuntime(() => false);
+    return { [programId]: buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime) };
 }
 
 function realPingPong(uniforms: Record<string, UniformParam>): {

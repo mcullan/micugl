@@ -154,3 +154,20 @@ export const PARTICLES_COMPONENT_FRAGMENT = `
         gl_FragColor = vec4(vec3(v), 1.0);
     }
 `;
+
+export const TRANSITION_FRAGMENT = `
+    precision highp float;
+    uniform vec2 u_resolution;
+    uniform float u_swirl;
+    uniform vec3 u_colorStart;
+    uniform vec3 u_colorEnd;
+    varying vec2 v_uv;
+    void main() {
+        vec2 uv = v_uv * 2.0 - 1.0;
+        float angle = atan(uv.y, uv.x) + u_swirl * length(uv);
+        float radius = length(uv);
+        float band = 0.5 + 0.5 * sin(angle * 6.0 - radius * 8.0);
+        vec3 color = mix(u_colorStart, u_colorEnd, band);
+        gl_FragColor = vec4(color, 1.0);
+    }
+`;

@@ -111,7 +111,9 @@ deterministic frame instead of animating continuously.
 - `reducedMotion` / `saveData`: `'static-frame' | 'pause' | 'ignore'` (default `'static-frame'`
   for both). When either axis is active, the most restrictive configured policy wins.
 - `'static-frame'` draws one poster frame (at `staticFrame`, default `0`) and stops the
-  continuous render loop entirely; `invalidate()` calls are ignored.
+  continuous render loop entirely. The clock stays pinned to `staticFrame`, so nothing
+  time-driven advances; an explicit `invalidate()` still redraws that one pinned frame, so
+  value changes (theme, resize, a snapped transition) reach the canvas.
 - `'pause'` freezes the clock at its current value but keeps responding to `invalidate()` —
   useful for content that should stay interactive (theme changes, resize) without
   autonomous time-driven motion.
@@ -120,6 +122,62 @@ deterministic frame instead of animating continuously.
 - `staticFrame` (default `0`) is the poster frame number, on the same 60fps timebase as
   `setFrame`/`ShaderHandle`. Pick a frame that looks good as a static image for shaders
   that are dull at frame 0.
+
+## Uniform transitions
+
+Give a uniform param a `transition` and a change to its `value` animates to the new value
+instead of stepping to it:
+
+```tsx
+<BaseShaderComponent
+    programId='marble'
+    shaderConfig={config}
+    uniforms={{
+        swirl: { type: 'float', value: hovered ? 1 : 0, transition: { duration: 400 } },
+        color: {
+            type: 'vec3',
+            value: dark ? DARK : LIGHT,
+            transition: { duration: 600, easing: 'easeInOut', delay: 100 }
+        }
+    }}
+/>
+```
+
+- `transition: { duration, easing?, delay?, interpolate? }`. `duration` and `delay` are in
+  milliseconds. `easing` is one of `'linear' | 'easeIn' | 'easeOut' | 'easeInOut'` (default
+  `'linear'`), or your own `(t: number) => number`. `interpolate` replaces the default
+  component-wise lerp, for cases like color-space-aware blending.
+- Supported on `float`, `vec2`, `vec3` and `vec4`. A transition on any other type, or on a
+  function-valued uniform, throws: there is no sensible interpolation to fall back to, and a
+  silently ignored transition is worse than an error.
+- Interpolation happens at frame time, inside the uniform read. A transition costs no React
+  renders and no GL re-initialization, and the existing dirty check still means only changed
+  values are uploaded.
+- Mounting snaps: the first value a uniform is given is its starting value, never animated
+  from zero. Retargeting mid-flight starts the new leg from the current interpolated value.
+
+**Transitions run on the engine clock, not on wall time.** `speed` scales them (`speed={0.5}`
+halves their pace, `speed={0}` freezes them), and `setFrame(n)` pins them, which is what makes
+them deterministic: the same frame number always produces the same interpolated value, so
+`renderSequence()` and `renderToBlob({ frame })` capture transitions exactly.
+
+**A motion gate snaps them.** Under `reducedMotion="static-frame"`/`"pause"` (the default, when
+the user has `prefers-reduced-motion: reduce` or Save-Data on) the render clock is frozen, so a
+tween sampled on engine time physically cannot advance; micugl snaps the uniform to its target
+and repaints once rather than leaving it stuck at its old value. The deliberate consequence:
+`reducedMotion="ignore"` (the user has told you their motion is fine) keeps transitions
+animating.
+
+**`frameloop='never'` still animates them.** A transition wakes the loop through the same
+invalidate channel `handle.invalidate()` uses, and keeps it awake until it settles, then lets it
+go idle again. `'never'` means "render only when something invalidates", not "never render" -
+the prop for never advancing anything is `speed={0}`.
+
+**Worker mode rejects them.** Transitions are interpolated on the main thread every frame and
+worker mode posts plain values, so a `transition` under `worker` would be silently ignored and
+the uniform would jump. That combination throws with the remedy in the message. Sampling
+transitions on the main thread and posting them through the `liveUniforms` channel is a
+follow-up.
 
 ## Worker rendering (OffscreenCanvas)
 

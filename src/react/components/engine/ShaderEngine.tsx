@@ -19,19 +19,18 @@ import type {
 } from '@/core';
 import { captureFrame } from '@/core/lib/captureFrame';
 import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
+import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { InstanceUploader } from '@/core/lib/instanceBuffers';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
-import { useReducedMotion } from '@/react/hooks/useReducedMotion';
-import { useSaveData } from '@/react/hooks/useSaveData';
+import { useMotionGate } from '@/react/hooks/useMotionGate';
 import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
 import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { instancingContentKey, programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
 import { createDelegatingInstancingConfig } from '@/react/lib/instancingConfig';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
-import { resolveMotionGate } from '@/react/lib/motionPolicy';
 import { createRecording } from '@/react/lib/record';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import { runRenderSequence } from '@/react/lib/renderSequence';
@@ -83,6 +82,7 @@ interface ShaderEngineBaseProps extends Omit<RenderControlProps, 'worker' | 'cre
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
     workerSkipDefaultUniforms?: boolean;
+    invalidation?: FrameInvalidation;
 }
 
 export type ShaderEngineWorkerProps =
@@ -171,6 +171,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     workerUniforms,
     workerSkipDefaultUniforms = false,
     liveUniforms,
+    invalidation,
     worker,
     createWorker,
     useDevicePixelRatio,
@@ -181,13 +182,11 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     dpr = DEFAULT_DPR,
     maxPixelCount = DEFAULT_MAX_PIXEL_COUNT,
     fit = 'window',
-    reducedMotion = 'static-frame',
-    saveData = 'static-frame',
+    reducedMotion,
+    saveData,
     staticFrame = 0
 }, ref) => {
-    const reducedMotionActive = useReducedMotion();
-    const saveDataActive = useSaveData();
-    const motionGate = resolveMotionGate({ reducedMotionActive, saveDataActive, reducedMotion, saveData });
+    const motionGate = useMotionGate(reducedMotion, saveData);
 
     const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
     const contentKey = `${programConfigContentKey(keyProgramId, keyProgramConfig)}|${instancingContentKey(instancing)}`;
@@ -437,6 +436,16 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         renderFrame(elapsed);
     }, [postLiveUniforms, renderFrame]);
 
+    const invalidateAll = useCallback(() => {
+        if (workerActiveRef.current) {
+            postLiveUniforms(frameToMs(controllerRef.current?.getFrame() ?? 0));
+            controllerRef.current?.invalidate();
+            bridgeRef.current?.invalidate();
+            return;
+        }
+        controllerRef.current?.invalidate();
+    }, [postLiveUniforms]);
+
     const startSamplerLoop = useCallback(() => {
         if (liveRef.current.names.length === 0) return;
         controllerRef.current?.start();
@@ -513,6 +522,11 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         controller?.start();
         return () => { controller?.stop() };
     }, [workerActive, liveKey, isStopped]);
+
+    useEffect(() => {
+        if (!invalidation) return;
+        return invalidation.connect(invalidateAll);
+    }, [invalidation, invalidateAll]);
 
     useEffect(() => {
         if (workerActive) return;
@@ -779,11 +793,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     }, []);
 
     useImperativeHandle(ref, (): ShaderHandle => workerActive ? {
-        invalidate: () => {
-            postLiveUniforms(frameToMs(controllerRef.current?.getFrame() ?? 0));
-            controllerRef.current?.invalidate();
-            bridgeRef.current?.invalidate();
-        },
+        invalidate: invalidateAll,
         setFrame: (frame: number) => {
             controllerRef.current?.setFrame(frame);
             bridgeRef.current?.renderFrame(frameToMs(frame));
@@ -803,7 +813,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         record: deny('record'),
         renderSequence: deny('renderSequence')
     } : {
-        invalidate: () => { controllerRef.current?.invalidate() },
+        invalidate: invalidateAll,
         setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
         getFrame: () => controllerRef.current?.getFrame() ?? 0,
         start: () => { controllerRef.current?.start() },
@@ -875,7 +885,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         workerActive,
         captureStill,
         renderFrame,
-        postLiveUniforms,
+        invalidateAll,
         startSamplerLoop,
         setStopped
     ]);

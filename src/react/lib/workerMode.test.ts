@@ -14,6 +14,7 @@ import {
     DEFAULT_FRAMEBUFFER_OPTIONS,
     DEFAULT_RENDER_OPTIONS
 } from '@/react/lib/pingPongPasses';
+import { createTransitionRuntime } from '@/react/lib/transitionRuntime';
 import type { WorkerBlockInputs } from '@/react/lib/workerMode';
 import {
     collectWorkerValues,
@@ -44,7 +45,8 @@ function simUniforms(): Record<string, UniformParam> {
 function realUpdaters(programId: string, uniforms: Record<string, UniformParam>): Record<string, UniformUpdaterDef[]> {
     const parsed = parseUniformStructureKey(uniformStructureKey(uniformDescriptors(uniforms), false));
     const valuesRef = { current: collectLiveValues(uniforms) };
-    return { [programId]: buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef) };
+    const runtime = createTransitionRuntime(() => false);
+    return { [programId]: buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime) };
 }
 
 function realPasses(uniforms = simUniforms()): RenderPass[] {
@@ -199,6 +201,21 @@ describe('findWorkerBlock: one list of the reasons a worker cannot run this comp
 
         expect(block).toEqual({ kind: 'uniform-not-clone-safe', programId: PROGRAM_ID, name: 'u_flag' });
         expect(workerBlockMessage('ShaderEngine', block!)).toMatch(/structured-clone-safe/);
+    });
+
+    it('blocks a uniform with a "transition", which would silently be ignored by the worker', () => {
+        const block = findWorkerBlock(blockInputs({
+            uniforms: {
+                [PROGRAM_ID]: {
+                    u_swirl: { type: 'float', value: 0, transition: { duration: 300 } }
+                }
+            }
+        }));
+
+        expect(block).toEqual({ kind: 'uniform-transition', programId: PROGRAM_ID, name: 'u_swirl' });
+        const message = workerBlockMessage('ShaderEngine', block!);
+        expect(message).toMatch(/u_swirl/);
+        expect(message).toMatch(/transition/);
     });
 
     it('blocks an unknown liveUniforms name in the render body, not from inside the sampler loop', () => {
