@@ -312,13 +312,23 @@ export type EasingName = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
 export type EasingFn = (t: number) => number;
 
 export interface TweenTransitionConfig {
+  type?: 'tween';
   duration: number;
   easing?: EasingName | EasingFn;
   delay?: number;
   interpolate?: (from: ArrayLike<number>, to: ArrayLike<number>, t: number, out: Float32Array) => void;
 }
 
-export type UniformTransitionConfig = TweenTransitionConfig;
+export interface SpringTransitionConfig {
+  type: 'spring';
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
+  restDelta?: number;
+  restSpeed?: number;
+}
+
+export type UniformTransitionConfig = TweenTransitionConfig | SpringTransitionConfig;
 
 export interface UniformParam<T extends UniformType = UniformType> {
   value: UniformValue<T>;

@@ -95,6 +95,31 @@ const Scene = ({
     />
 );
 
+interface SpringSceneProps {
+    value: number;
+    frameloop?: Frameloop;
+}
+
+const SpringScene = ({ value, frameloop = 'demand' }: SpringSceneProps) => (
+    <BaseShaderComponent
+        programId={PROGRAM_ID}
+        shaderConfig={CONFIG}
+        uniforms={{
+            swirl: {
+                type: 'float',
+                value,
+                transition: { type: 'spring', stiffness: 1200, damping: 20 }
+            }
+        }}
+        width={WIDTH}
+        height={HEIGHT}
+        useDevicePixelRatio={false}
+        frameloop={frameloop}
+        reducedMotion='ignore'
+        saveData='ignore'
+    />
+);
+
 function mockReducedMotionActive(): void {
     window.matchMedia = ((query: string) => ({
         matches: query === '(prefers-reduced-motion: reduce)',
@@ -172,5 +197,41 @@ describe('a real uniform transition, driven through a mounted BaseShaderComponen
 
         frames.tick(2_000_000);
         expect(uploads('u_swirl')).toEqual([0, 10]);
+    });
+
+    it('a spring prop change under frameloop="demand" self-sustains the rAF chain, overshoots and returns, lands exactly on the target, then drains', async () => {
+        await mount(<SpringScene value={0} />);
+        frames.tick(0);
+        expect(uploads('u_swirl')).toEqual([0]);
+        expect(frames.pending()).toBe(0);
+
+        await mount(<SpringScene value={10} />);
+        expect(frames.pending()).toBe(1);
+
+        const sampleTimes = [
+            1000, 1025, 1050, 1075, 1100, 1150, 1200, 1300, 1400, 1500, 1700, 1900, 1950, 2000, 2100
+        ];
+        for (const time of sampleTimes.slice(0, -1)) {
+            frames.tick(time);
+            expect(frames.pending()).toBe(1);
+        }
+        frames.tick(sampleTimes[sampleTimes.length - 1]);
+        expect(frames.pending()).toBe(0);
+
+        const values = uploads('u_swirl') as number[];
+        expect(values[0]).toBe(0);
+
+        const peakIndex = values.indexOf(Math.max(...values));
+        expect(values[peakIndex]).toBeGreaterThan(10);
+
+        const troughAfterPeak = Math.min(...values.slice(peakIndex + 1));
+        expect(troughAfterPeak).toBeLessThan(10);
+
+        expect(values[values.length - 1]).toBe(10);
+
+        const uploadCountAtSettle = values.length;
+        frames.tick(2200);
+        expect(frames.pending()).toBe(0);
+        expect(uploads('u_swirl').length).toBe(uploadCountAtSettle);
     });
 });

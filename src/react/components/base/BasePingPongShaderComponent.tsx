@@ -79,7 +79,7 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
         programConfigs[actualSecondaryProgramId] = secondaryShaderConfig;
     }
 
-    const { passes, framebuffers, port, invalidation } = usePingPongPasses({
+    const { passes, framebuffers, port, invalidation, springsInFlight } = usePingPongPasses({
         programId,
         secondaryProgramId: secondaryShaderConfig ? actualSecondaryProgramId : undefined,
         iterations,
@@ -118,6 +118,7 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
             framebuffers={framebuffers}
             debugPortRef={debugPortRef}
             invalidation={invalidation}
+            springsInFlight={springsInFlight}
             {...workerProps}
             className={className}
             style={style}

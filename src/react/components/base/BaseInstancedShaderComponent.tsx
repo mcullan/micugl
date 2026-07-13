@@ -64,7 +64,7 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
     renderOptions = RENDER_OPTIONS
 }, ref) => {
     const programConfigs = { [programId]: shaderConfig };
-    const { updaters, port, invalidation } = useUniformUpdaters(
+    const { updaters, port, invalidation, springsInFlight } = useUniformUpdaters(
         programId,
         uniforms,
         { skipDefaultUniforms, reducedMotion, saveData }
@@ -82,6 +82,7 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
             uniformUpdaters={updaters}
             debugPortRef={debugPortRef}
             invalidation={invalidation}
+            springsInFlight={springsInFlight}
             width={width}
             height={height}
             pixelRatio={pixelRatio}

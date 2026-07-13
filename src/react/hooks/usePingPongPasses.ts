@@ -12,6 +12,7 @@ import {
     serializeFramebufferOptions,
     serializeRenderOptions
 } from '@/react/lib/pingPongPasses';
+import type { SpringsInFlight } from '@/react/lib/springCapture';
 import type { FramebufferOptions, MotionPolicy, RenderPass, UniformParam } from '@/types';
 
 interface PingPongPassesOptions {
@@ -33,6 +34,7 @@ const EMPTY_UNIFORMS: Record<string, UniformParam> = {};
 export interface PingPongPassesWithPort extends PingPongPassesResult {
     port: UniformDebugPort;
     invalidation: FrameInvalidation;
+    springsInFlight: SpringsInFlight;
 }
 
 export const usePingPongPasses = ({
@@ -98,5 +100,12 @@ export const usePingPongPasses = ({
         [primary.invalidation, secondary.invalidation]
     );
 
-    return { ...passesResult, port, invalidation };
+    const primarySprings = primary.springsInFlight;
+    const secondarySprings = secondary.springsInFlight;
+    const springsInFlight = useMemo<SpringsInFlight>(
+        () => () => primarySprings() || secondarySprings(),
+        [primarySprings, secondarySprings]
+    );
+
+    return { ...passesResult, port, invalidation, springsInFlight };
 };

@@ -38,6 +38,8 @@ import {
     resolveDeviceResolution,
     resolveResolution
 } from '@/react/lib/resolution';
+import type { SpringsInFlight } from '@/react/lib/springCapture';
+import { springInFlightMessage } from '@/react/lib/springCapture';
 import { frameToMs } from '@/react/lib/timeKeeper';
 import type { WorkerBlock, WorkerProgramUniforms } from '@/react/lib/workerMode';
 import {
@@ -72,6 +74,7 @@ interface PingPongShaderEngineBaseProps extends Omit<RenderControlProps, 'worker
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
     invalidation?: FrameInvalidation;
+    springsInFlight?: SpringsInFlight;
 }
 
 export type PingPongShaderEngineWorkerProps =
@@ -154,6 +157,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     workerUniforms,
     workerCustomPasses = false,
     invalidation,
+    springsInFlight,
     worker,
     createWorker,
     useDevicePixelRatio,
@@ -250,6 +254,11 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             throw new Error('PingPongShaderEngine.renderToBlob: WebGL context is lost');
         }
 
+        const stepsTheClock = opts.frame !== undefined || opts.steps !== undefined;
+        if (stepsTheClock && springsInFlight?.()) {
+            throw new Error(springInFlightMessage('PingPongShaderEngine', 'renderToBlob'));
+        }
+
         const timePure = passSystem.isTimePure();
         if (opts.frame !== undefined && !timePure && opts.steps === undefined) {
             throw new Error(
@@ -307,7 +316,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         );
 
         return { ...result, type: opts.type, quality: opts.quality };
-    }, []);
+    }, [springsInFlight]);
 
     const applySize = useCallback(() => {
         const canvas = canvasRef.current;
@@ -790,6 +799,9 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             if (manager.context.isContextLost()) {
                 throw new Error('PingPongShaderEngine.renderSequence: WebGL context is lost');
             }
+            if (springsInFlight?.()) {
+                throw new Error(springInFlightMessage('PingPongShaderEngine', 'renderSequence'));
+            }
             const canvas = manager.context.canvas as HTMLCanvasElement;
             const controller = controllerRef.current;
             const wasRunning = controller !== null && !controller.isPaused();
@@ -813,7 +825,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
                 }
             });
         }
-    }, [workerActive, resetSimulation, captureStill, setStopped, invalidateAll]);
+    }, [workerActive, resetSimulation, captureStill, setStopped, invalidateAll, springsInFlight]);
 
     if (workerActive && block) {
         throw new Error(workerBlockMessage('PingPongShaderEngine', block));
