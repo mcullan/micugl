@@ -208,30 +208,26 @@ export function createVideoTextureDriver(
         }
     }
 
+    function raiseError(video: HTMLVideoElement, cause: unknown): void {
+        if (desired !== 'running' || attachment === null || attachment.video !== video || status === 'error') {
+            return;
+        }
+        error = toError(cause);
+        setStatus('error');
+        config.onError?.(cause);
+        invalidation.request();
+    }
+
     function attemptPlay(video: HTMLVideoElement): void {
-        Promise.resolve(video.play()).catch((cause: unknown) => {
-            if (desired !== 'running' || attachment === null || attachment.video !== video) {
-                return;
-            }
-            error = toError(cause);
-            setStatus('error');
-            config.onError?.(cause);
-            invalidation.request();
-        });
+        Promise.resolve(video.play()).catch((cause: unknown) => { raiseError(video, cause) });
     }
 
     function onOwnedError(video: HTMLVideoElement): void {
-        if (desired !== 'running' || attachment === null || attachment.video !== video) {
-            return;
-        }
         const mediaError = video.error;
         const cause = mediaError
             ? new Error(`micugl textures: the video failed to load (media error code ${String(mediaError.code)}).`)
             : new Error('micugl textures: the video failed to load.');
-        error = cause;
-        setStatus('error');
-        config.onError?.(cause);
-        invalidation.request();
+        raiseError(video, cause);
     }
 
     function resetFrameState(): void {

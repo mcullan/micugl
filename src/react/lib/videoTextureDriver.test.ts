@@ -291,6 +291,27 @@ describe('videoTextureDriver: the play call', () => {
         expect(activeError).toBe(denied);
     });
 
+    it('D7: raises a single error when a play() rejection and an element error event describe the same failure', async () => {
+        const rvfc = makeRvfcScheduler();
+        const denied = new Error('NotAllowedError');
+        const video = makeFakeVideo({ play: () => Promise.reject(denied) });
+        const errors: unknown[] = [];
+        const driver = createVideoTextureDriver(config({ onError: error => { errors.push(error) } }), {
+            createVideo: () => asVideoElement(video),
+            requestVideoFrameCallback: rvfc.request,
+            cancelVideoFrameCallback: rvfc.cancel
+        });
+
+        driver.start('https://example.test/clip.mp4');
+        await flushMicrotasks();
+
+        video.error = { code: 4 };
+        video.emitError();
+
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toBe(denied);
+    });
+
     it('D7: swallows a play() rejection that lands after stop() and does not flip to error', async () => {
         const rvfc = makeRvfcScheduler();
         let reject: (error: unknown) => void = () => undefined;

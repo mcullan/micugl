@@ -169,11 +169,12 @@ describe('useVideoTexture: kind honesty under a reduced-motion gate (H4)', () =>
         expect(count('drawArrays')).toBe(posters + 1);
         expect(fullUploads()).toEqual([{ width: 640, height: 480 }]);
 
+        const uploadsBefore = uploadCount();
         for (let i = 0; i < 4; i++) {
             act(() => { rvfc.fire() });
             expect(frames.pending()).toBe(0);
         }
-        expect(fullUploads()).toEqual([{ width: 640, height: 480 }]);
+        expect(uploadCount()).toBe(uploadsBefore);
     });
 
     it('uploads every decoded frame when reduced motion is ignored', async () => {
@@ -274,6 +275,35 @@ describe('useVideoTexture: the adopted-element contract (H10)', () => {
         expect(fullUploads()).toHaveLength(1);
         expect(video.playCalls).toBe(0);
         expect(video.pauseCalls).toBe(0);
+    });
+});
+
+describe('useVideoTexture: the placeholder-then-first-frame path through the real component', () => {
+    it('uploads only the placeholder while the element has no decoded frame, then the real frame once it decodes', async () => {
+        const rvfc = makeRvfcScheduler();
+        const video = makeFakeVideo({ readyState: 0, videoWidth: 0, videoHeight: 0 });
+        const deps: VideoTextureDeps = {
+            requestVideoFrameCallback: rvfc.request,
+            cancelVideoFrameCallback: rvfc.cancel
+        };
+
+        await mount(<VideoScene input={asVideoElement(video)} deps={deps} reducedMotion='ignore' frameloop='demand' />);
+        act(() => { frames.tick(0) });
+
+        act(() => { rvfc.fire() });
+        expect(frames.pending()).toBe(0);
+        expect(fullUploads()).toEqual([]);
+
+        act(() => {
+            video.readyState = 2;
+            video.videoWidth = 640;
+            video.videoHeight = 480;
+            rvfc.fire();
+        });
+        expect(frames.pending()).toBe(1);
+        act(() => { frames.tick(16) });
+
+        expect(fullUploads()).toEqual([{ width: 640, height: 480 }]);
     });
 });
 
