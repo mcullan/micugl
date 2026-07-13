@@ -38,7 +38,9 @@ const getServerVideo = (): HTMLVideoElement | null => null;
 export function useVideoTexture(input: VideoInput | null, options?: VideoTextureOptions): VideoTextureResult {
     const resolved = resolveSourceTextureOptions(options);
     const resizeToPOT = options?.resizeToPOT ?? false;
-    const optionsKey = `${JSON.stringify(resolved)}|${String(resizeToPOT)}`;
+    const crossOrigin = options?.crossOrigin ?? 'anonymous';
+    const loop = options?.loop ?? false;
+    const optionsKey = `${JSON.stringify(resolved)}|${String(resizeToPOT)}|${crossOrigin}|${String(loop)}`;
 
     const idRef = useRef('');
     if (idRef.current === '') {
@@ -47,13 +49,13 @@ export function useVideoTexture(input: VideoInput | null, options?: VideoTexture
     }
 
     const configRef = useRef<VideoTextureDriverConfig>({
-        crossOrigin: options?.crossOrigin ?? 'anonymous',
-        loop: options?.loop ?? false,
+        crossOrigin,
+        loop,
         resizeToPOT,
         onError: options?.onError
     });
-    configRef.current.crossOrigin = options?.crossOrigin ?? 'anonymous';
-    configRef.current.loop = options?.loop ?? false;
+    configRef.current.crossOrigin = crossOrigin;
+    configRef.current.loop = loop;
     configRef.current.resizeToPOT = resizeToPOT;
     configRef.current.onError = options?.onError;
 

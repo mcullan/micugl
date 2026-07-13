@@ -1,26 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { makeFakeStream } from '@/react/lib/fakeVideo';
 import type { WebcamAcquisitionDeps } from '@/react/lib/webcamAcquisition';
 import { buildWebcamConstraints, createWebcamAcquisition } from '@/react/lib/webcamAcquisition';
-
-interface FakeTrack {
-    stopped: boolean;
-    stop: () => void;
-}
-
-interface FakeStream {
-    stream: MediaStream;
-    tracks: FakeTrack[];
-}
-
-function makeStream(): FakeStream {
-    const tracks: FakeTrack[] = [
-        { stopped: false, stop() { this.stopped = true } },
-        { stopped: false, stop() { this.stopped = true } }
-    ];
-    const stream = { getTracks: () => tracks } as unknown as MediaStream;
-    return { stream, tracks };
-}
 
 function noopDeps(overrides: Partial<WebcamAcquisitionDeps>): WebcamAcquisitionDeps {
     return {
@@ -44,7 +26,7 @@ describe('buildWebcamConstraints', () => {
 
 describe('webcamAcquisition: releasing a grant', () => {
     it('A2: stops every track when the step after the grant throws', async () => {
-        const { stream, tracks } = makeStream();
+        const { stream, tracks } = makeFakeStream();
         const acquisition = createWebcamAcquisition(buildWebcamConstraints(), noopDeps({
             getUserMedia: () => Promise.resolve(stream),
             attach: () => { throw new Error('attach exploded') }
@@ -58,7 +40,7 @@ describe('webcamAcquisition: releasing a grant', () => {
     });
 
     it('A3: a stop() during the prompt releases the grant when it lands, with no error', async () => {
-        const { stream, tracks } = makeStream();
+        const { stream, tracks } = makeFakeStream();
         let grant: (value: MediaStream) => void = () => undefined;
         let attaches = 0;
         const acquisition = createWebcamAcquisition(buildWebcamConstraints(), noopDeps({
@@ -84,7 +66,7 @@ describe('webcamAcquisition: releasing a grant', () => {
 
 describe('webcamAcquisition: reconciling repeated starts', () => {
     it('A4: start() while starting opens the camera exactly once', async () => {
-        const { stream } = makeStream();
+        const { stream } = makeFakeStream();
         let calls = 0;
         const acquisition = createWebcamAcquisition(buildWebcamConstraints(), noopDeps({
             getUserMedia: () => { calls += 1; return Promise.resolve(stream) }
@@ -101,7 +83,7 @@ describe('webcamAcquisition: reconciling repeated starts', () => {
     });
 
     it('A4: start() then stop() then start() while the prompt is open adopts the one grant it asked for', async () => {
-        const { stream } = makeStream();
+        const { stream } = makeFakeStream();
         let calls = 0;
         let attaches = 0;
         let grant: (value: MediaStream) => void = () => undefined;
@@ -126,7 +108,7 @@ describe('webcamAcquisition: reconciling repeated starts', () => {
 
 describe('webcamAcquisition: stopping a live camera', () => {
     it('A5: stops every track and detaches when stopped from running', async () => {
-        const { stream, tracks } = makeStream();
+        const { stream, tracks } = makeFakeStream();
         let detaches = 0;
         const acquisition = createWebcamAcquisition(buildWebcamConstraints(), noopDeps({
             getUserMedia: () => Promise.resolve(stream),

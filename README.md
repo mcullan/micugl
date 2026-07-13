@@ -592,8 +592,9 @@ const cam = useWebcamTexture();                                 // never auto-st
   `status: 'idle' | 'loading' | 'ready' | 'error'`. A URL or `MediaStream` input is adopted into a
   hidden element micugl creates `muted` and `playsInline` and auto-plays (browsers only autoplay
   muted video). Pass an `HTMLVideoElement` you own and micugl **never** touches its playback — it
-  only pumps and samples what you play. `crossOrigin` (URL inputs, default `'anonymous'`) and `loop`
-  (owned elements) mirror the image hook.
+  only pumps and samples what you play. `crossOrigin` (default `'anonymous'`) and `loop` (default
+  `false`) apply only to a hidden element micugl creates, so in practice only to URL inputs: `loop`
+  is meaningless on a live `MediaStream` and is never touched on an element you own and play yourself.
 - **`useWebcamTexture(options?)`** returns `{ texture, status, error, start, stop, stream }` with
   `status: 'idle' | 'starting' | 'running' | 'stopped' | 'error'`. It is **explicit start/stop** and
   never auto-starts: opening a camera is a permission moment, so it waits for `start()`. `stop()` and

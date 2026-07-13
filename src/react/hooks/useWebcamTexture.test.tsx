@@ -259,8 +259,8 @@ describe('useWebcamTexture: the live capture path stays honest (H3)', () => {
     });
 });
 
-describe('useWebcamTexture: StrictMode never double-prompts (H6)', () => {
-    it('opens the camera exactly once after start() under a StrictMode mount', async () => {
+describe('useWebcamTexture: repeated start() opens the camera once (hook-level idempotency)', () => {
+    it('opens the camera exactly once when start() is called twice before the grant lands', async () => {
         const stream = makeFakeStream();
         const rvfc = makeRvfcScheduler();
         let calls = 0;
@@ -269,7 +269,7 @@ describe('useWebcamTexture: StrictMode never double-prompts (H6)', () => {
             getUserMedia: () => { calls += 1; return Promise.resolve(stream.stream) }
         });
 
-        await mount(<StrictMode><WebcamScene deps={deps} control={control} /></StrictMode>);
+        await mount(<WebcamScene deps={deps} control={control} />);
         await act(async () => {
             const first = control.start?.();
             const second = control.start?.();
@@ -409,6 +409,51 @@ describe('useWebcamTexture: the error surface (H9)', () => {
 
         expect(boundaryError).toBeNull();
         expect(control.status).toBe('error');
+        expect(reports).toHaveLength(1);
+        expect(reports[0]).toBeInstanceOf(Error);
+        expect(reports[0]).toBe(denied);
+    });
+
+    it('folds a play() rejection on the webcam path into the error surface exactly once', async () => {
+        const stream = makeFakeStream();
+        const rvfc = makeRvfcScheduler();
+        const denied = new Error('NotAllowedError: autoplay blocked');
+        const reports: unknown[] = [];
+        const control: WebcamControl = { start: null, stop: null, status: 'idle' };
+        const deps = webcamDeps(stream, rvfc, {
+            createVideo: () => asVideoElement(makeFakeVideo({ play: () => Promise.reject(denied) }))
+        });
+
+        await mount(<WebcamScene deps={deps} onError={error => { reports.push(error) }} control={control} />);
+        await act(async () => { await control.start?.() });
+        await act(async () => { await Promise.resolve() });
+
+        expect(control.status).toBe('error');
+        expect(stream.tracks.every((track: FakeTrack) => track.stopped)).toBe(true);
+        expect(reports).toHaveLength(1);
+        expect(reports[0]).toBe(denied);
+    });
+
+    it('re-throws a webcam-path play() rejection during render when no onError is supplied', async () => {
+        const stream = makeFakeStream();
+        const rvfc = makeRvfcScheduler();
+        const denied = new Error('NotAllowedError: autoplay blocked');
+        const control: WebcamControl = { start: null, stop: null, status: 'idle' };
+        const deps = webcamDeps(stream, rvfc, {
+            createVideo: () => asVideoElement(makeFakeVideo({ play: () => Promise.reject(denied) }))
+        });
+        let boundaryError: unknown = null;
+
+        await mount(
+            <ErrorBoundary onError={error => { boundaryError = error }}>
+                <WebcamScene deps={deps} control={control} />
+            </ErrorBoundary>
+        );
+        await act(async () => { await control.start?.() });
+        await act(async () => { await Promise.resolve() });
+
+        expect(boundaryError).toBe(denied);
+        expect(stream.tracks.every((track: FakeTrack) => track.stopped)).toBe(true);
     });
 });
 

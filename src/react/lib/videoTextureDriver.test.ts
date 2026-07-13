@@ -1,115 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { InvalidationKind } from '@/core/lib/frameInvalidation';
-import type {
-    VideoFrameCallbackMetadata,
-    VideoTextureDriverConfig
-} from '@/react/lib/videoTextureDriver';
+import type { FakeVideo } from '@/react/lib/fakeVideo';
+import { asVideoElement, makeFakeVideo, makeRvfcScheduler } from '@/react/lib/fakeVideo';
+import type { VideoTextureDriverConfig } from '@/react/lib/videoTextureDriver';
 import { createVideoTextureDriver } from '@/react/lib/videoTextureDriver';
-
-interface FakeVideo {
-    readyState: number;
-    videoWidth: number;
-    videoHeight: number;
-    paused: boolean;
-    ended: boolean;
-    muted: boolean;
-    playsInline: boolean;
-    loop: boolean;
-    crossOrigin: string;
-    src: string;
-    srcObject: unknown;
-    error: { code: number } | null;
-    play: () => Promise<void> | undefined;
-    pauseCalls: number;
-    loadCalls: number;
-    removedAttributes: string[];
-    setAttributes: [string, string][];
-    requestVideoFrameCallback?: (callback: (now: number, metadata: VideoFrameCallbackMetadata) => void) => number;
-    emitError: () => void;
-}
-
-function makeFakeVideo(overrides: Partial<FakeVideo> = {}): FakeVideo {
-    const listeners = new Map<string, (() => void)[]>();
-    const video: FakeVideo = {
-        readyState: 2,
-        videoWidth: 640,
-        videoHeight: 480,
-        paused: false,
-        ended: false,
-        muted: false,
-        playsInline: false,
-        loop: false,
-        crossOrigin: '',
-        src: '',
-        srcObject: null,
-        error: null,
-        play: () => undefined,
-        pauseCalls: 0,
-        loadCalls: 0,
-        removedAttributes: [],
-        setAttributes: [],
-        emitError: () => {
-            (listeners.get('error') ?? []).forEach(listener => { listener() });
-        },
-        ...overrides
-    };
-
-    const withDom = video as FakeVideo & {
-        pause: () => void;
-        load: () => void;
-        setAttribute: (name: string, value: string) => void;
-        removeAttribute: (name: string) => void;
-        addEventListener: (type: string, listener: () => void) => void;
-    };
-    withDom.pause = () => { video.pauseCalls += 1; video.paused = true };
-    withDom.load = () => { video.loadCalls += 1 };
-    withDom.setAttribute = (name, value) => { video.setAttributes.push([name, value]) };
-    withDom.removeAttribute = name => { video.removedAttributes.push(name) };
-    withDom.addEventListener = (type, listener) => {
-        const bucket = listeners.get(type) ?? [];
-        bucket.push(listener);
-        listeners.set(type, bucket);
-    };
-
-    return video;
-}
-
-function asElement(video: FakeVideo): HTMLVideoElement {
-    return video as unknown as HTMLVideoElement;
-}
-
-interface RvfcScheduler {
-    request: (video: HTMLVideoElement, callback: (now: number, metadata: VideoFrameCallbackMetadata) => void) => number;
-    cancel: (video: HTMLVideoElement, handle: number) => void;
-    fire: (now?: number) => void;
-    readonly pending: boolean;
-    readonly cancelled: number[];
-}
-
-function makeRvfcScheduler(): RvfcScheduler {
-    let callback: ((now: number, metadata: VideoFrameCallbackMetadata) => void) | null = null;
-    let handle = 0;
-    const cancelled: number[] = [];
-    return {
-        request: (_video, cb) => {
-            callback = cb;
-            handle += 1;
-            return handle;
-        },
-        cancel: (_video, h) => {
-            cancelled.push(h);
-            callback = null;
-        },
-        fire: (now = 0) => {
-            const current = callback;
-            callback = null;
-            current?.(now, { width: 640, height: 480 });
-        },
-        get pending() { return callback !== null },
-        get cancelled() { return cancelled }
-    };
-}
 
 interface RafScheduler {
     request: (callback: (now: number) => void) => number;
@@ -166,7 +61,7 @@ describe('videoTextureDriver: the requestVideoFrameCallback pump', () => {
         const rvfc = makeRvfcScheduler();
         const video = makeFakeVideo();
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -191,7 +86,7 @@ describe('videoTextureDriver: the requestAnimationFrame fallback pump', () => {
         const raf = makeRafScheduler();
         const video = makeFakeVideo({ paused: true });
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestAnimationFrame: raf.request,
             cancelAnimationFrame: raf.cancel
         });
@@ -219,7 +114,7 @@ describe('videoTextureDriver: getFrame readiness', () => {
         const rvfc = makeRvfcScheduler();
         const video = makeFakeVideo({ readyState: 0, videoWidth: 0, videoHeight: 0 });
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -254,7 +149,7 @@ describe('videoTextureDriver: resizeToPOT laziness', () => {
             } as unknown as HTMLCanvasElement;
         };
         const driver = createVideoTextureDriver(config({ resizeToPOT: true }), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel,
             createPotCanvas
@@ -295,7 +190,7 @@ describe('videoTextureDriver: stop', () => {
         const rvfc = makeRvfcScheduler();
         const video = makeFakeVideo();
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -318,12 +213,12 @@ describe('videoTextureDriver: stop', () => {
         const adopted = makeFakeVideo({ srcObject: { adopted: true } });
         let created = 0;
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => { created += 1; return asElement(makeFakeVideo()) },
+            createVideo: () => { created += 1; return asVideoElement(makeFakeVideo()) },
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
 
-        driver.start(asElement(adopted));
+        driver.start(asVideoElement(adopted));
         expect(created).toBe(0);
 
         driver.stop();
@@ -340,7 +235,7 @@ describe('videoTextureDriver: the playing predicate', () => {
         const rvfc = makeRvfcScheduler();
         const video = makeFakeVideo();
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -368,7 +263,7 @@ describe('videoTextureDriver: the play call', () => {
         const rvfc = makeRvfcScheduler();
         const video = makeFakeVideo({ play: () => undefined });
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -383,7 +278,7 @@ describe('videoTextureDriver: the play call', () => {
         const denied = new Error('NotAllowedError');
         const video = makeFakeVideo({ play: () => Promise.reject(denied) });
         const driver = createVideoTextureDriver(config({ onError: error => { activeError = error } }), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -401,7 +296,7 @@ describe('videoTextureDriver: the play call', () => {
         let reject: (error: unknown) => void = () => undefined;
         const video = makeFakeVideo({ play: () => new Promise<void>((_resolve, rej) => { reject = rej }) });
         const driver = createVideoTextureDriver(config(), {
-            createVideo: () => asElement(video),
+            createVideo: () => asVideoElement(video),
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         });
@@ -430,7 +325,7 @@ describe('videoTextureDriver: input change', () => {
                     throw new Error('unexpected extra createVideo');
                 }
                 created.push(next);
-                return asElement(next);
+                return asVideoElement(next);
             },
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
+import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
 import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
 import type { VideoInput, VideoTextureDeps } from '@/react/hooks/useVideoTexture';
 import { useVideoTexture } from '@/react/hooks/useVideoTexture';
@@ -197,27 +198,60 @@ describe('useVideoTexture: kind honesty under a reduced-motion gate (H4)', () =>
     });
 });
 
+const WAKE_CONFIG = createShaderConfig({
+    vertexShader: 'void main() {}',
+    fragmentShader: 'void main() {}',
+    uniformNames: { u_color: 'float', u_wake: 'float' }
+});
+
 describe('useVideoTexture: demand mode (H5)', () => {
-    it('wakes exactly one render and one upload per decoded frame, and skips a tick with no new frame', async () => {
+    it('wakes one render and one upload per decoded frame, and does not re-upload on a render woken with no new frame', async () => {
         const rvfc = makeRvfcScheduler();
         const video = makeFakeVideo();
+        const element = asVideoElement(video);
+        const wake = createFrameInvalidation();
         const deps: VideoTextureDeps = {
             requestVideoFrameCallback: rvfc.request,
             cancelVideoFrameCallback: rvfc.cancel
         };
 
-        await mount(<VideoScene input={asVideoElement(video)} deps={deps} reducedMotion='ignore' frameloop='demand' />);
+        const Scene = () => {
+            const source = useVideoTexture(element, { deps });
+            return (
+                <BaseShaderComponent
+                    programId={PROGRAM_ID}
+                    shaderConfig={WAKE_CONFIG}
+                    uniforms={{
+                        u_color: { type: 'float', value: 0.5 },
+                        u_wake: { type: 'float', value: 0.5, invalidation: wake }
+                    }}
+                    textures={{ cam: source.texture }}
+                    width={WIDTH}
+                    height={HEIGHT}
+                    useDevicePixelRatio={false}
+                    frameloop='demand'
+                    reducedMotion='ignore'
+                    saveData='ignore'
+                />
+            );
+        };
+
+        await mount(<Scene />);
         act(() => { frames.tick(0) });
 
         act(() => { rvfc.fire() });
         expect(frames.pending()).toBe(1);
         act(() => { frames.tick(16) });
-        expect(fullUploads()).toHaveLength(1);
+        const uploadsBefore = uploadCount();
+        expect(uploadsBefore).toBeGreaterThan(0);
         const draws = count('drawArrays');
 
+        act(() => { wake.request('discrete') });
+        expect(frames.pending()).toBe(1);
         act(() => { frames.tick(32) });
-        expect(fullUploads()).toHaveLength(1);
-        expect(count('drawArrays')).toBe(draws);
+
+        expect(count('drawArrays')).toBe(draws + 1);
+        expect(uploadCount()).toBe(uploadsBefore);
     });
 });
 

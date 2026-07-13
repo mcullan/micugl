@@ -9,6 +9,7 @@ export interface WebcamAcquisitionDeps {
     getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
     attach: (stream: MediaStream) => void;
     detach: () => void;
+    onError?: (error: unknown) => void;
 }
 
 export type WebcamAcquisitionStatus = 'idle' | 'starting' | 'running' | 'stopped' | 'error';
@@ -16,6 +17,7 @@ export type WebcamAcquisitionStatus = 'idle' | 'starting' | 'running' | 'stopped
 export interface WebcamAcquisition {
     start: () => Promise<void>;
     stop: () => void;
+    fail: (cause: unknown) => void;
     subscribe: (onChange: () => void) => () => void;
     readonly status: WebcamAcquisitionStatus;
     readonly error: Error | null;
@@ -126,6 +128,7 @@ export function createWebcamAcquisition(
             if (desired === 'running') {
                 desired = 'stopped';
                 setState({ kind: 'error', error: failure });
+                deps.onError?.(failure);
             } else {
                 setState({ kind: 'stopped' });
             }
@@ -181,9 +184,24 @@ export function createWebcamAcquisition(
         setState({ kind: 'stopped' });
     }
 
+    function fail(cause: unknown): void {
+        if (state.kind === 'error') {
+            return;
+        }
+        const failure = toError(cause);
+        desired = 'stopped';
+        if (state.kind === 'running') {
+            deps.detach();
+            stopTracks(state.stream);
+        }
+        setState({ kind: 'error', error: failure });
+        deps.onError?.(failure);
+    }
+
     return {
         start,
         stop,
+        fail,
         subscribe: onChange => {
             listeners.add(onChange);
             return () => { listeners.delete(onChange) };

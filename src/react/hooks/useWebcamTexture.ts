@@ -80,24 +80,28 @@ export function useWebcamTexture(options?: WebcamTextureOptions): WebcamTextureR
         idRef.current = `webcam-texture-${String(webcamTextureCounter)}`;
     }
 
+    const onErrorRef = useRef(options?.onError);
+    onErrorRef.current = options?.onError;
+
+    const acquisitionRef = useRef<WebcamAcquisition | null>(null);
+
     const configRef = useRef<VideoTextureDriverConfig>({
         crossOrigin: 'anonymous',
         loop: false,
         resizeToPOT,
-        onError: options?.onError
+        onError: cause => { acquisitionRef.current?.fail(cause) }
     });
     configRef.current.resizeToPOT = resizeToPOT;
-    configRef.current.onError = options?.onError;
 
     const driverRef = useRef<VideoTextureDriver | null>(null);
     driverRef.current ??= createVideoTextureDriver(configRef.current, options?.deps);
     const driver = driverRef.current;
 
-    const acquisitionRef = useRef<WebcamAcquisition | null>(null);
     acquisitionRef.current ??= createWebcamAcquisition(buildWebcamConstraints(constraints), {
         getUserMedia: options?.deps?.getUserMedia,
         attach: stream => { driver.start(stream) },
-        detach: () => { driver.stop() }
+        detach: () => { driver.stop() },
+        onError: cause => { onErrorRef.current?.(cause) }
     });
     const acquisition = acquisitionRef.current;
 
