@@ -98,6 +98,23 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
     return { promise, resolve, reject };
 }
 
+interface ClosableBitmap {
+    width: number;
+    height: number;
+    closed: number;
+    close: () => void;
+}
+
+function closableBitmap(width: number, height: number): ClosableBitmap {
+    const record: ClosableBitmap = {
+        width,
+        height,
+        closed: 0,
+        close: (): void => { record.closed += 1 }
+    };
+    return record;
+}
+
 describe('useImageTexture: a direct ImageBitmap source', () => {
     it('is ready after the mount effect, bumps the version once, and requests one discrete frame', async () => {
         const probe: Probe = { current: null };
@@ -222,6 +239,104 @@ describe('useImageTexture: a superseded load', () => {
 
         expect(currentResult(probe).texture.getFrame()).toBe(fastFrame);
         expect(currentResult(probe).texture.version).toBe(1);
+    });
+});
+
+describe('useImageTexture: clearing the input back to null', () => {
+    it('drops the frame to null and stays idle without bumping the version or requesting a frame', async () => {
+        const probe: Probe = { current: null };
+        const kinds: InvalidationKind[] = [];
+        const frame = bitmap(64, 48);
+
+        await mount(<Scene input={frame} probe={probe} kinds={kinds} />);
+        await flush();
+        expect(currentResult(probe).status).toBe('ready');
+        expect(currentResult(probe).texture.version).toBe(1);
+
+        await mount(<Scene input={null} probe={probe} kinds={kinds} />);
+        await flush();
+
+        expect(currentResult(probe).status).toBe('idle');
+        expect(currentResult(probe).texture.getFrame()).toBeNull();
+        expect(currentResult(probe).texture.version).toBe(1);
+        expect(kinds).toEqual(['discrete']);
+    });
+});
+
+describe('useImageTexture: resizeToPOT with an ImageData source', () => {
+    it('fails loud before the draw, naming resizeToPOT, ImageData, and createImageBitmap', async () => {
+        class ImageDataStub {
+            constructor(
+                public data: Uint8ClampedArray,
+                public width: number,
+                public height: number
+            ) {}
+        }
+        (globalThis as { ImageData?: unknown }).ImageData = ImageDataStub;
+
+        const probe: Probe = { current: null };
+        const reports: unknown[] = [];
+        const source = new ImageDataStub(new Uint8ClampedArray(4), 640, 480) as unknown as ImageInput;
+
+        try {
+            await mount(
+                <Scene
+                    input={source}
+                    options={{ resizeToPOT: true, onError: error => { reports.push(error) } }}
+                    probe={probe}
+                />
+            );
+            await flush();
+
+            expect(currentResult(probe).status).toBe('error');
+            expect(reports).toHaveLength(1);
+            const message = (currentResult(probe).error as Error).message;
+            expect(message).toContain('resizeToPOT');
+            expect(message).toContain('ImageData');
+            expect(message).toContain('createImageBitmap');
+        } finally {
+            delete (globalThis as { ImageData?: unknown }).ImageData;
+        }
+    });
+});
+
+describe('useImageTexture: a superseded Blob load closes only the bitmap it created', () => {
+    it('closes the discarded self-created bitmap exactly once and never the winning one', async () => {
+        const pending: { resolve: (value: ImageBitmap) => void }[] = [];
+        const deps: ImageTextureDeps = {
+            createImageBitmap: () => {
+                const control = deferred<ImageBitmap>();
+                pending.push({ resolve: control.resolve });
+                return control.promise;
+            }
+        };
+        const probe: Probe = { current: null };
+        const slow = new Blob(['slow']);
+        const fast = new Blob(['fast']);
+
+        await mount(<Scene input={slow} options={{ deps }} probe={probe} />);
+        await flush();
+        await mount(<Scene input={fast} options={{ deps }} probe={probe} />);
+        await flush();
+
+        const fastBitmap = closableBitmap(200, 100);
+        const slowBitmap = closableBitmap(50, 40);
+
+        await act(async () => {
+            pending[1].resolve(fastBitmap as unknown as ImageBitmap);
+            await Promise.resolve();
+        });
+        await flush();
+
+        await act(async () => {
+            pending[0].resolve(slowBitmap as unknown as ImageBitmap);
+            await Promise.resolve();
+        });
+        await flush();
+
+        expect(slowBitmap.closed).toBe(1);
+        expect(fastBitmap.closed).toBe(0);
+        expect(currentResult(probe).texture.getFrame()).toBe(fastBitmap as unknown as ImageInput);
     });
 });
 

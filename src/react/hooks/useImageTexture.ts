@@ -47,6 +47,13 @@ function isImageElement(value: unknown): value is HTMLImageElement {
     return typeof HTMLImageElement !== 'undefined' && value instanceof HTMLImageElement;
 }
 
+function closeOwnedBitmap(decoded: TextureUploadSource): void {
+    const closable = decoded as { close?: () => void };
+    if (typeof closable.close === 'function') {
+        closable.close();
+    }
+}
+
 async function decodeInput(
     input: ImageInput,
     crossOrigin: string,
@@ -120,6 +127,7 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
 
     useEffect(() => {
         if (input === null) {
+            frameRef.current = null;
             setStatus('idle');
             return;
         }
@@ -136,7 +144,12 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
 
             try {
                 const decoded = await decodeInput(input, crossOrigin, loaderDeps);
-                if (cancelled) return;
+                if (cancelled) {
+                    if (isBlob(input)) {
+                        closeOwnedBitmap(decoded);
+                    }
+                    return;
+                }
 
                 const frame = shouldResize
                     ? resizeSourceToPot(decoded, deps?.createPotCanvas ?? defaultPotCanvasFactory)

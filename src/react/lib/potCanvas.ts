@@ -21,6 +21,10 @@ export function defaultPotCanvasFactory(width: number, height: number): HTMLCanv
     return canvas;
 }
 
+function isImageData(source: TextureUploadSource): source is ImageData {
+    return typeof ImageData !== 'undefined' && source instanceof ImageData;
+}
+
 export function resizeSourceToPot(
     source: TextureUploadSource,
     createCanvas: PotCanvasFactory
@@ -31,6 +35,14 @@ export function resizeSourceToPot(
 
     if (potWidth === width && potHeight === height) {
         return source;
+    }
+
+    if (isImageData(source)) {
+        throw new Error(
+            'micugl useImageTexture: resizeToPOT cannot draw an ImageData source onto a power-of-two canvas '
+            + 'because ImageData is not a CanvasImageSource that drawImage accepts. Convert the ImageData with '
+            + 'createImageBitmap(imageData) before passing it in, or drop resizeToPOT for this input.'
+        );
     }
 
     const canvas = createCanvas(potWidth, potHeight);

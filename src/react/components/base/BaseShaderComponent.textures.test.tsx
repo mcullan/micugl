@@ -275,10 +275,17 @@ describe('BaseShaderComponent textures, structural re-init when a texture is add
         expect(samplerUnits('u_overlay')).toEqual([1]);
         expect(count('createProgram')).toBe(programsBeforeAdd + 1);
 
+        const preExistingReuploadsBefore = fullUploads()
+            .filter(upload => upload.width === 320 && upload.height === 240).length;
+
         b.produceFrame(128, 96);
         expect(frames.pending()).toBe(1);
         act(() => { frames.tick(32) });
         expect(fullUploads()).toContainEqual({ width: 128, height: 96 });
+
+        const preExistingReuploadsAfter = fullUploads()
+            .filter(upload => upload.width === 320 && upload.height === 240).length;
+        expect(preExistingReuploadsAfter).toBe(preExistingReuploadsBefore + 1);
 
         const programsAfterAdd = count('createProgram');
         a.produceFrame(320, 240);

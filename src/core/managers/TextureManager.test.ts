@@ -177,6 +177,18 @@ describe('TextureManager.defineTexture', () => {
         expect(calls.some(call => call.name === 'createTexture')).toBe(true);
         expect(manager.has('u_image')).toBe(true);
     });
+
+    it('generates mipmaps for the 1x1 placeholder when the min-filter is a mipmap filter', () => {
+        const { manager, calls } = setup();
+        const { source } = createSource('u_image', { minFilter: GL_LINEAR_MIPMAP_LINEAR });
+
+        manager.defineTexture(source);
+
+        const sequence = calls
+            .map(call => call.name)
+            .filter(name => name === 'texImage2D' || name === 'generateMipmap');
+        expect(sequence).toEqual(['texImage2D', 'generateMipmap']);
+    });
 });
 
 describe('TextureManager.uploadIfStale', () => {

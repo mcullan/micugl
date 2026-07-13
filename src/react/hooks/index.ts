@@ -5,6 +5,4 @@ export { useImageTexture } from './useImageTexture';
 export { usePingPongPasses } from './usePingPongPasses';
 export { useReducedMotion } from './useReducedMotion';
 export { useSaveData } from './useSaveData';
-export type { TextureBindingsResult } from './useTextureBindings';
-export { useTextureBindings } from './useTextureBindings';
 export { useUniformUpdaters } from './useUniformUpdaters';

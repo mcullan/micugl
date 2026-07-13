@@ -11,8 +11,6 @@ export { useImageTexture } from './hooks/useImageTexture';
 export { usePingPongPasses } from './hooks/usePingPongPasses';
 export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';
-export type { TextureBindingsResult } from './hooks/useTextureBindings';
-export { useTextureBindings } from './hooks/useTextureBindings';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
 export type { AudioAnalyserDriverDeps } from './lib/audioAnalyserDriver';
 export { createCommonUpdaters, createUniformUpdater, createUniformUpdaters } from './lib/createUniformUpdater';

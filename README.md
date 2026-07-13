@@ -541,6 +541,8 @@ const overlay = useImageTexture(file);
 - **`useImageTexture(input, options?)`** returns `{ texture, status, error }` where `status` is
   `'idle' | 'loading' | 'ready' | 'error'`. `input: null` is idle (render before a file is chosen).
   Swapping the input keeps the old frame on screen until the new one decodes — no flash.
+  Clearing the input back to `null` stops updates and the canvas keeps the last uploaded frame;
+  unmount the component or swap the `textures` record to reset it to the placeholder.
 - **CORS.** URL inputs default to `crossOrigin: 'anonymous'`, so a cross-origin image needs
   permissive CORS headers or the upload taints the canvas and throws. Pass `crossOrigin` to change
   it.

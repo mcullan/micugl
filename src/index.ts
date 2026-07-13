@@ -30,8 +30,7 @@ export type {
     AudioUniformsResult,
     ImageTextureDeps,
     ImageTextureOptions,
-    ImageTextureResult,
-    TextureBindingsResult
+    ImageTextureResult
 } from './react';
 export {
     BaseInstancedShaderComponent,
@@ -48,7 +47,6 @@ export {
     usePingPongPasses,
     useReducedMotion,
     useSaveData,
-    useTextureBindings,
     useUniformUpdaters
 } from './react';
 export type {

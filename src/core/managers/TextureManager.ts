@@ -97,6 +97,9 @@ export class TextureManager {
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, PLACEHOLDER_PIXEL
         );
+        if (isMipmapMinFilter(options.minFilter)) {
+            gl.generateMipmap(gl.TEXTURE_2D);
+        }
 
         this.resources.set(id, { texture, dimensions: null, options, uploadedVersion: null, owner: source });
     }
