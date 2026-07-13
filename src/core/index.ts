@@ -7,11 +7,21 @@ export {
     GL_FLOAT,
     GL_HALF_FLOAT_OES,
     GL_LINEAR,
+    GL_MIRRORED_REPEAT,
     GL_NEAREST,
+    GL_REPEAT,
     GL_RGBA,
     GL_UNSIGNED_BYTE
 } from '@/core/lib/glConstants';
+export { isPowerOfTwo } from '@/core/lib/math';
+export type { SourceDimensions, UploadMode } from '@/core/lib/sourceTextureOptions';
+export {
+    isUploadable,
+    resolveSourceTextureOptions,
+    sourceDimensions
+} from '@/core/lib/sourceTextureOptions';
 export { FBOManager } from '@/core/managers/FBOManager';
+export { TextureManager } from '@/core/managers/TextureManager';
 export { WebGLManager } from '@/core/managers/WebGLManager';
 export { Passes } from '@/core/systems/Passes';
 export { Postprocessing } from '@/core/systems/Postprocessing';
@@ -27,13 +37,18 @@ export type {
     PingPongState,
     RenderOptions,
     RenderPass,
+    ResolvedSourceTextureOptions,
     ResolvedTextureOptions,
     ShaderAttributeLocations,
     ShaderProgramConfig,
     ShaderRenderCallback,
     ShaderResources,
     ShaderUniformLocations,
+    SourceTextureOptions,
+    TextureBindingSpec,
     TextureOptions,
+    TextureSource,
+    TextureUploadSource,
     UniformConfig,
     UniformType,
     UniformUpdateFn,

@@ -4,7 +4,9 @@ export type {
     GLCall,
     GLStubConfig,
     GLStubHandle,
+    PixelStoreCallRecord,
     TexImage2DCallRecord,
+    TexSubImage2DCallRecord,
     UniformCallRecord
 } from '@/testing/glStub';
 /** @experimental */
