@@ -34,7 +34,7 @@ export function resizeSourceToPot(
     const { width, height } = sourceDimensions(source);
     if (width < 1 || height < 1) {
         throw new Error(
-            `micugl useImageTexture: resizeToPOT got a source measuring ${width}x${height}. A source without `
+            `micugl textures: resizeToPOT got a source measuring ${width}x${height}. A source without `
             + 'positive dimensions has no pixels to draw onto a power-of-two canvas, and copying it would upload '
             + 'a blank texture instead of failing loud. Size or decode the source before passing it in.'
         );
@@ -48,7 +48,7 @@ export function resizeSourceToPot(
 
     if (isImageData(source)) {
         throw new Error(
-            'micugl useImageTexture: resizeToPOT cannot draw an ImageData source onto a power-of-two canvas '
+            'micugl textures: resizeToPOT cannot draw an ImageData source onto a power-of-two canvas '
             + 'because ImageData is not a CanvasImageSource that drawImage accepts. Convert the ImageData with '
             + 'createImageBitmap(imageData) before passing it in, or drop resizeToPOT for this input.'
         );
@@ -58,7 +58,7 @@ export function resizeSourceToPot(
     const context = canvas.getContext('2d');
     if (!context) {
         throw new Error(
-            'micugl useImageTexture: resizeToPOT needs a 2D canvas context to draw the source onto a '
+            'micugl textures: resizeToPOT needs a 2D canvas context to draw the source onto a '
             + 'power-of-two canvas, but getContext("2d") returned null.'
         );
     }

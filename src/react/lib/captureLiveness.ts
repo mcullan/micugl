@@ -2,7 +2,7 @@ export type SpringsInFlight = () => boolean;
 
 export type NonReproducible = () => boolean;
 
-export type CaptureBlocker = 'spring' | 'audio';
+export type CaptureBlocker = 'spring' | 'audio' | 'texture';
 
 export type CapturesAreNonReproducible = () => CaptureBlocker | null;
 
@@ -16,6 +16,16 @@ export function nonReproducibleCaptureMessage(
             `${engine}.${method}: a spring transition is still in flight. Springs integrate frame to frame, so a `
             + 'captured frame depends on the frames rendered before it, and this export would not reproduce. Wait for '
             + 'the spring to settle, or use a tween transition, which is deterministic under setFrame.'
+        );
+    }
+
+    if (blocker === 'texture') {
+        return (
+            `${engine}.${method}: a live video or webcam texture is playing. Every frame samples whatever the video `
+            + 'or camera happens to be showing right now, so the picture is wall-clock-dependent and a synthesized '
+            + 'frame number cannot reproduce it. This export would not reproduce. Pause the video or call stop() on '
+            + 'the webcam hook before exporting for a deterministic frame; renderToBlob() with no frame, record() and '
+            + 'captureStream() capture the live picture and remain available.'
         );
     }
 

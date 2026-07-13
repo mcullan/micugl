@@ -274,6 +274,7 @@ export interface TextureSource {
   options: ResolvedSourceTextureOptions;
   getFrame: () => TextureUploadSource | null;
   invalidation: FrameInvalidation;
+  nonReproducible?: () => boolean;
 }
 
 export interface TextureBindingSpec {

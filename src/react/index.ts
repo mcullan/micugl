@@ -12,6 +12,20 @@ export { usePingPongPasses } from './hooks/usePingPongPasses';
 export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
+export type {
+    VideoInput,
+    VideoTextureDeps,
+    VideoTextureOptions,
+    VideoTextureResult
+} from './hooks/useVideoTexture';
+export { useVideoTexture } from './hooks/useVideoTexture';
+export type {
+    WebcamStatus,
+    WebcamTextureDeps,
+    WebcamTextureOptions,
+    WebcamTextureResult
+} from './hooks/useWebcamTexture';
+export { useWebcamTexture } from './hooks/useWebcamTexture';
 export type { AudioAnalyserDriverDeps } from './lib/audioAnalyserDriver';
 export { createCommonUpdaters, createUniformUpdater, createUniformUpdaters } from './lib/createUniformUpdater';
 export type { InstanceAttribute, InstancingConfig, WorkerMode } from '@/types';

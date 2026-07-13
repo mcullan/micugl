@@ -30,7 +30,15 @@ export type {
     AudioUniformsResult,
     ImageTextureDeps,
     ImageTextureOptions,
-    ImageTextureResult
+    ImageTextureResult,
+    VideoInput,
+    VideoTextureDeps,
+    VideoTextureOptions,
+    VideoTextureResult,
+    WebcamStatus,
+    WebcamTextureDeps,
+    WebcamTextureOptions,
+    WebcamTextureResult
 } from './react';
 export {
     BaseInstancedShaderComponent,
@@ -47,7 +55,9 @@ export {
     usePingPongPasses,
     useReducedMotion,
     useSaveData,
-    useUniformUpdaters
+    useUniformUpdaters,
+    useVideoTexture,
+    useWebcamTexture
 } from './react';
 export type {
     ActiveUniform,
