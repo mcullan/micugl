@@ -223,6 +223,8 @@ animate everything else from `u_time` inside the shader.
 
 - **useUniformUpdaters(programId, uniforms)** → React memoized uniform updaters
 - **useImageTexture(input, options?)** → { texture, status, error } for the `textures` prop
+- **useVideoTexture(input, options?)** → { texture, status, error, video } for the `textures` prop
+- **useWebcamTexture(options?)** → { texture, status, error, start, stop, stream } for the `textures` prop
 - **usePingPongPasses(options)** → { passes, framebuffers } for engine
 - **useDarkMode()** → boolean dark‑mode flag
 - **useReducedMotion()** → boolean, live `prefers-reduced-motion: reduce` state
@@ -560,6 +562,64 @@ const overlay = useImageTexture(file);
 - **Worker mode.** `textures` under `worker` throws at mount: texture frames decode on the main
   thread and cannot cross to the worker, so it fails loud instead of sampling a blank placeholder.
   Turn worker mode off on that component, or drop `textures`.
+
+### Video and webcam textures
+
+`useVideoTexture` samples a playing `<video>` (a file URL, a `MediaStream`, or an element you own)
+into a `sampler2D`; `useWebcamTexture` opens the camera and feeds it the same way. Both hand back
+the same stable `TextureSource` the `textures` prop expects, and both pump one upload per decoded
+frame — driven by the video's own clock through `requestVideoFrameCallback` (an internal
+`requestAnimationFrame` loop where that is missing), so a paused tab or a `demand` engine costs
+nothing between frames.
+
+```tsx
+const clip = useVideoTexture('https://example.com/clip.mp4');   // URL | MediaStream | HTMLVideoElement | null
+const cam = useWebcamTexture();                                 // never auto-starts
+
+<button onClick={() => cam.start()}>Enable camera</button>
+<button onClick={cam.stop}>Disable camera</button>
+
+<BaseShaderComponent
+  programId="scene"
+  shaderConfig={config}
+  uniforms={{}}
+  textures={{ cam: cam.texture }}                               // -> u_cam (unit 0)
+  frameloop="demand"
+/>
+```
+
+- **`useVideoTexture(input, options?)`** returns `{ texture, status, error, video }` with
+  `status: 'idle' | 'loading' | 'ready' | 'error'`. A URL or `MediaStream` input is adopted into a
+  hidden element micugl creates `muted` and `playsInline` and auto-plays (browsers only autoplay
+  muted video). Pass an `HTMLVideoElement` you own and micugl **never** touches its playback — it
+  only pumps and samples what you play. `crossOrigin` (URL inputs, default `'anonymous'`) and `loop`
+  (owned elements) mirror the image hook.
+- **`useWebcamTexture(options?)`** returns `{ texture, status, error, start, stop, stream }` with
+  `status: 'idle' | 'starting' | 'running' | 'stopped' | 'error'`. It is **explicit start/stop** and
+  never auto-starts: opening a camera is a permission moment, so it waits for `start()`. `stop()` and
+  unmount end every track, so the OS camera indicator clears. `deviceId`, `facingMode`, `width` and
+  `height` pass straight through to the constraints; the constraints always set `audio: false` (there
+  is no option to record audio). Changing those constraints on a live hook throws — give the
+  component a `key` that changes with them so React remounts it and stops the old camera.
+- **Permissions and secure context.** `getUserMedia` only exists in a secure context: serve over
+  `https`, or from `localhost`. A denied or unavailable camera reaches `status: 'error'` and, with no
+  `onError`, re-throws during render to your nearest error boundary — same convention as the image
+  hook.
+- **Reduced motion.** The first decoded frame requests a *discrete* repaint and every frame after it
+  a *continuous* one, so a motion-gated scene paints one frozen poster of the opening frame and then
+  stays still, instead of either animating or showing black.
+- **Capture semantics.** A playing video or a running webcam is wall-clock-dependent, so
+  `renderToBlob({ frame })` and `renderSequence` **throw** — a synthesized frame number cannot
+  reproduce a live picture. Pause the video or `stop()` the camera first for a deterministic export.
+  The live-clock paths — `renderToBlob()` with no frame, `record()`, `captureStream()` — capture the
+  live picture and stay available (the "capture button on a webcam filter" case).
+- **`resizeToPOT`.** Supported, and lazy: the power-of-two copy is drawn at most once per decoded
+  frame, reusing one canvas until the video's dimensions change. It legalizes `REPEAT` wrap and
+  mipmap min-filters, but a mipmapped video regenerates mipmaps on every upload — that is a per-frame
+  cost on top of the per-frame copy, so leave the default `LINEAR` filter unless you need it.
+- **SSR.** Importing the hooks touches no browser global, and `getUserMedia` / the element are read
+  lazily inside `start()` / the mount effect, so the hooks render on the server and only reach for the
+  camera in the browser.
 
 ## Worker rendering (OffscreenCanvas)
 

@@ -16,6 +16,7 @@ import { RerenderStorm } from './RerenderStorm';
 import { StaticIdle } from './StaticIdle';
 import { Transitions } from './Transitions';
 import { VisualFixed } from './VisualFixed';
+import { Webcam } from './Webcam';
 import { WorkerContextLoss } from './WorkerContextLoss';
 import { WorkerJank } from './WorkerJank';
 
@@ -33,6 +34,7 @@ export const scenes: Record<string, ComponentType> = {
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
     'image-texture': ImageTexture,
+    'webcam': Webcam,
     'instanced-particles': InstancedParticles,
     'particles-components': ParticlesComponents,
     'worker-jank': WorkerJank,
