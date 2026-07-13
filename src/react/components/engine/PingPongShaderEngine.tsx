@@ -209,6 +209,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             uniforms: workerPrograms,
             fastPath: true,
             instancing: false,
+            textures: false,
             passes: workerPasses
         })
         : null;

@@ -399,7 +399,11 @@ export class WebGLManager {
     private setSamplerUnit(resources: ShaderResources, programId: string, binding: TextureBindingSpec): void {
         const location = this.checkedUniformLocation(resources, programId, binding.samplerName, 'sampler2D');
         if (location === null) {
-            return;
+            throw new Error(
+                `WebGLManager.registerTextureBinding: the shader on program "${programId}" never samples `
+                + `"${binding.samplerName}", so binding a texture to it can never affect the picture. Sample it in `
+                + 'the shader, fix the sampler name, or remove its entry from the "textures" prop.'
+            );
         }
 
         this.useProgram(resources.program);

@@ -1,4 +1,4 @@
-import type { FramebufferOptions, InstancingConfig, ShaderProgramConfig } from '@/types';
+import type { FramebufferOptions, InstancingConfig, ShaderProgramConfig, TextureBindingSpec } from '@/types';
 
 const FIELD_SEPARATOR = '\u0000';
 const ENTRY_SEPARATOR = '\u0001';
@@ -42,6 +42,20 @@ export function framebuffersContentKey(framebuffers: Record<string, FramebufferO
             String(options.height),
             String(options.textureCount ?? 2),
             JSON.stringify(options.textureOptions ?? {})
+        ].join(FIELD_SEPARATOR))
+        .join(ENTRY_SEPARATOR);
+}
+
+export function texturesContentKey(bindings: TextureBindingSpec[] | undefined): string {
+    if (!bindings || bindings.length === 0) {
+        return '';
+    }
+    return bindings
+        .map(binding => [
+            binding.samplerName,
+            String(binding.unit),
+            binding.source.id,
+            JSON.stringify(binding.source.options)
         ].join(FIELD_SEPARATOR))
         .join(ENTRY_SEPARATOR);
 }

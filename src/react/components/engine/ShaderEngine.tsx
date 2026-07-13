@@ -30,7 +30,12 @@ import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
 import { nonReproducibleCaptureMessage } from '@/react/lib/captureLiveness';
-import { instancingContentKey, programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
+import {
+    instancingContentKey,
+    programConfigContentKey,
+    singleProgramEntry,
+    texturesContentKey
+} from '@/react/lib/contentKeys';
 import { createDelegatingInstancingConfig } from '@/react/lib/instancingConfig';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { createRecording } from '@/react/lib/record';
@@ -62,6 +67,7 @@ import type {
     RenderToBlobOptions,
     SequenceOptions,
     ShaderHandle,
+    TextureBindingSpec,
     WorkerMode
 } from '@/types';
 import type { WorkerBridge } from '@/worker/WorkerBridge';
@@ -81,6 +87,7 @@ interface ShaderEngineBaseProps extends Omit<RenderControlProps, 'worker' | 'cre
     uniformUpdaters?: Record<string, UniformUpdaterEntry[]>;
     useFastPath?: boolean;
     instancing?: InstancingConfig;
+    textureBindings?: TextureBindingSpec[];
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
     workerSkipDefaultUniforms?: boolean;
@@ -169,6 +176,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     uniformUpdaters = DEFAULT_UNIFORM_UPDATERS,
     useFastPath = false,
     instancing,
+    textureBindings,
     debug = false,
     debugPortRef,
     workerUniforms,
@@ -193,7 +201,9 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const motionGate = useMotionGate(reducedMotion, saveData);
 
     const [keyProgramId, keyProgramConfig] = singleProgramEntry(programConfigs);
-    const contentKey = `${programConfigContentKey(keyProgramId, keyProgramConfig)}|${instancingContentKey(instancing)}`;
+    const contentKey = programConfigContentKey(keyProgramId, keyProgramConfig)
+        + `|${instancingContentKey(instancing)}`
+        + `|${texturesContentKey(textureBindings)}`;
 
     const engineIdRef = useRef<string>('');
     if (!engineIdRef.current) {
@@ -227,6 +237,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             uniforms: workerPrograms,
             fastPath: useFastPath,
             instancing: instancing !== undefined,
+            textures: (textureBindings?.length ?? 0) > 0,
             liveUniforms: { programId: keyProgramId, names: liveNames }
         })
         : null;
@@ -234,7 +245,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const liveRef = useRef({ programId: keyProgramId, programs: workerPrograms, names: liveNames });
     liveRef.current = { programId: keyProgramId, programs: workerPrograms, names: liveNames };
 
-    const initPropsRef = useRef({ programConfigs, uniformUpdaters, instancing });
+    const initPropsRef = useRef({ programConfigs, uniformUpdaters, instancing, textureBindings });
     const renderConfigRef = useRef({ useFastPath, renderOptions, renderCallback });
 
     const dprMin = Array.isArray(dpr) ? dpr[0] : dpr;
@@ -510,7 +521,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     workerActiveRef.current = workerActive;
 
     useEffect(() => {
-        initPropsRef.current = { programConfigs, uniformUpdaters, instancing };
+        initPropsRef.current = { programConfigs, uniformUpdaters, instancing, textureBindings };
         renderConfigRef.current = { useFastPath, renderOptions, renderCallback };
         instancingRef.current = instancing;
         applySizeRef.current = applySize;
@@ -605,6 +616,20 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                 ups?.forEach(u => {
                     manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
                 });
+
+                const bindings = initPropsRef.current.textureBindings;
+                if (bindings && bindings.length > 0) {
+                    if (!renderConfigRef.current.useFastPath) {
+                        throw new Error(
+                            'ShaderEngine: textures require useFastPath. The default renderCallback binds no '
+                            + 'source textures, so the samplers would read the 1x1 placeholder. Set useFastPath, '
+                            + 'or remove the "textures" prop.'
+                        );
+                    }
+                    for (const binding of bindings) {
+                        manager.registerTextureBinding(pid, binding);
+                    }
+                }
 
                 readyRef.current = true;
                 applySizeRef.current();

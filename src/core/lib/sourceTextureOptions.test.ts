@@ -10,8 +10,8 @@ import {
     GL_REPEAT
 } from '@/core/lib/glConstants';
 import {
-    assertNonMipmapMinFilter,
     assertNpotCompatible,
+    isMipmapMinFilter,
     isUploadable,
     resolveSourceTextureOptions,
     sourceDimensions,
@@ -57,11 +57,10 @@ describe('resolveSourceTextureOptions', () => {
         });
     });
 
-    it('throws on a mipmap min-filter instead of silently downgrading it to LINEAR', () => {
-        expect(() => resolveSourceTextureOptions({ minFilter: GL_LINEAR_MIPMAP_LINEAR }))
-            .toThrow(/mipmap filter/);
-        expect(() => resolveSourceTextureOptions({ minFilter: GL_NEAREST_MIPMAP_NEAREST }))
-            .toThrow(/will not quietly downgrade/);
+    it('no longer throws on a mipmap min-filter: resizeToPOT can legalize it, so the check moves to upload', () => {
+        expect(() => resolveSourceTextureOptions({ minFilter: GL_LINEAR_MIPMAP_LINEAR })).not.toThrow();
+        expect(resolveSourceTextureOptions({ minFilter: GL_LINEAR_MIPMAP_LINEAR }).minFilter)
+            .toBe(GL_LINEAR_MIPMAP_LINEAR);
     });
 });
 
@@ -76,12 +75,12 @@ describe('sourceTextureOptionsEqual', () => {
     });
 });
 
-describe('assertNonMipmapMinFilter', () => {
-    it('rejects every mipmap min-filter and accepts the two that need no mipmaps', () => {
-        expect(() => { assertNonMipmapMinFilter(GL_LINEAR_MIPMAP_LINEAR) }).toThrow(/mipmap filter/);
-        expect(() => { assertNonMipmapMinFilter(GL_NEAREST_MIPMAP_NEAREST) }).toThrow(/mipmap filter/);
-        expect(() => { assertNonMipmapMinFilter(GL_LINEAR) }).not.toThrow();
-        expect(() => { assertNonMipmapMinFilter(GL_NEAREST) }).not.toThrow();
+describe('isMipmapMinFilter', () => {
+    it('names the mipmap min-filters and clears the two that need no mipmaps', () => {
+        expect(isMipmapMinFilter(GL_LINEAR_MIPMAP_LINEAR)).toBe(true);
+        expect(isMipmapMinFilter(GL_NEAREST_MIPMAP_NEAREST)).toBe(true);
+        expect(isMipmapMinFilter(GL_LINEAR)).toBe(false);
+        expect(isMipmapMinFilter(GL_NEAREST)).toBe(false);
     });
 });
 
@@ -89,6 +88,17 @@ describe('assertNpotCompatible', () => {
     it('accepts CLAMP_TO_EDGE on a non-power-of-two source', () => {
         const options = resolveSourceTextureOptions();
         expect(() => { assertNpotCompatible(options, 640, 480) }).not.toThrow();
+    });
+
+    it('throws on a mipmap min-filter over a non-power-of-two source, naming resizeToPOT as the remedy', () => {
+        const options = resolveSourceTextureOptions({ minFilter: GL_LINEAR_MIPMAP_LINEAR });
+        expect(() => { assertNpotCompatible(options, 640, 480) }).toThrow(/resizeToPOT/);
+        expect(() => { assertNpotCompatible(options, 640, 480) }).toThrow(/not power-of-two/);
+    });
+
+    it('accepts a mipmap min-filter once the source is power-of-two on both axes', () => {
+        const options = resolveSourceTextureOptions({ minFilter: GL_LINEAR_MIPMAP_LINEAR });
+        expect(() => { assertNpotCompatible(options, 512, 256) }).not.toThrow();
     });
 
     it('throws when REPEAT wrap meets a non-power-of-two source', () => {

@@ -25,7 +25,14 @@ export {
     vec4,
     WebGLManager
 } from './core';
-export type { AudioAnalyserDriverDeps, AudioUniformsResult } from './react';
+export type {
+    AudioAnalyserDriverDeps,
+    AudioUniformsResult,
+    ImageTextureDeps,
+    ImageTextureOptions,
+    ImageTextureResult,
+    TextureBindingsResult
+} from './react';
 export {
     BaseInstancedShaderComponent,
     BasePingPongShaderComponent,
@@ -37,9 +44,11 @@ export {
     ShaderEngine,
     useAudioUniforms,
     useDarkMode,
+    useImageTexture,
     usePingPongPasses,
     useReducedMotion,
     useSaveData,
+    useTextureBindings,
     useUniformUpdaters
 } from './react';
 export type {
@@ -65,6 +74,7 @@ export type {
     FramebufferOptions,
     FramebufferResources,
     Frameloop,
+    ImageInput,
     Mat2,
     Mat3,
     Mat4,
@@ -95,6 +105,7 @@ export type {
     TextureBindingSpec,
     TextureOptions,
     TextureSource,
+    TextureStatus,
     TextureUploadSource,
     TweenTransitionConfig,
     TypedFloat32Array,

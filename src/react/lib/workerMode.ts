@@ -23,6 +23,7 @@ export type WorkerBlock =
     | { kind: 'uniforms-missing' }
     | { kind: 'fast-path' }
     | { kind: 'instancing' }
+    | { kind: 'textures' }
     | { kind: 'live-uniform-unknown'; name: string }
     | { kind: 'uniform-function'; programId: string; name: string }
     | { kind: 'uniform-builtin-function'; programId: string; name: string }
@@ -35,6 +36,7 @@ export interface WorkerBlockInputs {
     uniforms: WorkerProgramUniforms | undefined;
     fastPath: boolean;
     instancing: boolean;
+    textures: boolean;
     liveUniforms?: WorkerLiveUniforms;
     passes?: RenderPass[];
 }
@@ -147,6 +149,9 @@ export function findWorkerBlock(inputs: WorkerBlockInputs): WorkerBlock | null {
     if (inputs.instancing) {
         return { kind: 'instancing' };
     }
+    if (inputs.textures) {
+        return { kind: 'textures' };
+    }
 
     return findLiveUniformBlock(inputs)
         ?? findProgramUniformBlock(inputs)
@@ -209,6 +214,12 @@ function instancingMessage(component: string): string {
         + 'turn off worker mode on this component.';
 }
 
+function texturesMessage(component: string): string {
+    return `${component}: the "textures" prop is not supported in worker mode (v1). Texture sources decode media `
+        + 'on the main thread and their frames cannot cross to the worker, so the samplers would read a blank '
+        + 'placeholder. Remove "textures", or turn off worker mode on this component.';
+}
+
 function missingLiveUniformMessage(name: string): string {
     return `micugl worker: "${name}" is listed in the "liveUniforms" prop but is not one of the component's `
         + 'uniforms, so nothing would ever be sent for it. Add it to "uniforms", or remove it from "liveUniforms".';
@@ -222,6 +233,8 @@ export function workerBlockMessage(component: string, block: WorkerBlock): strin
             return fastPathMessage(component);
         case 'instancing':
             return instancingMessage(component);
+        case 'textures':
+            return texturesMessage(component);
         case 'live-uniform-unknown':
             return missingLiveUniformMessage(block.name);
         case 'uniform-function':

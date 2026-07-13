@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react';
-import { forwardRef, memo, useRef } from 'react';
+import { forwardRef, memo, useMemo, useRef } from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
+import { combineFrameInvalidation } from '@/core';
 import { ShaderEngine } from '@/react';
+import { useTextureBindings } from '@/react/hooks/useTextureBindings';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type {
@@ -10,6 +12,7 @@ import type {
     InstancingConfig,
     RenderControlProps,
     ShaderHandle,
+    TextureSource,
     UniformParam
 } from '@/types';
 
@@ -17,6 +20,7 @@ export interface BaseInstancedShaderProps extends Omit<RenderControlProps, 'work
     programId: string;
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
+    textures?: Record<string, TextureSource>;
     instanceCount: number | (() => number);
     instanceAttributes: Record<string, InstanceAttribute>;
     skipDefaultUniforms?: boolean;
@@ -42,6 +46,7 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
     programId,
     shaderConfig,
     uniforms,
+    textures,
     instanceCount,
     instanceAttributes,
     skipDefaultUniforms = false,
@@ -63,11 +68,20 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
     style,
     renderOptions = RENDER_OPTIONS
 }, ref) => {
-    const programConfigs = { [programId]: shaderConfig };
     const { updaters, port, invalidation, capturesAreNonReproducible } = useUniformUpdaters(
         programId,
         uniforms,
         { skipDefaultUniforms, reducedMotion, saveData }
+    );
+    const {
+        bindings,
+        invalidation: textureInvalidation,
+        config: augmentedConfig
+    } = useTextureBindings(textures, shaderConfig);
+    const programConfigs = { [programId]: augmentedConfig };
+    const combinedInvalidation = useMemo(
+        () => (textureInvalidation ? combineFrameInvalidation([invalidation, textureInvalidation]) : invalidation),
+        [invalidation, textureInvalidation]
     );
     const debugPortRef = useRef<UniformDebugPort | null>(null);
     debugPortRef.current = port;
@@ -81,7 +95,8 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
             renderCallback={renderFullscreenQuad}
             uniformUpdaters={updaters}
             debugPortRef={debugPortRef}
-            invalidation={invalidation}
+            invalidation={combinedInvalidation}
+            textureBindings={bindings}
             capturesAreNonReproducible={capturesAreNonReproducible}
             width={width}
             height={height}

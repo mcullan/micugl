@@ -282,6 +282,16 @@ export interface TextureBindingSpec {
   source: TextureSource;
 }
 
+export type TextureStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export type ImageInput =
+  string
+  | Blob
+  | ImageBitmap
+  | HTMLImageElement
+  | HTMLCanvasElement
+  | ImageData;
+
 // ===================================================
 // Render Pass
 // ===================================================

@@ -369,6 +369,16 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         texParameteri: (target: number, pname: number, param: number): void => {
             record('texParameteri', [target, pname, param]);
         },
+        generateMipmap: (target: number): void => {
+            record('generateMipmap', [target]);
+            if (!boundTexture || !textureSizes.has(boundTexture)) {
+                throw new Error(
+                    'micugl test stub: generateMipmap on a texture that texImage2D never allocated. Real WebGL '
+                    + 'raises INVALID_OPERATION, which is a GL error and not a JS exception, so the mipmap chain is '
+                    + 'never built and the texture samples black at distance.'
+                );
+            }
+        },
         viewport: (x: number, y: number, width: number, height: number): void => {
             record('viewport', [x, y, width, height]);
             viewportCalls.push([x, y, width, height]);
