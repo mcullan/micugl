@@ -9,7 +9,27 @@ const BUDGETS = [
     { file: 'embed.global.js', gzipBudget: 1900 }
 ];
 
-const RELATIVE_IMPORT = /\bfrom\s*['"]\.|(?:^|[;\n])\s*import\s*['"]\./;
+const EXPORT_TARGETS = ['embed.js', 'embed/index.d.ts'];
+
+const FROM_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]/g;
+const BARE_IMPORT = /(?:^|[;\n])\s*import\s*['"]([^'"]+)['"]/g;
+const DYNAMIC_IMPORT = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+const matchAll = (source, pattern) => {
+    const specifiers = [];
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+        specifiers.push(match[1]);
+    }
+    pattern.lastIndex = 0;
+    return specifiers;
+};
+
+const importedSpecifiers = source => [
+    ...matchAll(source, FROM_SPECIFIER),
+    ...matchAll(source, BARE_IMPORT),
+    ...matchAll(source, DYNAMIC_IMPORT)
+];
 
 const failures = [];
 const measured = [];
@@ -24,12 +44,14 @@ for (const { file, gzipBudget } of BUDGETS) {
 
     const bytes = readFileSync(path);
     const source = bytes.toString('utf8');
+    const imports = importedSpecifiers(source);
 
-    if (RELATIVE_IMPORT.test(source)) {
+    if (imports.length > 0) {
         failures.push(
-            `${file} statically imports another module, so it is a re-export shim rather than the runtime `
-            + 'itself. Gzipping it would measure the shim and pass no matter how large the runtime grew. Keep '
-            + 'the embed runtime a single self-contained module (src/embed/index.ts) with no imports.'
+            `${file} imports ${imports.join(', ')}, so it is a re-export shim rather than the runtime itself. `
+            + 'Gzipping it would measure the shim and pass no matter how large the runtime grew. Keep the embed '
+            + 'runtime a single self-contained module (src/embed/index.ts) with no static, bare or dynamic '
+            + 'imports.'
         );
     }
 
@@ -42,6 +64,15 @@ for (const { file, gzipBudget } of BUDGETS) {
             + 'The embed runtime exists because reusing WebGLManager costs ~4.4 KB gzip for a fullscreen quad; a '
             + 'runtime that drifts back toward that size has lost its reason to exist. Cut bytes rather than '
             + 'raising the budget.'
+        );
+    }
+}
+
+for (const file of EXPORT_TARGETS) {
+    if (!existsSync(resolve(distRoot, file))) {
+        failures.push(
+            `${file} was not emitted, but package.json maps the micugl/embed export at it, so the subpath would `
+            + 'resolve to nothing (or ship untyped) with a green build.'
         );
     }
 }

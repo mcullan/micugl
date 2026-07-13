@@ -33,6 +33,8 @@ interface GLStubHandle {
     locationFor: (name: string) => object | null;
     named: (name: string) => GLCall[];
     countOf: (name: string) => number;
+    fireContextLost: () => void;
+    contextLostListenerCount: () => number;
 }
 
 function createStub(options: GLStubOptions = {}): GLStubHandle {
@@ -40,6 +42,7 @@ function createStub(options: GLStubOptions = {}): GLStubHandle {
     const contextAttributes: WebGLContextAttributes[] = [];
     const nullUniforms = new Set(options.nullUniforms ?? []);
     const locations = new Map<string, object>();
+    const contextLostListeners = new Set<() => void>();
 
     const record = (name: string, args: unknown[]): void => {
         calls.push({ name, args });
@@ -67,8 +70,12 @@ function createStub(options: GLStubOptions = {}): GLStubHandle {
         FLOAT: GL_FLOAT,
         COLOR_BUFFER_BIT: GL_COLOR_BUFFER_BIT,
         TRIANGLE_STRIP: GL_TRIANGLE_STRIP,
-        drawingBufferWidth: options.drawingBufferWidth ?? 1600,
-        drawingBufferHeight: options.drawingBufferHeight ?? 1200,
+        get drawingBufferWidth(): number {
+            return options.drawingBufferWidth ?? canvas.width;
+        },
+        get drawingBufferHeight(): number {
+            return options.drawingBufferHeight ?? canvas.height;
+        },
         createShader: (type: number): object => {
             record('createShader', [type]);
             return { shader: type };
@@ -160,6 +167,16 @@ function createStub(options: GLStubOptions = {}): GLStubHandle {
             record('getContext', [contextId, attributes]);
             contextAttributes.push(attributes);
             return (options.noContext ?? false) ? null : gl;
+        },
+        addEventListener: (type: string, listener: () => void): void => {
+            if (type === 'webglcontextlost') {
+                contextLostListeners.add(listener);
+            }
+        },
+        removeEventListener: (type: string, listener: () => void): void => {
+            if (type === 'webglcontextlost') {
+                contextLostListeners.delete(listener);
+            }
         }
     };
 
@@ -171,7 +188,13 @@ function createStub(options: GLStubOptions = {}): GLStubHandle {
         contextAttributes,
         locationFor,
         named,
-        countOf: (name: string): number => named(name).length
+        countOf: (name: string): number => named(name).length,
+        fireContextLost: (): void => {
+            for (const listener of [...contextLostListeners]) {
+                listener();
+            }
+        },
+        contextLostListenerCount: (): number => contextLostListeners.size
     };
 }
 
@@ -181,6 +204,16 @@ interface EnvironmentOptions {
     devicePixelRatio?: number;
     innerWidth?: number;
     innerHeight?: number;
+    noMatchMedia?: boolean;
+}
+
+interface WindowStub {
+    devicePixelRatio: number;
+    innerWidth: number;
+    innerHeight: number;
+    matchMedia?: (query: string) => { matches: boolean };
+    addEventListener: (type: string, listener: () => void) => void;
+    removeEventListener: (type: string, listener: () => void) => void;
 }
 
 interface EnvironmentHandle {
@@ -196,7 +229,7 @@ function installEnvironment(options: EnvironmentOptions = {}): EnvironmentHandle
     let nextFrameId = 1;
     let now = 1000;
 
-    const win = {
+    const win: WindowStub = {
         devicePixelRatio: options.devicePixelRatio ?? 1,
         innerWidth: options.innerWidth ?? 800,
         innerHeight: options.innerHeight ?? 600,
@@ -214,6 +247,10 @@ function installEnvironment(options: EnvironmentOptions = {}): EnvironmentHandle
             }
         }
     };
+
+    if (options.noMatchMedia ?? false) {
+        delete win.matchMedia;
+    }
 
     vi.stubGlobal('window', win);
     vi.stubGlobal('navigator', { connection: { saveData: options.saveData ?? false } });
@@ -254,6 +291,7 @@ const FRAGMENT = 'precision highp float;void main(){gl_FragColor=vec4(1.0);}';
 afterEach(() => {
     vi.unstubAllGlobals();
     vi.resetModules();
+    vi.restoreAllMocks();
 });
 
 describe('embed fail-loud paths', () => {
@@ -279,6 +317,16 @@ describe('embed fail-loud paths', () => {
 
         expect(() => embed(canvas, { fragment: FRAGMENT }))
             .toThrow(/^micugl\/embed: program link failed: ERROR: varying v_uv is not written/);
+    });
+
+    it('deletes the program and both shaders before throwing on a link failure', () => {
+        installEnvironment();
+        const stub = createStub({ linkFails: true });
+
+        expect(() => embed(stub.canvas, { fragment: FRAGMENT })).toThrow();
+
+        expect(stub.countOf('deleteShader')).toBe(2);
+        expect(stub.countOf('deleteProgram')).toBe(1);
     });
 
     it('throws for a uniform array that is not 2 to 4 components', () => {
@@ -371,17 +419,91 @@ describe('embed setup', () => {
         expect(stub.named('clearColor')[0]?.args).toEqual([0.1, 0.2, 0.3, 1]);
     });
 
-    it('clamps the drawing buffer to the dpr cap and sizes the canvas to the viewport', () => {
+    it('sizes the css box to the viewport', () => {
         installEnvironment({ devicePixelRatio: 3, innerWidth: 800, innerHeight: 600 });
+        const stub = createStub();
+
+        embed(stub.canvas, { fragment: FRAGMENT });
+
+        expect(stub.canvas.style.width).toBe('800px');
+        expect(stub.canvas.style.height).toBe('600px');
+    });
+});
+
+describe('embed dpr', () => {
+    it('reads a numeric dpr as a fixed ratio, exactly as the React dpr prop does', () => {
+        installEnvironment({ devicePixelRatio: 1, innerWidth: 800, innerHeight: 600 });
         const stub = createStub();
 
         embed(stub.canvas, { fragment: FRAGMENT, dpr: 2 });
 
         expect(stub.canvas.width).toBe(1600);
         expect(stub.canvas.height).toBe(1200);
-        expect(stub.canvas.style.width).toBe('800px');
-        expect(stub.canvas.style.height).toBe('600px');
-        expect(stub.named('viewport')[0]?.args).toEqual([0, 0, 1600, 1200]);
+    });
+
+    it('clamps devicePixelRatio into the range when dpr is a tuple', () => {
+        installEnvironment({ devicePixelRatio: 3, innerWidth: 800, innerHeight: 600 });
+        const capped = createStub();
+
+        embed(capped.canvas, { fragment: FRAGMENT, dpr: [1, 1.5] });
+
+        expect(capped.canvas.width).toBe(1200);
+        expect(capped.canvas.height).toBe(900);
+
+        installEnvironment({ devicePixelRatio: 0.5, innerWidth: 800, innerHeight: 600 });
+        const floored = createStub();
+
+        embed(floored.canvas, { fragment: FRAGMENT, dpr: [1, 1.5] });
+
+        expect(floored.canvas.width).toBe(800);
+        expect(floored.canvas.height).toBe(600);
+    });
+
+    it('defaults to the React [1, 2] range: capped above 2x, floored below 1x', () => {
+        installEnvironment({ devicePixelRatio: 3, innerWidth: 800, innerHeight: 600 });
+        const dense = createStub();
+
+        embed(dense.canvas, { fragment: FRAGMENT });
+
+        expect(dense.canvas.width).toBe(1600);
+        expect(dense.canvas.height).toBe(1200);
+
+        installEnvironment({ devicePixelRatio: 0.5, innerWidth: 800, innerHeight: 600 });
+        const zoomedOut = createStub();
+
+        embed(zoomedOut.canvas, { fragment: FRAGMENT });
+
+        expect(zoomedOut.canvas.width).toBe(800);
+        expect(zoomedOut.canvas.height).toBe(600);
+    });
+});
+
+describe('embed viewport', () => {
+    it('sets the viewport from the real drawing buffer, not the requested canvas size', () => {
+        const environment = installEnvironment({ devicePixelRatio: 2, innerWidth: 800, innerHeight: 600 });
+        const stub = createStub({ drawingBufferWidth: 1024, drawingBufferHeight: 768 });
+
+        embed(stub.canvas, { fragment: FRAGMENT });
+
+        expect(stub.canvas.width).toBe(1600);
+        expect(stub.canvas.height).toBe(1200);
+        expect(stub.named('viewport').at(-1)?.args).toEqual([0, 0, 1024, 768]);
+
+        environment.tick();
+
+        expect(stub.named('uniform2f').at(-1)?.args).toEqual([stub.locationFor('u_resolution'), 1024, 768]);
+    });
+
+    it('keeps the viewport on the real drawing buffer across a resize', () => {
+        const environment = installEnvironment({ devicePixelRatio: 2, innerWidth: 800, innerHeight: 600 });
+        const stub = createStub({ drawingBufferWidth: 1024, drawingBufferHeight: 768 });
+
+        embed(stub.canvas, { fragment: FRAGMENT });
+        environment.setViewport(1200, 900);
+        environment.fireResize();
+
+        expect(stub.canvas.width).toBe(2400);
+        expect(stub.named('viewport').at(-1)?.args).toEqual([0, 0, 1024, 768]);
     });
 });
 
@@ -433,12 +555,37 @@ describe('embed uniform dispatch', () => {
         expect(uploads.some(call => call.args[0] === null)).toBe(false);
     });
 
-    it('does not validate a uniform that the shader optimized away', () => {
+    it('still validates a uniform that the shader optimized away', () => {
         installEnvironment();
-        const stub = createStub({ nullUniforms: ['u_unused'] });
 
-        expect(() => embed(stub.canvas, { fragment: FRAGMENT, uniforms: { u_unused: [1] } })).not.toThrow();
+        expect(() => embed(
+            createStub({ nullUniforms: ['u_unused'] }).canvas,
+            { fragment: FRAGMENT, uniforms: { u_unused: [1] } }
+        )).toThrow(/^micugl\/embed: uniform "u_unused" must be a finite number or an array of 2 to 4/);
+
+        expect(() => embed(
+            createStub({ nullUniforms: ['u_unused'] }).canvas,
+            { fragment: FRAGMENT, uniforms: { u_unused: Number.NaN } }
+        )).toThrow(/^micugl\/embed: uniform "u_unused" must be a finite number/);
+
+        const typo = { u_unused: 'red' } as unknown as Record<string, number>;
+        expect(() => embed(
+            createStub({ nullUniforms: ['u_unused'] }).canvas,
+            { fragment: FRAGMENT, uniforms: typo }
+        )).toThrow(/^micugl\/embed: uniform "u_unused" must be a finite number/);
+    });
+
+    it('skips the upload, without throwing, for a valid value the shader optimized away', () => {
+        installEnvironment();
+        const stub = createStub({ nullUniforms: ['u_unused', 'u_scalar'] });
+
+        expect(() => embed(stub.canvas, {
+            fragment: FRAGMENT,
+            uniforms: { u_unused: [1, 2], u_scalar: 0.5 }
+        })).not.toThrow();
+
         expect(stub.countOf('uniform2fv')).toBe(0);
+        expect(stub.countOf('uniform1f')).toBe(0);
     });
 });
 
@@ -462,8 +609,8 @@ describe('embed render loop', () => {
     });
 
     it('draws the quad and uploads the drawing-buffer resolution on every frame', () => {
-        const environment = installEnvironment();
-        const stub = createStub({ drawingBufferWidth: 1600, drawingBufferHeight: 1200 });
+        const environment = installEnvironment({ devicePixelRatio: 2, innerWidth: 800, innerHeight: 600 });
+        const stub = createStub({ drawingBufferWidth: 1024, drawingBufferHeight: 768 });
 
         embed(stub.canvas, { fragment: FRAGMENT });
 
@@ -474,7 +621,7 @@ describe('embed render loop', () => {
         expect(stub.countOf('drawArrays')).toBe(2);
         expect(stub.named('drawArrays')[0]?.args).toEqual([GL_TRIANGLE_STRIP, 0, 4]);
         expect(stub.named('uniform2f')).toHaveLength(2);
-        expect(stub.named('uniform2f')[0]?.args).toEqual([stub.locationFor('u_resolution'), 1600, 1200]);
+        expect(stub.named('uniform2f')[0]?.args).toEqual([stub.locationFor('u_resolution'), 1024, 768]);
     });
 
     it('uploads no time when the shader declares no u_time', () => {
@@ -549,6 +696,77 @@ describe('embed destroy', () => {
         expect(stub.named('getExtension').at(-1)?.args).toEqual(['WEBGL_lose_context']);
         expect(stub.countOf('loseContext')).toBe(1);
     });
+
+    it('stops the loop when destroyed before the first frame runs', () => {
+        const environment = installEnvironment();
+        const stub = createStub();
+
+        embed(stub.canvas, { fragment: FRAGMENT }).destroy();
+        environment.tick();
+        environment.tick();
+
+        expect(stub.countOf('drawArrays')).toBe(0);
+    });
+
+    it('is idempotent: a second destroy neither throws nor restarts the loop', () => {
+        const environment = installEnvironment();
+        const stub = createStub();
+
+        const handle = embed(stub.canvas, { fragment: FRAGMENT });
+        environment.tick();
+        handle.destroy();
+
+        expect(() => { handle.destroy() }).not.toThrow();
+
+        environment.tick();
+        environment.tick();
+
+        expect(stub.countOf('drawArrays')).toBe(1);
+        expect(handle.animating).toBe(false);
+    });
+
+    it('reports animating false once destroyed, and stops drawing', () => {
+        const environment = installEnvironment();
+        const stub = createStub();
+
+        const handle = embed(stub.canvas, { fragment: FRAGMENT });
+        environment.tick();
+        expect(handle.animating).toBe(true);
+        expect(stub.countOf('drawArrays')).toBe(1);
+
+        handle.destroy();
+        environment.tick();
+
+        expect(handle.animating).toBe(false);
+        expect(stub.countOf('drawArrays')).toBe(1);
+    });
+});
+
+describe('embed context loss', () => {
+    it('logs loudly when the WebGL context is lost rather than going silently blank', () => {
+        const environment = installEnvironment();
+        const stub = createStub();
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        embed(stub.canvas, { fragment: FRAGMENT });
+        environment.tick();
+        stub.fireContextLost();
+
+        expect(errors).toHaveBeenCalledTimes(1);
+        expect(errors.mock.calls[0]?.[0]).toMatch(/^micugl\/embed: the WebGL context was lost/);
+    });
+
+    it('does not log a lost context that destroy() caused itself', () => {
+        installEnvironment();
+        const stub = createStub();
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        embed(stub.canvas, { fragment: FRAGMENT }).destroy();
+        stub.fireContextLost();
+
+        expect(stub.contextLostListenerCount()).toBe(0);
+        expect(errors).not.toHaveBeenCalled();
+    });
 });
 
 describe('embed motion gate', () => {
@@ -616,6 +834,7 @@ describe('embed motion gate', () => {
 
         const handle = embed(stub.canvas, { fragment: FRAGMENT });
         environment.tick();
+        environment.tick();
 
         expect(handle.animating).toBe(false);
         expect(stub.countOf('drawArrays')).toBe(1);
@@ -627,9 +846,56 @@ describe('embed motion gate', () => {
 
         const handle = embed(stub.canvas, { fragment: FRAGMENT, saveData: 'ignore' });
         environment.tick();
+        environment.tick();
 
         expect(handle.animating).toBe(true);
+        expect(stub.countOf('drawArrays')).toBe(2);
+    });
+
+    it('folds pause into a static frame rather than animating', () => {
+        const environment = installEnvironment({ reducedMotion: true, saveData: true });
+        const stub = createStub();
+
+        const handle = embed(stub.canvas, {
+            fragment: FRAGMENT,
+            reducedMotion: 'pause',
+            saveData: 'pause',
+            staticFrame: 30
+        });
+        environment.tick();
+        environment.tick();
+
+        expect(handle.animating).toBe(false);
         expect(stub.countOf('drawArrays')).toBe(1);
+        expect(stub.named('uniform1f')[0]?.args).toEqual([stub.locationFor('u_time'), 0.5]);
+    });
+
+    it('gates on an unknown policy string rather than animating against the preference', () => {
+        const environment = installEnvironment({ reducedMotion: true });
+        const stub = createStub();
+        const options = {
+            fragment: FRAGMENT,
+            reducedMotion: 'static_frame'
+        } as unknown as { fragment: string };
+
+        const handle = embed(stub.canvas, options);
+        environment.tick();
+        environment.tick();
+
+        expect(handle.animating).toBe(false);
+        expect(stub.countOf('drawArrays')).toBe(1);
+    });
+
+    it('animates without throwing in a DOM shim that has no matchMedia', () => {
+        const environment = installEnvironment({ noMatchMedia: true });
+        const stub = createStub();
+
+        const handle = embed(stub.canvas, { fragment: FRAGMENT });
+        environment.tick();
+        environment.tick();
+
+        expect(handle.animating).toBe(true);
+        expect(stub.countOf('drawArrays')).toBe(2);
     });
 });
 

@@ -1,12 +1,14 @@
 export type EmbedUniformValue = number | readonly number[];
 
-export type EmbedMotionPolicy = 'static-frame' | 'ignore';
+export type EmbedMotionPolicy = 'static-frame' | 'pause' | 'ignore';
+
+export type EmbedDpr = number | readonly [number, number];
 
 export interface EmbedOptions {
     fragment: string;
     uniforms?: Record<string, EmbedUniformValue>;
     clearColor?: readonly [number, number, number, number];
-    dpr?: number;
+    dpr?: EmbedDpr;
     reducedMotion?: EmbedMotionPolicy;
     saveData?: EmbedMotionPolicy;
     staticFrame?: number;
@@ -16,15 +18,18 @@ export interface EmbedOptions {
 export interface EmbedHandle {
     canvas: HTMLCanvasElement;
     gl: WebGLRenderingContext;
-    animating: boolean;
+    readonly animating: boolean;
     destroy: () => void;
 }
 
 const VERTEX_SHADER =
-    'attribute vec2 a_position;varying vec2 v_uv;'
-    + 'void main(){gl_Position=vec4(a_position,0.0,1.0);v_uv=a_position*0.5+0.5;}';
+    'attribute vec2 a_position;varying vec2 v_uv;varying vec2 v_texCoord;'
+    + 'void main(){gl_Position=vec4(a_position,0.0,1.0);v_uv=a_position*0.5+0.5;v_texCoord=v_uv;}';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+const QUAD_VERTICES = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+const STATIC_FRAME_FPS = 60;
+const DEFAULT_DPR: readonly [number, number] = [1, 2];
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader {
     const shader = gl.createShader(type);
@@ -53,7 +58,7 @@ function badUniform(name: string, value: EmbedUniformValue): Error {
 
 function setUniform(
     gl: WebGLRenderingContext,
-    location: WebGLUniformLocation,
+    location: WebGLUniformLocation | null,
     name: string,
     value: EmbedUniformValue
 ): void {
@@ -61,13 +66,19 @@ function setUniform(
         if (!Number.isFinite(value)) {
             throw badUniform(name, value);
         }
-        gl.uniform1f(location, value);
+        if (location !== null) {
+            gl.uniform1f(location, value);
+        }
         return;
     }
 
     const data = new Float32Array(value);
-    if (data.length < 2 || data.length > 4 || !data.every(component => Number.isFinite(component))) {
+    if (data.length < 2 || data.length > 4 || !data.every(Number.isFinite)) {
         throw badUniform(name, value);
+    }
+
+    if (location === null) {
+        return;
     }
 
     if (data.length === 2) {
@@ -101,23 +112,23 @@ export function embed(canvas: HTMLCanvasElement, options: EmbedOptions): EmbedHa
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
         const info = gl.getProgramInfoLog(program);
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+        gl.deleteProgram(program);
         throw new Error(`micugl/embed: program link failed: ${info ?? ''}`);
     }
     gl.useProgram(program);
 
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
 
     const position = gl.getAttribLocation(program, 'a_position');
     gl.enableVertexAttribArray(position);
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
     for (const [name, value] of Object.entries(options.uniforms ?? {})) {
-        const location = gl.getUniformLocation(program, name);
-        if (location !== null) {
-            setUniform(gl, location, name, value);
-        }
+        setUniform(gl, gl.getUniformLocation(program, name), name, value);
     }
 
     const timeLocation = gl.getUniformLocation(program, 'u_time');
@@ -126,13 +137,14 @@ export function embed(canvas: HTMLCanvasElement, options: EmbedOptions): EmbedHa
     const color = options.clearColor ?? [0, 0, 0, 1];
     gl.clearColor(color[0], color[1], color[2], color[3]);
 
-    const dprCap = options.dpr ?? 2;
-    const staticSeconds = (options.staticFrame ?? 0) / 60;
+    const dpr = options.dpr ?? DEFAULT_DPR;
+    const staticSeconds = (options.staticFrame ?? 0) / STATIC_FRAME_FPS;
 
     const still =
-        ((options.reducedMotion ?? 'static-frame') === 'static-frame'
+        ((options.reducedMotion ?? 'static-frame') !== 'ignore'
+            && typeof window.matchMedia === 'function'
             && window.matchMedia(REDUCED_MOTION_QUERY).matches)
-        || ((options.saveData ?? 'static-frame') === 'static-frame'
+        || ((options.saveData ?? 'static-frame') !== 'ignore'
             && navigator.connection?.saveData === true);
 
     const draw = (seconds: number): void => {
@@ -147,7 +159,9 @@ export function embed(canvas: HTMLCanvasElement, options: EmbedOptions): EmbedHa
     };
 
     const resize = (): void => {
-        const ratio = Math.min(window.devicePixelRatio, dprCap);
+        const ratio = typeof dpr === 'number'
+            ? dpr
+            : Math.min(Math.max(window.devicePixelRatio, dpr[0]), dpr[1]);
         const width = Math.round(window.innerWidth * ratio);
         const height = Math.round(window.innerHeight * ratio);
         if (canvas.width !== width || canvas.height !== height) {
@@ -156,33 +170,45 @@ export function embed(canvas: HTMLCanvasElement, options: EmbedOptions): EmbedHa
         }
         canvas.style.width = `${window.innerWidth}px`;
         canvas.style.height = `${window.innerHeight}px`;
-        gl.viewport(0, 0, width, height);
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         if (still) {
             draw(staticSeconds);
         }
     };
 
+    const contextLost = (): void => {
+        console.error(
+            'micugl/embed: the WebGL context was lost, so this canvas will stay blank until it is recreated'
+        );
+    };
+
+    canvas.addEventListener('webglcontextlost', contextLost);
     resize();
     window.addEventListener('resize', resize);
 
     let start: number | null = null;
     let frame = 0;
+    let running = !still;
     const loop = (now: number): void => {
         start ??= now;
         draw((now - start) * 0.001);
         frame = requestAnimationFrame(loop);
     };
-    if (!still) {
+    if (running) {
         frame = requestAnimationFrame(loop);
     }
 
     return {
         canvas,
         gl,
-        animating: !still,
+        get animating(): boolean {
+            return running;
+        },
         destroy: (): void => {
+            running = false;
             cancelAnimationFrame(frame);
             window.removeEventListener('resize', resize);
+            canvas.removeEventListener('webglcontextlost', contextLost);
             gl.deleteProgram(program);
             gl.deleteShader(vertexShader);
             gl.deleteShader(fragmentShader);

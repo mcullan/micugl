@@ -51,7 +51,7 @@ export default function App() {
 ## Embed (loading screens, no React)
 
 `micugl/embed` is a standalone micro-runtime that renders one animated fullscreen fragment
-shader **before or without** React. It is a separate ~1.6 KB gzip runtime, not a re-export of
+shader **before or without** React. It is a separate ~1.8 KB gzip runtime, not a re-export of
 `micugl/core`: it has no FBOs, no ping-pong, no capability probing and no resource registry,
 because a loading screen needs none of them. (`WebGLManager` builds an `FBOManager` and probes
 four extensions in its constructor, which costs ~4.4 KB gzip for a fullscreen quad. CI enforces
@@ -64,7 +64,9 @@ const handle = embed(document.getElementById("loader"), {
   fragment: FRAGMENT,           // your fragment shader source
   uniforms: { u_tint: [0.2, 0.4, 0.9] },
   clearColor: [0, 0, 0, 1],     // default [0,0,0,1]
-  dpr: 2,                       // devicePixelRatio cap, default 2
+  dpr: [1, 2],                  // same meaning as the React dpr prop, default [1,2]
+  contextAttributes: {},        // merged over { alpha:false, antialias:false, depth:false,
+                                //               stencil:false, powerPreference:'low-power' }
 });
 
 // later, once the real app has painted:
@@ -72,13 +74,26 @@ handle.destroy();
 ```
 
 Your fragment shader receives `uniform float u_time` (seconds), `uniform vec2 u_resolution`
-(drawing-buffer pixels) and `varying vec2 v_uv` (0..1) — the same convention as
-`BaseShaderComponent`, so a shader written for the React component drops straight in.
+(drawing-buffer pixels) and the 0..1 quad coordinate under **both** names the library's shaders
+use, `varying vec2 v_uv` and `varying vec2 v_texCoord` (the examples in this README all name it
+`v_texCoord`), so a fragment shader written for a React component drops straight in.
 The canvas is sized to the viewport, so give it `position:fixed;inset:0`.
 
-`embed()` returns `{ canvas, gl, animating, destroy }`. `destroy()` cancels the loop, removes the
-resize listener, deletes the program/shaders/buffer and calls `WEBGL_lose_context.loseContext()`,
-so a later React mount on a fresh canvas is a clean handoff.
+`dpr` mirrors the React `dpr` prop exactly: a **tuple** `[min, max]` clamps `devicePixelRatio` into
+that range (default `[1, 2]`, so a 3x phone renders at 2x and a zoomed-out 0.5x window still renders
+at 1x), and a **number** is a fixed ratio (`dpr: 2` renders at 2x even on a 1x display). Unlike the
+React components, embed does **not** apply a `maxPixelCount` cap (React defaults to 8,294,400 px);
+a loading screen is one cheap fullscreen quad, so pass `dpr: 1` if you need a hard floor on cost.
+
+`embed()` returns `{ canvas, gl, animating, destroy }`. `animating` is live: it is `false` when the
+motion gate rendered a poster instead of starting the loop, and `false` after `destroy()`.
+`destroy()` cancels the loop, removes the resize and context-loss listeners, deletes the
+program/shaders/buffer and calls `WEBGL_lose_context.loseContext()`, so a later React mount on a
+fresh canvas is a clean handoff. It is idempotent.
+
+If the WebGL context is lost (GPU-process restart, mobile tab eviction) the canvas stops updating;
+embed does not restore it, but it logs a `micugl/embed:` prefixed error rather than going silently
+blank. Recover by removing the canvas and calling `embed()` again on a fresh one.
 
 ### Static HTML (the `<script>` build)
 
@@ -99,9 +114,28 @@ of `node_modules/micugl/dist/` and it exposes `window.micuglEmbed`:
 ### Handing off to React
 
 The loader owns its canvas and context for its whole life; React mounts its own component on a
-**fresh** canvas. Let React paint one frame (a double `requestAnimationFrame`, or a ~200 ms opacity
-crossfade on the loader canvas), then call `handle.destroy()` and remove the loader canvas. Two GL
-contexts exist for that brief overlap, which browsers allow.
+**fresh** canvas. Mount React first, let it paint, and only then destroy the loader — destroying it
+before React's first paint is the black-flash trap:
+
+```jsx
+function App() {
+  useEffect(() => {
+    // two frames: one to commit, one to let the browser paint it
+    const outer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.__loader?.destroy();
+        document.getElementById("loader")?.remove();
+      });
+    });
+    return () => { cancelAnimationFrame(outer) };
+  }, []);
+
+  return <RippleScene style={{ width: "100vw", height: "100vh" }} />;
+}
+```
+
+Two GL contexts exist for that brief overlap, which browsers allow. A ~200 ms opacity crossfade on
+the loader canvas works the same way: fade first, destroy on transition end.
 
 ### Reduced motion & Save-Data
 
@@ -109,11 +143,19 @@ contexts exist for that brief overlap, which browsers allow.
 the React components (see below). When either is active it draws exactly one poster frame and never
 starts the rAF loop; `handle.animating` reports which happened.
 
-- `reducedMotion` / `saveData`: `'static-frame' | 'ignore'`, default `'static-frame'`.
+- `reducedMotion` / `saveData`: `'static-frame' | 'pause' | 'ignore'` (the same `MotionPolicy`
+  members as the React props), default `'static-frame'`. Only `'ignore'` animates: `'pause'` folds
+  to a static frame here, because a loading screen's clock starts at 0, so pausing it at its current
+  time and posing it at frame 0 are the same picture. Anything else — a typo, a value from a CMS —
+  gates rather than animating, since the `<script>` build has no TypeScript to catch it.
 - `staticFrame` (default `0`) is the poster frame, on the same 60fps timebase as the React
-  `staticFrame` prop, so a poster picked for the React component reproduces exactly here.
+  `staticFrame` prop, so a poster picked for the React component reproduces exactly here. With an
+  explicit `staticFrame`, a gated embed shows that poster rather than frame 0.
 - A loading screen that animates against a user's OS accessibility preference while the rest of the
   library respects it would read as a bug, so opting out is explicit: `reducedMotion: 'ignore'`.
+- The media query is read **once**, at `embed()`. React's `useReducedMotion` subscribes and reacts
+  live; a loading screen lives for a few seconds, so embed spends no bytes on a listener. If the user
+  flips the OS preference mid-load, the loader keeps whatever it started with.
 
 ### Failing loud, and the one place it does not
 
@@ -121,10 +163,13 @@ Everything fails loud with a `micugl/embed:` prefixed error: no WebGL context, s
 failure (info log included), program link failure, and a uniform that is not a finite number or an
 array of 2 to 4 finite numbers.
 
-The **one deliberate exception**: a uniform whose `getUniformLocation` returns `null` is **skipped**,
-not thrown. GLSL compilers legitimately optimize out declared-but-unused uniforms, so `null` is an
-expected outcome that is indistinguishable from a typo at the GL level. `WebGLManager` already
-behaves this way. If a uniform seems to have no effect, check that the shader actually reads it.
+The **one deliberate exception**: a uniform whose `getUniformLocation` returns `null` has its
+**upload** skipped, not thrown. GLSL compilers legitimately optimize out declared-but-unused
+uniforms, so `null` is an expected outcome that is indistinguishable from a typo at the GL level.
+`WebGLManager` already behaves this way. If a uniform seems to have no effect, check that the shader
+actually reads it. The **value is still validated**: `{ u_tint: 'red' }` or a `NaN` from a
+`done / total` with `total === 0` throws whether or not the shader kept the uniform, so a bad value
+cannot hide behind a renamed uniform.
 
 Caller uniforms are set **once**, at init. Only `u_time` and `u_resolution` are live per frame;
 animate everything else from `u_time` inside the shader.
