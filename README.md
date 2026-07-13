@@ -121,6 +121,103 @@ deterministic frame instead of animating continuously.
   `setFrame`/`ShaderHandle`. Pick a frame that looks good as a static image for shaders
   that are dull at frame 0.
 
+## Worker rendering (OffscreenCanvas)
+
+`worker` moves the GL context and the render loop off the main thread, onto an
+`OffscreenCanvas` inside a Web Worker. The picture is identical; the difference is that
+main-thread jank (React renders, layout, long tasks) no longer stalls the animation.
+
+```tsx
+<BaseShaderComponent worker programId='blob' shaderConfig={config} uniforms={uniforms} />
+```
+
+- `worker={true}` — always use a worker. If a uniform or a prop cannot cross the worker
+  boundary, micugl **throws** and names the uniform and the remedy.
+- `worker="auto"` — use a worker when this browser and this component's props allow it, and
+  fall back to main-thread rendering otherwise. `"auto"` never throws.
+- `worker={false}` (default) — main-thread rendering, unchanged.
+
+### Shipping the worker: CSP
+
+By default micugl builds the worker from an **inlined blob**, so there is no worker file to
+copy, host, or version, and nothing to configure. A strict Content-Security-Policy will block
+that. Two supported fixes, both first-class:
+
+1. Allow blob workers in your CSP:
+
+   ```
+   worker-src 'self' blob:;
+   ```
+
+2. Or build the worker yourself from the `micugl/worker` export and keep `worker-src 'self'`:
+
+   ```tsx
+   <BaseShaderComponent
+       worker
+       createWorker={() => new Worker(new URL('micugl/worker', import.meta.url), { type: 'module' })}
+       ...
+   />
+   ```
+
+If the worker cannot be constructed (no `OffscreenCanvas` support, or a CSP that forbids it),
+micugl logs once, explains the remedy, and renders on the main thread instead. The canvas is
+never transferred in that case, so the fallback is complete: same picture, no worker.
+
+### Uniforms in worker mode
+
+A worker cannot call your functions, so a function-valued uniform cannot simply be sent across.
+
+- **Plain values** (`number`, `number[]`, typed array) are posted when they change, and are
+  dirty-checked on both sides. This is the normal path; use it for anything you drive from
+  React state.
+- **`u_time` and `u_resolution`** are computed inside the worker, from its own frame clock and
+  the canvas size. Do not pass them as functions: micugl throws rather than let the worker
+  quietly compute a different value than the one you wrote.
+- **`liveUniforms`** (`BaseShaderComponent` / `ShaderEngine` only) names function-valued
+  uniforms that micugl evaluates on a main-thread `requestAnimationFrame` and posts every
+  frame:
+
+  ```tsx
+  <BaseShaderComponent
+      worker
+      uniforms={{ mouse: { type: 'vec2', value: () => pointerRef.current } }}
+      liveUniforms={['mouse']}
+      ...
+  />
+  ```
+
+  This costs you a main-thread rAF (the thing worker mode exists to avoid), so keep the list
+  short, or empty. The `time` argument these functions receive comes from the **main thread's**
+  clock and can drift slightly from the worker's, so `liveUniforms` is for inputs that do not
+  depend on time (pointer, scroll, sensors). Time-driven uniforms belong in the shader, where
+  `u_time` is exact.
+- Any other function-valued uniform throws under `worker={true}` and downgrades to the main
+  thread under `worker="auto"`.
+- `liveUniforms` does not cover ping-pong pass uniforms in v1, which is why the ping-pong
+  components do not accept the prop. A `customPasses` entry may not carry a function-valued
+  pass uniform in worker mode, not even `u_time`: the worker cannot call your function, and
+  computing its own built-in instead would draw a different picture. Give the pass uniform a
+  plain value, let micugl build the ping-pong passes for you (their uniforms are posted to the
+  worker), or turn worker mode off on that component.
+
+### v1 non-goals
+
+Worker mode leaves no WebGL context on the main thread, and the following features need one.
+In worker mode they throw, naming the remedy (turn worker mode off on that component):
+
+- `renderToBlob()`, `renderToDataURL()`, `captureStream()`, `record()`, `renderSequence()`,
+  and `resetSimulation()`.
+- `getFrame()`: the render clock lives in the worker and cannot be read synchronously from the
+  main thread. Drive the clock instead with `setFrame(frame)`.
+- Devtools (`debug`): there is no main-thread context to inspect. `debug` + `worker` logs once
+  and inspects nothing.
+- Instancing, and a custom `renderCallback` on `ShaderEngine` (worker mode requires the fast
+  path). Both throw under `worker={true}`.
+
+`invalidate()`, `setFrame()`, `start()`, `stop()`, `frameloop`, `speed`, `pauseWhenHidden`,
+`dpr`, `fit`, `reducedMotion` / `saveData` and the IntersectionObserver / visibility pausing all
+work exactly as they do on the main thread.
+
 ## Deterministic capture
 
 Both `ShaderEngine` and `PingPongShaderEngine` expose `renderToBlob(options?)` and

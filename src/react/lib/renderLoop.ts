@@ -157,6 +157,10 @@ export class RenderLoop {
         return this.paused();
     }
 
+    isVisible(): boolean {
+        return this.visible();
+    }
+
     setSpeed(speed: number): void {
         const now = this.deps.now();
         const base = this.cold ? syncTime(this.time, now) : this.time;

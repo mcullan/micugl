@@ -1,3 +1,4 @@
+import type { MotionGate } from '@/react/lib/motionPolicy';
 import type {
     FramebufferOptions,
     Frameloop,
@@ -24,6 +25,7 @@ export const MAIN_TO_WORKER_MESSAGE_TYPES = [
     'invalidate',
     'setFrameloop',
     'setSpeed',
+    'setMotionGate',
     'renderFrame',
     'dispose'
 ] as const;
@@ -76,6 +78,7 @@ export interface WorkerInitConfig {
     framebuffers?: Record<string, FramebufferOptions>;
     initialValues: Record<string, UniformValueMap>;
     descriptors: Record<string, UniformDescriptor[]>;
+    skipDefaultUniforms?: boolean;
     frameloop: Frameloop;
     speed: number;
     active: boolean;
@@ -97,6 +100,7 @@ export type MainToWorker =
     | { type: 'invalidate'; frames?: number }
     | { type: 'setFrameloop'; mode: Frameloop }
     | { type: 'setSpeed'; speed: number }
+    | { type: 'setMotionGate'; gate: MotionGate }
     | { type: 'renderFrame'; time: number }
     | { type: 'dispose' };
 

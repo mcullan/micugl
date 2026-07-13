@@ -30,6 +30,7 @@ describe('message type tag constants', () => {
             'invalidate',
             'setFrameloop',
             'setSpeed',
+            'setMotionGate',
             'renderFrame',
             'dispose'
         ]);

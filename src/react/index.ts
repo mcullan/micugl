@@ -9,4 +9,4 @@ export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
 export { createCommonUpdaters, createUniformUpdater, createUniformUpdaters } from './lib/createUniformUpdater';
-export type { InstanceAttribute, InstancingConfig } from '@/types';
+export type { InstanceAttribute, InstancingConfig, WorkerMode } from '@/types';

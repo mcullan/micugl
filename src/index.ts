@@ -86,7 +86,8 @@ export type {
     Vec3,
     Vec4,
     WebGLExtensionName,
-    WebGLExtensionTypes
+    WebGLExtensionTypes,
+    WorkerMode
 } from './types';
 export type { CreateWorkerOptions } from './worker/createWorker';
 export { createMicuglWorker } from './worker/createWorker';

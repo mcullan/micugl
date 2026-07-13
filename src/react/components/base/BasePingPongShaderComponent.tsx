@@ -2,9 +2,11 @@ import type { CSSProperties } from 'react';
 import { forwardRef, memo, useRef } from 'react';
 
 import type { FramebufferOptions, RenderOptions, RenderPass, ShaderProgramConfig } from '@/core';
+import type { PingPongShaderEngineWorkerProps } from '@/react/components/engine/PingPongShaderEngine';
 import { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
 import { usePingPongPasses } from '@/react/hooks/usePingPongPasses';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
+import { workerPingPongUniforms } from '@/react/lib/workerMode';
 import type { PingPongShaderHandle, RenderControlProps, UniformParam } from '@/types';
 
 export interface BasePingPongShaderProps extends RenderControlProps {
@@ -62,6 +64,8 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
     reducedMotion,
     saveData,
     staticFrame,
+    worker,
+    createWorker,
     customPasses,
     renderOptions = RENDER_OPTIONS
 }, ref) => {
@@ -89,6 +93,21 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
     const debugPortRef = useRef<UniformDebugPort | null>(null);
     debugPortRef.current = port;
 
+    const workerProps: PingPongShaderEngineWorkerProps = worker === undefined || worker === false
+        ? {}
+        : {
+            worker,
+            createWorker,
+            workerCustomPasses: customPasses !== undefined,
+            workerUniforms: workerPingPongUniforms({
+                programId,
+                uniforms,
+                secondaryProgramId: secondaryShaderConfig ? actualSecondaryProgramId : undefined,
+                secondaryUniforms,
+                customPasses: customPasses !== undefined
+            })
+        };
+
     return (
         <PingPongShaderEngine
             ref={ref}
@@ -96,6 +115,7 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
             passes={passes}
             framebuffers={framebuffers}
             debugPortRef={debugPortRef}
+            {...workerProps}
             className={className}
             style={style}
             width={width}

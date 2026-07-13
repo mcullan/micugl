@@ -13,7 +13,7 @@ import type {
     UniformParam
 } from '@/types';
 
-export interface BaseInstancedShaderProps extends RenderControlProps {
+export interface BaseInstancedShaderProps extends Omit<RenderControlProps, 'worker' | 'createWorker'> {
     programId: string;
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;

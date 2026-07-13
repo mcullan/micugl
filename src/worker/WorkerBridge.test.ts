@@ -334,6 +334,81 @@ describe('WorkerBridge value-diff posting', () => {
     });
 });
 
+describe('WorkerBridge unknown programs', () => {
+    it('throws instead of inventing a dirty-check entry for a program that was never declared', () => {
+        const fake = createFakeTransport();
+        const bridge = new WorkerBridge(fake.transport, baseInit({
+            uniforms: { main: { u_a: { type: 'float', value: 1 } } }
+        }));
+        fake.postMessage.mockClear();
+
+        expect(() => { bridge.setUniformValues('blur', { u_a: 2 }) }).toThrow(/blur/);
+        expect(() => { bridge.setUniformValues('blur', { u_a: 2 }) }).toThrow(/main/);
+        expect(fake.postMessage).not.toHaveBeenCalled();
+    });
+
+    it('accepts a program declared with an empty uniform map', () => {
+        const fake = createFakeTransport();
+        const bridge = new WorkerBridge(fake.transport, pingPongInit([{ programId: 'main', inputTextures: [] }]));
+        fake.postMessage.mockClear();
+
+        expect(() => { bridge.setUniformValues('blur', {}) }).not.toThrow();
+        expect(fake.postMessage).not.toHaveBeenCalled();
+    });
+});
+
+describe('WorkerBridge ready idempotency', () => {
+    it('only flushes the queued resize and calls onReady for the first ready message', () => {
+        const fake = createFakeTransport();
+        const onReady = vi.fn();
+        const bridge = new WorkerBridge(fake.transport, baseInit(), { onReady });
+
+        bridge.resize(100, 200);
+        emitReady(fake);
+        emitReady(fake);
+
+        expect(onReady).toHaveBeenCalledTimes(1);
+        const resizeCalls = fake.postMessage.mock.calls.filter(
+            call => (call[0] as MainToWorker).type === 'resize'
+        );
+        expect(resizeCalls).toHaveLength(1);
+    });
+});
+
+describe('WorkerBridge motion gate', () => {
+    it('forwards the motion gate so the worker loop applies the same motion semantics', () => {
+        const fake = createFakeTransport();
+        const bridge = new WorkerBridge(fake.transport, baseInit());
+        fake.postMessage.mockClear();
+
+        bridge.setMotionGate('static');
+        bridge.setMotionGate('none');
+
+        expect(fake.postMessage).toHaveBeenNthCalledWith(1, { type: 'setMotionGate', gate: 'static' }, undefined);
+        expect(fake.postMessage).toHaveBeenNthCalledWith(2, { type: 'setMotionGate', gate: 'none' }, undefined);
+    });
+
+    it('goes inert after dispose', () => {
+        const fake = createFakeTransport();
+        const bridge = new WorkerBridge(fake.transport, baseInit());
+        bridge.dispose();
+        fake.postMessage.mockClear();
+
+        bridge.setMotionGate('pause');
+
+        expect(fake.postMessage).not.toHaveBeenCalled();
+    });
+});
+
+describe('WorkerBridge skipDefaultUniforms', () => {
+    it('forwards skipDefaultUniforms so the worker does not auto-register u_time / u_resolution', () => {
+        const fake = createFakeTransport();
+        new WorkerBridge(fake.transport, baseInit({ skipDefaultUniforms: true }));
+
+        expect(initMessage(fake).config.skipDefaultUniforms).toBe(true);
+    });
+});
+
 describe('WorkerBridge setPasses', () => {
     it('posts serialized passes, applying the same built-in exemption and fail-loud rules', () => {
         const fake = createFakeTransport();

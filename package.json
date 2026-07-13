@@ -84,6 +84,7 @@
     "eslint-plugin-react-x": "^1.48.4",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "globals": "^16.0.0",
+    "jsdom": "^29.1.1",
     "mp4-muxer": "^5.2.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

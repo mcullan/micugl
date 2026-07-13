@@ -1,3 +1,4 @@
+import type { MotionGate } from '@/react/lib/motionPolicy';
 import type {
     FramebufferOptions,
     Frameloop,
@@ -43,6 +44,21 @@ export interface WorkerTransport {
     terminate?: () => void;
 }
 
+export function workerTransport(worker: Worker): WorkerTransport {
+    return {
+        postMessage: (message, transfer) => {
+            if (transfer) {
+                worker.postMessage(message, transfer);
+                return;
+            }
+            worker.postMessage(message);
+        },
+        addEventListener: (type, listener) => { worker.addEventListener(type, listener) },
+        removeEventListener: (type, listener) => { worker.removeEventListener(type, listener) },
+        terminate: () => { worker.terminate() }
+    };
+}
+
 export interface WorkerBridgeCallbacks {
     onReady?: (capabilities: WorkerCapabilities) => void;
     onContextLost?: () => void;
@@ -59,6 +75,7 @@ export interface WorkerBridgeInit {
     uniforms: Record<string, WorkerBridgeProgramUniforms>;
     passes?: RenderPass[];
     framebuffers?: Record<string, FramebufferOptions>;
+    skipDefaultUniforms?: boolean;
     frameloop: Frameloop;
     speed: number;
     active?: boolean;
@@ -76,11 +93,16 @@ function isLiveUniformName(
     return liveUniforms?.[programId]?.includes(name) ?? false;
 }
 
-function functionUniformErrorMessage(programId: string, name: string): string {
+export function functionUniformErrorMessage(programId: string, name: string): string {
     return `micugl worker: uniform "${name}" on program "${programId}" is a function and cannot be `
         + 'sent to a worker. Either give it a plain value (number, number[], or typed array) so it is '
         + `posted on change, or list "${name}" in the "liveUniforms" prop for program "${programId}" `
         + 'to have it evaluated on the main thread each frame.';
+}
+
+function unknownProgramErrorMessage(programId: string, known: string[]): string {
+    return `micugl worker: setUniformValues was called for program "${programId}", which was not declared at `
+        + `init. Programs are fixed when the worker starts; the declared programs are: ${known.join(', ')}.`;
 }
 
 function notCloneSafeErrorMessage(programId: string, name: string): string {
@@ -212,6 +234,7 @@ export class WorkerBridge {
             framebuffers: init.framebuffers,
             initialValues,
             descriptors,
+            skipDefaultUniforms: init.skipDefaultUniforms,
             frameloop: init.frameloop,
             speed: init.speed,
             active: this.lastActive,
@@ -233,6 +256,9 @@ export class WorkerBridge {
         }
         switch (message.type) {
             case 'ready':
+                if (this.ready) {
+                    break;
+                }
                 this.ready = true;
                 if (this.pendingResize) {
                     this.post({ type: 'resize', ...this.pendingResize });
@@ -257,7 +283,11 @@ export class WorkerBridge {
             return;
         }
 
-        const last = this.lastPostedValues.get(programId) ?? {};
+        const last = this.lastPostedValues.get(programId);
+        if (!last) {
+            throw new Error(unknownProgramErrorMessage(programId, [...this.lastPostedValues.keys()]));
+        }
+
         const diff: UniformValueMap = {};
 
         for (const [name, rawValue] of Object.entries(values)) {
@@ -349,6 +379,13 @@ export class WorkerBridge {
             return;
         }
         this.post({ type: 'setSpeed', speed });
+    }
+
+    setMotionGate(gate: MotionGate): void {
+        if (this.disposed) {
+            return;
+        }
+        this.post({ type: 'setMotionGate', gate });
     }
 
     renderFrame(time: number): void {

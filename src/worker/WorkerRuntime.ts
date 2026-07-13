@@ -166,6 +166,9 @@ export class WorkerRuntime {
             case 'setSpeed':
                 loop.setSpeed(message.speed);
                 break;
+            case 'setMotionGate':
+                loop.setMotionGate(message.gate);
+                break;
             case 'renderFrame':
                 loop.setFrame(msToFrame(message.time));
                 break;
@@ -336,11 +339,13 @@ export class WorkerRuntime {
     private registerUniformUpdaters(manager: WebGLManager): void {
         const config = this.requireConfig();
 
-        for (const [programId, programConfig] of Object.entries(config.programConfigs)) {
-            for (const uniform of programConfig.uniforms) {
-                const hasPostedValue = this.values.get(programId)?.[uniform.name] !== undefined;
-                if (isWorkerBuiltinUniformName(uniform.name) && !hasPostedValue) {
-                    this.ensureBuiltinUpdater(manager, programId, uniform.name);
+        if (!config.skipDefaultUniforms) {
+            for (const [programId, programConfig] of Object.entries(config.programConfigs)) {
+                for (const uniform of programConfig.uniforms) {
+                    const hasPostedValue = this.values.get(programId)?.[uniform.name] !== undefined;
+                    if (isWorkerBuiltinUniformName(uniform.name) && !hasPostedValue) {
+                        this.ensureBuiltinUpdater(manager, programId, uniform.name);
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ import {
     useCallback,
     useEffect,
     useImperativeHandle,
+    useMemo,
     useRef,
     useState
 } from 'react';
@@ -23,6 +24,8 @@ import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { useReducedMotion } from '@/react/hooks/useReducedMotion';
 import { useSaveData } from '@/react/hooks/useSaveData';
+import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
+import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
@@ -37,6 +40,16 @@ import {
     resolveResolution
 } from '@/react/lib/resolution';
 import { frameToMs } from '@/react/lib/timeKeeper';
+import type { WorkerBlock, WorkerProgramUniforms } from '@/react/lib/workerMode';
+import {
+    findWorkerBlock,
+    isWorkerRequested,
+    normalizeWorkerPrograms,
+    stripPassUniforms,
+    workerBlockMessage,
+    workerGetFrameMessage,
+    workerHandleUnsupportedMessage
+} from '@/react/lib/workerMode';
 import type {
     Dpr,
     PingPongShaderHandle,
@@ -44,10 +57,12 @@ import type {
     RenderControlProps,
     RenderToBlobOptions,
     SeedOptions,
-    SequenceOptions
+    SequenceOptions,
+    WorkerMode
 } from '@/types';
+import type { WorkerBridge } from '@/worker/WorkerBridge';
 
-interface PingPongShaderEngineProps extends RenderControlProps {
+interface PingPongShaderEngineBaseProps extends Omit<RenderControlProps, 'worker' | 'createWorker'> {
     programConfigs: Record<string, ShaderProgramConfig>;
     passes: RenderPass[];
     framebuffers?: Record<string, FramebufferOptions>;
@@ -58,6 +73,17 @@ interface PingPongShaderEngineProps extends RenderControlProps {
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
 }
+
+export type PingPongShaderEngineWorkerProps =
+    | { worker?: false; createWorker?: never; workerUniforms?: never; workerCustomPasses?: never }
+    | {
+        worker: WorkerMode;
+        createWorker?: () => Worker;
+        workerUniforms: WorkerProgramUniforms;
+        workerCustomPasses: boolean;
+    };
+
+type PingPongShaderEngineProps = PingPongShaderEngineBaseProps & PingPongShaderEngineWorkerProps;
 
 interface ObservedSize {
     cssWidth: number;
@@ -82,6 +108,10 @@ const readNow = (): number => (typeof performance === 'object' ? performance.now
 
 const readDevicePixelRatio = (): number =>
     typeof window === 'object' ? window.devicePixelRatio : 1;
+
+const deny = (method: string) => (): never => {
+    throw new Error(workerHandleUnsupportedMessage('PingPongShaderEngine', method));
+};
 
 let engineIdCounter = 0;
 
@@ -121,6 +151,10 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     renderHeight,
     debug = false,
     debugPortRef,
+    workerUniforms,
+    workerCustomPasses = false,
+    worker,
+    createWorker,
     useDevicePixelRatio,
     pixelRatio,
     frameloop = 'always',
@@ -152,10 +186,30 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     const observedSizeRef = useRef<ObservedSize | null>(null);
     const appliedPassesRef = useRef<RenderPass[] | null>(null);
     const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const initPropsRef = useRef({ programConfigs, framebuffers, passes });
+    const bridgeRef = useRef<WorkerBridge | null>(null);
+    const renderSizeRef = useRef({ renderWidth: 0, renderHeight: 0 });
+    const workerActiveRef = useRef(false);
 
     const [epoch, setEpoch] = useState(0);
+
+    const workerRequested = isWorkerRequested(worker);
+    const workerPasses = useMemo(
+        () => workerRequested && !workerCustomPasses ? stripPassUniforms(passes) : passes,
+        [workerRequested, workerCustomPasses, passes]
+    );
+    const workerPrograms = workerRequested && workerUniforms
+        ? normalizeWorkerPrograms(workerUniforms)
+        : undefined;
+    const block: WorkerBlock | null = workerRequested
+        ? findWorkerBlock({
+            uniforms: workerPrograms,
+            fastPath: true,
+            instancing: false,
+            passes: workerPasses
+        })
+        : null;
+
+    const initPropsRef = useRef({ programConfigs, framebuffers, passes });
 
     const dprMin = Array.isArray(dpr) ? dpr[0] : dpr;
     const dprMax = Array.isArray(dpr) ? dpr[1] : dpr;
@@ -257,9 +311,12 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     }, []);
 
     const applySize = useCallback(() => {
-        const manager = managerRef.current;
         const canvas = canvasRef.current;
-        if (!readyRef.current || !manager || !canvas) return;
+        if (!canvas) return;
+
+        const workerMode = workerActiveRef.current;
+        const manager = managerRef.current;
+        if (!workerMode && (!readyRef.current || !manager)) return;
 
         const devicePixelRatio = readDevicePixelRatio();
         const disableDevicePixelRatio = useDevicePixelRatio === false;
@@ -308,6 +365,18 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         const bufferWidth = renderWidth ?? computedWidth;
         const bufferHeight = renderHeight ?? computedHeight;
 
+        if (workerMode) {
+            if (fit !== 'element') {
+                canvas.style.width = `${displayWidth}px`;
+                canvas.style.height = `${displayHeight}px`;
+            }
+            renderSizeRef.current = { renderWidth: bufferWidth, renderHeight: bufferHeight };
+            bridgeRef.current?.resize(bufferWidth, bufferHeight);
+            return;
+        }
+
+        if (!manager) return;
+
         if (fit === 'element') {
             manager.setDrawingBufferSize(bufferWidth, bufferHeight);
         } else {
@@ -325,6 +394,48 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     }, [width, height, renderWidth, renderHeight, dprMin, dprMax, maxPixelCount, pixelRatio, useDevicePixelRatio, fit]);
 
     const applySizeRef = useRef(applySize);
+
+    const session = useWorkerBridge({
+        worker,
+        blocked: block !== null,
+        contentKey,
+        canvasRef,
+        controllerRef,
+        bridgeRef,
+        createWorker,
+        programs: workerPrograms,
+        debug,
+        frameloop,
+        speed,
+        motionGate,
+        staticFrame,
+        measure: () => {
+            applySizeRef.current();
+            return renderSizeRef.current;
+        },
+        buildInit: (active): WorkerBridgeInitPayload => {
+            if (!workerPrograms) {
+                throw new Error(workerBlockMessage('PingPongShaderEngine', { kind: 'uniforms-missing' }));
+            }
+            return {
+                kind: 'pingpong',
+                programConfigs,
+                uniforms: workerPrograms,
+                passes: workerPasses,
+                framebuffers,
+                skipDefaultUniforms: workerCustomPasses,
+                frameloop,
+                speed,
+                active
+            };
+        },
+        onConnected: () => {
+            appliedPassesRef.current = workerPasses;
+        }
+    });
+
+    const { active: workerActive, canvasKey, syncActive, setStopped } = session;
+    workerActiveRef.current = workerActive;
 
     useEffect(() => {
         initPropsRef.current = { programConfigs, framebuffers, passes };
@@ -346,6 +457,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     }, [renderFrame]);
 
     useEffect(() => {
+        if (workerActive) return;
         if (!canvasRef.current) return;
 
         const manager = new WebGLManager(canvasRef.current);
@@ -430,7 +542,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             passSystemRef.current = null;
             emitEngineUnmount(engineIdRef.current);
         };
-    }, [contentKey, epoch, debugPortRef]);
+    }, [workerActive, contentKey, epoch, debugPortRef]);
 
     useEffect(() => {
         applySize();
@@ -469,9 +581,18 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         const onResize = () => { applySize() };
         window.addEventListener('resize', onResize);
         return () => { window.removeEventListener('resize', onResize) };
-    }, [fit, width, height, applySize]);
+    }, [fit, width, height, canvasKey, applySize]);
 
     useEffect(() => {
+        if (workerActive) {
+            const bridge = bridgeRef.current;
+            if (!bridge || workerPasses === appliedPassesRef.current) return;
+
+            appliedPassesRef.current = workerPasses;
+            bridge.setPasses(workerPasses);
+            return;
+        }
+
         const passSystem = passSystemRef.current;
         if (!passSystem || !readyRef.current) return;
 
@@ -486,18 +607,27 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         });
         passSystem.initializeResources();
         controllerRef.current?.invalidate();
-    }, [passes]);
+    }, [workerActive, passes, workerPasses]);
 
     useEffect(() => {
         const controller = controllerRef.current;
         if (!controller) return;
 
+        const setVisible = (documentVisible: boolean) => {
+            controller.setVisible(documentVisible);
+            syncActive();
+        };
+        const setIntersecting = (intersecting: boolean) => {
+            controller.setIntersecting(intersecting);
+            syncActive();
+        };
+
         const onVisibility = () => {
-            controller.setVisible(typeof document === 'object' ? !document.hidden : true);
+            setVisible(typeof document === 'object' ? !document.hidden : true);
         };
 
         if (typeof document === 'object') {
-            controller.setVisible(!document.hidden);
+            setVisible(!document.hidden);
             document.addEventListener('visibilitychange', onVisibility);
         }
 
@@ -507,12 +637,12 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             observer = new IntersectionObserver(entries => {
                 const entry = entries[entries.length - 1] as IntersectionObserverEntry | undefined;
                 if (entry) {
-                    controller.setIntersecting(entry.isIntersecting);
+                    setIntersecting(entry.isIntersecting);
                 }
             }, { threshold: 0 });
             observer.observe(canvas);
         } else {
-            controller.setIntersecting(true);
+            setIntersecting(true);
         }
 
         return () => {
@@ -521,7 +651,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             }
             observer?.disconnect();
         };
-    }, []);
+    }, [canvasKey, syncActive]);
 
     useEffect(() => {
         const controller = controllerRef.current;
@@ -530,7 +660,8 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         controller.setFrameloop(frameloop);
         controller.setSpeed(speed);
         controller.setPauseWhenHidden(pauseWhenHidden);
-    }, [frameloop, speed, pauseWhenHidden]);
+        syncActive();
+    }, [frameloop, speed, pauseWhenHidden, syncActive]);
 
     useEffect(() => {
         const controller = controllerRef.current;
@@ -543,17 +674,8 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     }, [motionGate, staticFrame]);
 
     useEffect(() => {
-        if (!debug) return;
-        let cancelled = false;
-        void import('@/react/devtools/attach').then(module => {
-            if (!cancelled) {
-                module.ensureDevtoolsMounted();
-            }
-        });
-        return () => { cancelled = true };
-    }, [debug]);
+        if (workerActive) return;
 
-    useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -572,7 +694,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             canvas.removeEventListener('webglcontextlost', onLost);
             canvas.removeEventListener('webglcontextrestored', onRestored);
         };
-    }, []);
+    }, [workerActive, canvasKey]);
 
     useEffect(() => {
         if (releaseTimerRef.current !== null) {
@@ -589,7 +711,19 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         };
     }, []);
 
-    useImperativeHandle(ref, () => ({
+    useImperativeHandle(ref, (): PingPongShaderHandle => workerActive ? {
+        invalidate: () => { bridgeRef.current?.invalidate() },
+        setFrame: (frame: number) => { bridgeRef.current?.renderFrame(frameToMs(frame)) },
+        getFrame: () => { throw new Error(workerGetFrameMessage('PingPongShaderEngine')) },
+        start: () => { setStopped(false) },
+        stop: () => { setStopped(true) },
+        resetSimulation: deny('resetSimulation'),
+        renderToBlob: deny('renderToBlob'),
+        renderToDataURL: deny('renderToDataURL'),
+        captureStream: deny('captureStream'),
+        record: deny('record'),
+        renderSequence: deny('renderSequence')
+    } : {
         invalidate: () => { controllerRef.current?.invalidate() },
         setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
         getFrame: () => controllerRef.current?.getFrame() ?? 0,
@@ -667,10 +801,19 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
                 }
             });
         }
-    }), [resetSimulation, captureStill]);
+    }, [workerActive, resetSimulation, captureStill, setStopped]);
+
+    if (workerActive && block) {
+        throw new Error(workerBlockMessage('PingPongShaderEngine', block));
+    }
+
+    if (session.error) {
+        throw session.error;
+    }
 
     return (
         <canvas
+            key={canvasKey}
             ref={canvasRef}
             className={className}
             style={{
