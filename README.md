@@ -228,6 +228,131 @@ the uniform would jump. That combination throws with the remedy in the message. 
 transitions on the main thread and posting them through the `liveUniforms` channel is a
 follow-up.
 
+## Audio-reactive uniforms
+
+`useAudioUniforms` turns a microphone, an `<audio>`/`<video>` element, or an `AudioNode` you
+already own into two uniforms: `u_audioBands` (1-4 log-spaced frequency bands packed into a
+`float`/`vec2`/`vec3`/`vec4`) and `u_audioLevel` (their mean).
+
+The element is `null` on the first render, so the visualizer has to wait for it. Hold the
+element in state with a ref callback and render the visualizer only once it exists:
+
+```tsx
+const Visualizer = ({ element }: { element: HTMLAudioElement }) => {
+    const audio = useAudioUniforms(
+        { type: 'element', element },
+        { bands: 4, attack: 0.01, release: 0.18 }
+    );
+
+    return (
+        <>
+            <BaseShaderComponent
+                programId='audio-bars'
+                shaderConfig={config}
+                uniforms={{ ...audio.uniforms, intensity: { type: 'float', value: 1 } }}
+                frameloop='demand'
+            />
+            <button type='button' onClick={() => { void audio.start() }}>play</button>
+            {audio.status === 'error' && <p>{audio.error?.message}</p>}
+        </>
+    );
+};
+
+export const Player = () => {
+    const [element, setElement] = useState<HTMLAudioElement | null>(null);
+
+    return (
+        <>
+            <audio ref={setElement} src='/track.mp3' controls />
+            {element && <Visualizer element={element} />}
+        </>
+    );
+};
+```
+
+- `useAudioUniforms(source, options?)` returns `{ uniforms, start, stop, status, error }`.
+  `source` is `{ type: 'mic' }`, `{ type: 'element', element }` or `{ type: 'node', node, context }`.
+- **`start()` needs a user gesture.** Call it from a click, not on mount: browsers require a
+  gesture for `getUserMedia` and for resuming a suspended `AudioContext`. It returns a promise
+  that rejects on a denied permission or an insecure context, and the same failure is reported
+  through `status === 'error'` and `error`.
+- `stop()` releases everything the hook owns: the microphone track stops (the OS recording
+  indicator goes out), a mic `AudioContext` is closed, and the uniforms fall back to zero.
+  Unmounting stops the driver too. `stop()` never disconnects a media element from the
+  speakers - stopping the visualizer does not stop the music.
+- Options: `bands` (1-4, default 4), `fftSize`, `smoothingTimeConstant`, `attack`/`release`
+  (an asymmetric envelope in seconds - fast attack, slow release, which the analyser's own
+  symmetric smoothing cannot express), `minDecibels`/`maxDecibels`, `bandLayout`
+  (`'log' | 'linear'`), and `names` to rename the two uniforms. A statically-invalid option
+  (a `bands` outside 1-4, an `fftSize` that is not a power of two, a negative `attack`) throws
+  during render, before any WebAudio object exists. A `bands`/`fftSize` combination that is only
+  impossible against the device's *actual* sample rate - too few bins between the band edges to
+  split - cannot be caught statically: it throws from `start()` or from the reconfigure, and
+  surfaces as `status === 'error'` with the reason in `error`.
+- A third argument, `deps`, lets you inject your own `AudioContext` factory and `getUserMedia`
+  (`{ createContext, getUserMedia }`). It is read once, when the hook builds its driver; changing
+  it afterwards is deliberately ignored, because the hook owns one audio graph for its whole life.
+- Analysis is **frame-driven**: it runs inside the uniform read, once per rendered frame. There
+  is no second rAF loop, an engine that is paused, hidden or offscreen does no audio work at
+  all, and `frameloop='demand'` works - the driver wakes the loop every time it analyses, so the
+  loop keeps itself alive while audio is running and goes idle again the moment you `stop()`.
+- The band count decides the uniform's type, so changing `bands` means changing the uniform's
+  declaration in the shader too (`vec4` -> `vec2`).
+- One hook instance owns one audio graph for its whole life. Changing the `source` under a live
+  hook throws; give the component a `key` that changes with the source so the old graph is
+  stopped before the new one is built.
+- Worker mode works: audio uniforms are function-valued, so list them in `liveUniforms` and the
+  main thread samples them each frame and posts the values to the worker.
+- **A running audio scene cannot be exported deterministically.** The envelope integrates frame
+  to frame, and every frame reads whatever the microphone or media element happens to be playing,
+  so `renderSequence()` and `renderToBlob({ frame })` - the two calls that synthesize a frame time
+  - throw while `status === 'running'`, and the message says so. Call `stop()` first and the same
+  export works. The honest live captures (`renderToBlob()` with no frame, `record()`,
+  `captureStream()`) render the real clock and are never blocked.
+- Known limitation: a CORS-tainted media element (cross-origin audio without permissive CORS
+  headers) feeds the analyser silent zeros. The browser reports no error, so neither can micugl:
+  `status` reads `'running'` and the uniforms read 0.
+
+### Waking a `demand` engine from your own value producer
+
+`useAudioUniforms` is built on two public pieces you can use directly for any live input of your
+own (a webcam, a MIDI knob, a websocket). `UniformParam.invalidation` takes a `FrameInvalidation`;
+whenever your producer calls `request()`, every engine using that uniform renders a frame. Under
+`frameloop='always'` it is a no-op; under `'demand'` it is the whole scheduling mechanism.
+
+```tsx
+const pointerInvalidation = useMemo(() => createFrameInvalidation(), []);
+const pointerRef = useRef<[number, number]>([0, 0]);
+
+useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+        pointerRef.current = [event.clientX, event.clientY];
+        pointerInvalidation.request();
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => { window.removeEventListener('pointermove', onMove) };
+}, [pointerInvalidation]);
+
+<BaseShaderComponent
+    programId='trail'
+    shaderConfig={config}
+    frameloop='demand'
+    uniforms={{
+        u_pointer: {
+            type: 'vec2',
+            value: () => pointerRef.current,
+            invalidation: pointerInvalidation
+        }
+    }}
+/>
+```
+
+`invalidation` must be **referentially stable**. The engine diffs the connected set by object
+identity, so an inline `createFrameInvalidation()` or `combineFrameInvalidation([...])` built
+during render would connect and dispose on every render. Memoize it (or hold it in a ref), as
+above. `combineFrameInvalidation` merges several producers into one when a uniform is woken by
+more than one source.
+
 ## Worker rendering (OffscreenCanvas)
 
 `worker` moves the GL context and the render loop off the main thread, onto an

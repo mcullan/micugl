@@ -3,10 +3,13 @@ export { BasePingPongShaderComponent } from './components/base/BasePingPongShade
 export { BaseShaderComponent } from './components/base/BaseShaderComponent';
 export { PingPongShaderEngine } from './components/engine/PingPongShaderEngine';
 export { ShaderEngine } from './components/engine/ShaderEngine';
+export type { AudioUniformsResult } from './hooks/useAudioUniforms';
+export { useAudioUniforms } from './hooks/useAudioUniforms';
 export { useDarkMode } from './hooks/useDarkMode';
 export { usePingPongPasses } from './hooks/usePingPongPasses';
 export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
+export type { AudioAnalyserDriverDeps } from './lib/audioAnalyserDriver';
 export { createCommonUpdaters, createUniformUpdater, createUniformUpdaters } from './lib/createUniformUpdater';
 export type { InstanceAttribute, InstancingConfig, WorkerMode } from '@/types';

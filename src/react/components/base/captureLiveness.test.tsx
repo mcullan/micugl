@@ -7,11 +7,17 @@ import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import { GL_NEAREST, GL_UNSIGNED_BYTE } from '@/core/lib/glConstants';
 import { BasePingPongShaderComponent } from '@/react/components/base/BasePingPongShaderComponent';
 import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
+import type { AudioUniformsResult } from '@/react/hooks/useAudioUniforms';
+import { useAudioUniforms } from '@/react/hooks/useAudioUniforms';
+import type { AudioAnalyserDriverDeps } from '@/react/lib/audioAnalyserDriver';
+import { asContext, createFakeStream, FakeContext, latestAnalyser, LOW_HALF } from '@/react/lib/fakeWebAudio';
 import type { GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
 import type { FrameQueue } from '@/testing/frameQueue';
 import { createFrameQueue } from '@/testing/frameQueue';
 import type {
+    AudioSourceSpec,
+    AudioUniformsOptions,
     FramebufferOptions,
     PingPongShaderHandle,
     SequenceOptions,
@@ -45,6 +51,22 @@ const CONFIG = createShaderConfig({
     fragmentShader: 'void main() {}',
     uniformNames: { u_swirl: 'float' }
 });
+
+const AUDIO_CONFIG = createShaderConfig({
+    vertexShader: 'void main() {}',
+    fragmentShader: 'void main() {}',
+    uniformNames: { u_audioBands: 'vec2', u_audioLevel: 'float' }
+});
+
+const MIC: AudioSourceSpec = { type: 'mic' };
+
+const AUDIO_OPTIONS: AudioUniformsOptions = {
+    bands: 2,
+    fftSize: 64,
+    bandLayout: 'linear',
+    attack: 0.05,
+    release: 0.4
+};
 
 class MediaRecorderStub {
     static isTypeSupported = (type: string): boolean => type === 'video/webm;codecs=vp9';
@@ -177,6 +199,59 @@ function settle(): void {
     }
 }
 
+interface AudioFixture {
+    context: FakeContext;
+    deps: AudioAnalyserDriverDeps;
+    hear: () => void;
+}
+
+function createAudioFixture(): AudioFixture {
+    const context = new FakeContext();
+    const { stream } = createFakeStream();
+    return {
+        context,
+        deps: {
+            createContext: () => asContext(context),
+            getUserMedia: () => Promise.resolve(stream)
+        },
+        hear: () => { latestAnalyser(context).spectrum = LOW_HALF }
+    };
+}
+
+interface AudioSceneProps {
+    handleRef: RefObject<ShaderHandle | null>;
+    probe: { current: AudioUniformsResult | null };
+    deps: AudioAnalyserDriverDeps;
+}
+
+const AudioScene = ({ handleRef, probe, deps }: AudioSceneProps) => {
+    const audio = useAudioUniforms(MIC, AUDIO_OPTIONS, deps);
+    probe.current = audio;
+
+    return (
+        <BaseShaderComponent
+            ref={handleRef}
+            programId={PROGRAM_ID}
+            shaderConfig={AUDIO_CONFIG}
+            uniforms={audio.uniforms}
+            width={WIDTH}
+            height={HEIGHT}
+            useDevicePixelRatio={false}
+            frameloop='demand'
+            reducedMotion='ignore'
+            saveData='ignore'
+        />
+    );
+};
+
+function currentAudio(probe: { current: AudioUniformsResult | null }): AudioUniformsResult {
+    const value = probe.current;
+    if (!value) {
+        throw new Error('the audio scene has not rendered yet');
+    }
+    return value;
+}
+
 describe('deterministic capture with a spring transition in flight, through mounted components', () => {
     it('renderSequence throws while a spring is in flight, and the message says why', async () => {
         const handleRef: RefObject<ShaderHandle | null> = { current: null };
@@ -294,5 +369,98 @@ describe('deterministic capture with a spring transition in flight, through moun
         stub.reset();
         await expect(handleRef.current?.renderToBlob({ frame: 30 })).resolves.toBeInstanceOf(Blob);
         expect(stub.readPixelsCalls.length).toBe(1);
+    });
+});
+
+describe('deterministic capture with a live audio input, through mounted components', () => {
+    it('renderSequence throws while the audio is running, and the message names the audio, not a spring', async () => {
+        const handleRef: RefObject<ShaderHandle | null> = { current: null };
+        const probe: { current: AudioUniformsResult | null } = { current: null };
+        const fixture = createAudioFixture();
+
+        await mount(<AudioScene handleRef={handleRef} probe={probe} deps={fixture.deps} />);
+        frames.tick(0);
+
+        await act(async () => { await currentAudio(probe).start() });
+        fixture.hear();
+        frames.tick(16);
+
+        expect(() => handleRef.current?.renderSequence(SEQUENCE))
+            .toThrow(/ShaderEngine\.renderSequence: audio is running/);
+        expect(() => handleRef.current?.renderSequence(SEQUENCE)).toThrow(/would not reproduce/);
+        expect(() => handleRef.current?.renderSequence(SEQUENCE)).toThrow(/Call stop\(\) on the audio hook/);
+        expect(() => handleRef.current?.renderSequence(SEQUENCE)).not.toThrow(/spring/);
+    });
+
+    it('renderToBlob({ frame }) rejects while the audio is running, and never reaches the pixel read', async () => {
+        const handleRef: RefObject<ShaderHandle | null> = { current: null };
+        const probe: { current: AudioUniformsResult | null } = { current: null };
+        const fixture = createAudioFixture();
+
+        await mount(<AudioScene handleRef={handleRef} probe={probe} deps={fixture.deps} />);
+        frames.tick(0);
+
+        await act(async () => { await currentAudio(probe).start() });
+        fixture.hear();
+        frames.tick(16);
+
+        stub.reset();
+        await expect(handleRef.current?.renderToBlob({ frame: 30 }))
+            .rejects.toThrow(/ShaderEngine\.renderToBlob: audio is running/);
+        expect(stub.readPixelsCalls.length).toBe(0);
+
+        expect(() => handleRef.current?.renderToDataURL({ frame: 30 })).toThrow(/audio is running/);
+    });
+
+    it('a stopped audio scene captures fine: the guard asks the driver, it is not a static flag on the uniform', async () => {
+        const handleRef: RefObject<ShaderHandle | null> = { current: null };
+        const probe: { current: AudioUniformsResult | null } = { current: null };
+        const fixture = createAudioFixture();
+
+        await mount(<AudioScene handleRef={handleRef} probe={probe} deps={fixture.deps} />);
+        frames.tick(0);
+
+        stub.reset();
+        await expect(handleRef.current?.renderToBlob({ frame: 30 })).resolves.toBeInstanceOf(Blob);
+        expect(stub.readPixelsCalls.length).toBe(1);
+
+        await act(async () => { await currentAudio(probe).start() });
+        fixture.hear();
+        frames.tick(16);
+        expect(currentAudio(probe).status).toBe('running');
+
+        await expect(handleRef.current?.renderToBlob({ frame: 30 })).rejects.toThrow(/audio is running/);
+
+        act(() => { currentAudio(probe).stop() });
+        expect(currentAudio(probe).status).toBe('stopped');
+
+        stub.reset();
+        await expect(handleRef.current?.renderToBlob({ frame: 30 })).resolves.toBeInstanceOf(Blob);
+        expect(stub.readPixelsCalls.length).toBe(1);
+
+        await expect(handleRef.current?.renderSequence(SEQUENCE)).rejects.toThrow(/WebCodecs|VideoEncoder/);
+    });
+
+    it('a live capture of running audio is honest, so renderToBlob() with no frame and record() both run', async () => {
+        const handleRef: RefObject<ShaderHandle | null> = { current: null };
+        const probe: { current: AudioUniformsResult | null } = { current: null };
+        const fixture = createAudioFixture();
+
+        await mount(<AudioScene handleRef={handleRef} probe={probe} deps={fixture.deps} />);
+        frames.tick(0);
+
+        await act(async () => { await currentAudio(probe).start() });
+        fixture.hear();
+        frames.tick(16);
+
+        await expect(handleRef.current?.renderToBlob({ frame: 30 })).rejects.toThrow(/audio is running/);
+
+        stub.reset();
+        await expect(handleRef.current?.renderToBlob()).resolves.toBeInstanceOf(Blob);
+        expect(stub.readPixelsCalls.length).toBe(1);
+
+        const recording = handleRef.current?.record();
+        expect(recording?.stream).toBeDefined();
+        expect(recorderStarts).toBe(1);
     });
 });

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { combineFrameInvalidation, type FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
+import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
 import { combineUniformDebugPorts, type UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import {
     buildPasses,
@@ -12,7 +13,6 @@ import {
     serializeFramebufferOptions,
     serializeRenderOptions
 } from '@/react/lib/pingPongPasses';
-import type { SpringsInFlight } from '@/react/lib/springCapture';
 import type { FramebufferOptions, MotionPolicy, RenderPass, UniformParam } from '@/types';
 
 interface PingPongPassesOptions {
@@ -34,7 +34,7 @@ const EMPTY_UNIFORMS: Record<string, UniformParam> = {};
 export interface PingPongPassesWithPort extends PingPongPassesResult {
     port: UniformDebugPort;
     invalidation: FrameInvalidation;
-    springsInFlight: SpringsInFlight;
+    capturesAreNonReproducible: CapturesAreNonReproducible;
 }
 
 export const usePingPongPasses = ({
@@ -100,12 +100,12 @@ export const usePingPongPasses = ({
         [primary.invalidation, secondary.invalidation]
     );
 
-    const primarySprings = primary.springsInFlight;
-    const secondarySprings = secondary.springsInFlight;
-    const springsInFlight = useMemo<SpringsInFlight>(
-        () => () => primarySprings() || secondarySprings(),
-        [primarySprings, secondarySprings]
+    const primaryCapture = primary.capturesAreNonReproducible;
+    const secondaryCapture = secondary.capturesAreNonReproducible;
+    const capturesAreNonReproducible = useMemo<CapturesAreNonReproducible>(
+        () => () => primaryCapture() ?? secondaryCapture(),
+        [primaryCapture, secondaryCapture]
     );
 
-    return { ...passesResult, port, invalidation, springsInFlight };
+    return { ...passesResult, port, invalidation, capturesAreNonReproducible };
 };

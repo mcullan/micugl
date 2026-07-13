@@ -141,6 +141,10 @@ export default tseslint.config(
           {
             group: ['@/testing', '@/testing/*', '**/testing/**'],
             message: 'micugl/testing is dev/test-only and must stay out of library source; only src/testing/**, src/react/devtools/** and *.test.* files may import it.'
+          },
+          {
+            group: ['@/react/lib/fakeWebAudio', '**/fakeWebAudio'],
+            message: 'fakeWebAudio is a test-only fake and must stay out of library source; only *.test.* files may import it.'
           }
         ]
       }]

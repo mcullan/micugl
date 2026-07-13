@@ -5,11 +5,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
+import type { AudioUniformsResult } from '@/react/hooks/useAudioUniforms';
+import { useAudioUniforms } from '@/react/hooks/useAudioUniforms';
+import type { AudioAnalyserDriverDeps } from '@/react/lib/audioAnalyserDriver';
+import { asContext, createFakeStream, FakeContext, latestAnalyser, LOW_HALF } from '@/react/lib/fakeWebAudio';
 import type { GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
 import type { FrameQueue } from '@/testing/frameQueue';
 import { createFrameQueue } from '@/testing/frameQueue';
-import type { Frameloop, ShaderHandle, UniformParam } from '@/types';
+import type {
+    AudioSourceSpec,
+    AudioUniformsOptions,
+    Frameloop,
+    ShaderHandle,
+    UniformParam
+} from '@/types';
 import type { MainToWorker, WorkerToMain } from '@/worker/protocol';
 import type { WorkerRuntimeHost } from '@/worker/WorkerRuntime';
 import { WorkerRuntime } from '@/worker/WorkerRuntime';
@@ -24,12 +34,29 @@ const CONFIG = createShaderConfig({
     uniformNames: { u_level: 'float' }
 });
 
+const AUDIO_CONFIG = createShaderConfig({
+    vertexShader: 'void main() {}',
+    fragmentShader: 'void main() {}',
+    uniformNames: { u_audioBands: 'vec2', u_audioLevel: 'float' }
+});
+
+const MIC: AudioSourceSpec = { type: 'mic' };
+
+const AUDIO_OPTIONS: AudioUniformsOptions = {
+    bands: 2,
+    fftSize: 64,
+    bandLayout: 'linear',
+    attack: 0.05,
+    release: 0.4
+};
+
 interface WorkerHarness {
     createWorker: () => Worker;
     gl: GLStubHandle;
     frames: FrameQueue;
     errors: string[];
     uploads: (name: string) => unknown[];
+    posted: MainToWorker[];
     transfers: () => number;
     mainThreadContexts: () => number;
     failToStart: () => void;
@@ -53,6 +80,7 @@ function createWorkerHarness({ startsScript = true }: WorkerHarnessOptions = {})
 
     const frames = createFrameQueue();
     const errors: string[] = [];
+    const posted: MainToWorker[] = [];
     const listeners: ((event: MessageEvent<WorkerToMain>) => void)[] = [];
     const errorListeners: ((event: Event) => void)[] = [];
 
@@ -75,6 +103,7 @@ function createWorkerHarness({ startsScript = true }: WorkerHarnessOptions = {})
 
     const worker = {
         postMessage: (message: MainToWorker) => {
+            posted.push(message);
             if (startsScript) {
                 runtime.handleMessage(message);
             }
@@ -112,6 +141,7 @@ function createWorkerHarness({ startsScript = true }: WorkerHarnessOptions = {})
         gl: stub,
         frames,
         errors,
+        posted,
         uploads: name => {
             const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
             return stub.uniformCalls
@@ -180,6 +210,118 @@ async function mount(element: ReactElement): Promise<void> {
         root.render(element);
         await Promise.resolve();
     });
+}
+
+interface AudioFixture {
+    context: FakeContext;
+    deps: AudioAnalyserDriverDeps;
+    hear: () => void;
+}
+
+function createAudioFixture(): AudioFixture {
+    const context = new FakeContext();
+    const { stream } = createFakeStream();
+    return {
+        context,
+        deps: {
+            createContext: () => asContext(context),
+            getUserMedia: () => Promise.resolve(stream)
+        },
+        hear: () => { latestAnalyser(context).spectrum = LOW_HALF }
+    };
+}
+
+function countedUniforms(
+    uniforms: Record<string, UniformParam>,
+    samples: string[]
+): Record<string, UniformParam> {
+    const counted: Record<string, UniformParam> = {};
+    for (const [name, param] of Object.entries(uniforms)) {
+        const value = param.value;
+        counted[name] = typeof value === 'function'
+            ? {
+                ...param,
+                value: (time, width, height) => {
+                    samples.push(name);
+                    return value(time, width, height);
+                }
+            }
+            : param;
+    }
+    return counted;
+}
+
+interface AudioSceneProps {
+    worker: WorkerHarness;
+    audio: AudioFixture;
+    probe: { current: AudioUniformsResult | null };
+    frameloop: Frameloop;
+    samples?: string[];
+}
+
+const AudioScene = ({ worker, audio, probe, frameloop, samples }: AudioSceneProps) => {
+    const result = useAudioUniforms(MIC, AUDIO_OPTIONS, audio.deps);
+    probe.current = result;
+
+    return (
+        <BaseShaderComponent
+            worker={true}
+            createWorker={worker.createWorker}
+            programId={PROGRAM_ID}
+            shaderConfig={AUDIO_CONFIG}
+            uniforms={samples ? countedUniforms(result.uniforms, samples) : result.uniforms}
+            liveUniforms={['u_audioBands', 'u_audioLevel']}
+            width={WIDTH}
+            height={HEIGHT}
+            useDevicePixelRatio={false}
+            frameloop={frameloop}
+            reducedMotion='ignore'
+            saveData='ignore'
+        />
+    );
+};
+
+function currentAudio(probe: { current: AudioUniformsResult | null }): AudioUniformsResult {
+    const value = probe.current;
+    if (!value) {
+        throw new Error('the audio scene has not rendered yet');
+    }
+    return value;
+}
+
+function latestBandsUpload(worker: WorkerHarness): number[] {
+    const calls = worker.uploads('u_audioBands');
+    if (calls.length === 0) {
+        throw new Error('u_audioBands has never been uploaded to the worker');
+    }
+    return Array.from(calls[calls.length - 1] as Float32Array);
+}
+
+function bandsPosts(worker: WorkerHarness): number {
+    return worker.posted.filter(
+        message => message.type === 'setUniformValues' && 'u_audioBands' in message.values
+    ).length;
+}
+
+interface BandFrame {
+    posts: number;
+    uploaded: number[];
+}
+
+function expectAdvancingBands(series: BandFrame[]): void {
+    expect(series.length).toBeGreaterThan(5);
+    expect(series.every(frame => frame.uploaded.length === 2)).toBe(true);
+    expect(series.every(frame => frame.uploaded.every(value => Number.isFinite(value)))).toBe(true);
+
+    for (let i = 1; i < series.length; i++) {
+        expect(series[i].posts).toBeGreaterThan(series[i - 1].posts);
+        expect(series[i].uploaded[0]).toBeGreaterThan(series[i - 1].uploaded[0]);
+    }
+    expect(series[series.length - 1].uploaded[0]).toBeGreaterThan(0.4);
+}
+
+function sampleBands(worker: WorkerHarness): BandFrame {
+    return { posts: bandsPosts(worker), uploaded: latestBandsUpload(worker) };
 }
 
 describe('BaseShaderComponent in worker mode', () => {
@@ -353,4 +495,137 @@ describe('BaseShaderComponent in worker mode', () => {
         expect(worker.errors).toEqual([]);
         expect(worker.uploads('u_level')).toEqual([0, 0.75]);
     });
+
+    it('frameloop="demand": an audio uniform keeps posting advancing values instead of freezing after one frame',
+        async () => {
+            const worker = createWorkerHarness();
+            const audio = createAudioFixture();
+            const probe = { current: null as AudioUniformsResult | null };
+
+            await mount(<AudioScene worker={worker} audio={audio} probe={probe} frameloop='demand' />);
+
+            act(() => { mainFrames.tick(0) });
+            worker.frames.tick(0);
+            expect(worker.uploads('u_audioLevel')).toEqual([0]);
+            expect(mainFrames.pending()).toBe(0);
+
+            await act(async () => { await currentAudio(probe).start() });
+            expect(mainFrames.pending()).toBe(1);
+
+            audio.hear();
+
+            const bandSeries: BandFrame[] = [];
+            for (let time = 16; time <= 160; time += 16) {
+                await act(async () => {
+                    mainFrames.tick(time);
+                    await Promise.resolve();
+                });
+                expect(mainFrames.pending()).toBe(1);
+                worker.frames.tick(time);
+                bandSeries.push(sampleBands(worker));
+            }
+
+            const levels = worker.uploads('u_audioLevel') as number[];
+            expect(worker.errors).toEqual([]);
+            expect(levels.length).toBeGreaterThan(5);
+            for (let i = 1; i < levels.length; i++) {
+                expect(levels[i]).toBeGreaterThan(levels[i - 1]);
+            }
+            expect(levels[levels.length - 1]).toBeGreaterThan(0.4);
+            expect(levels.every(level => Number.isFinite(level))).toBe(true);
+
+            expectAdvancingBands(bandSeries);
+
+            await act(async () => {
+                currentAudio(probe).stop();
+                await Promise.resolve();
+            });
+            await act(async () => {
+                mainFrames.tick(176);
+                await Promise.resolve();
+            });
+            worker.frames.tick(176);
+
+            const after = worker.uploads('u_audioLevel') as number[];
+            expect(after[after.length - 1]).toBe(0);
+            expect(mainFrames.pending()).toBe(0);
+        });
+
+    it('samples each live uniform once per frame: waking the loop from inside the sampler must not re-enter it',
+        async () => {
+            const worker = createWorkerHarness();
+            const audio = createAudioFixture();
+            const probe = { current: null as AudioUniformsResult | null };
+            const samples: string[] = [];
+
+            await mount(
+                <AudioScene worker={worker} audio={audio} probe={probe} frameloop='demand' samples={samples} />
+            );
+            act(() => { mainFrames.tick(0) });
+
+            await act(async () => { await currentAudio(probe).start() });
+            audio.hear();
+
+            const analyser = latestAnalyser(audio.context);
+            const readsBefore = analyser.reads;
+            samples.length = 0;
+
+            const bandSeries: BandFrame[] = [];
+            for (let time = 16; time <= 112; time += 16) {
+                await act(async () => {
+                    mainFrames.tick(time);
+                    await Promise.resolve();
+                });
+                worker.frames.tick(time);
+                bandSeries.push(sampleBands(worker));
+            }
+
+            expect(samples.filter(name => name === 'u_audioLevel')).toHaveLength(7);
+            expect(samples.filter(name => name === 'u_audioBands')).toHaveLength(7);
+            expect(analyser.reads - readsBefore).toBe(7);
+
+            expectAdvancingBands(bandSeries);
+        });
+
+    it('never posts an invalidate ahead of the setUniformValues it is for: the worker cannot redraw stale uniforms',
+        async () => {
+            const worker = createWorkerHarness();
+            const audio = createAudioFixture();
+            const probe = { current: null as AudioUniformsResult | null };
+
+            await mount(<AudioScene worker={worker} audio={audio} probe={probe} frameloop='demand' />);
+            act(() => { mainFrames.tick(0) });
+
+            await act(async () => { await currentAudio(probe).start() });
+            audio.hear();
+
+            worker.posted.length = 0;
+
+            for (let time = 16; time <= 96; time += 16) {
+                await act(async () => {
+                    mainFrames.tick(time);
+                    await Promise.resolve();
+                });
+                worker.frames.tick(time);
+            }
+
+            const order = worker.posted
+                .map(message => message.type)
+                .filter(type => type === 'setUniformValues' || type === 'invalidate');
+
+            expect(order.filter(type => type === 'setUniformValues').length).toBeGreaterThan(4);
+            expect(order.filter(type => type === 'invalidate').length).toBeGreaterThan(4);
+            expect(order[0]).toBe('setUniformValues');
+
+            let posts = 0;
+            let redraws = 0;
+            for (const type of order) {
+                if (type === 'setUniformValues') {
+                    posts += 1;
+                    continue;
+                }
+                redraws += 1;
+                expect(redraws).toBeLessThanOrEqual(posts);
+            }
+        });
 });
