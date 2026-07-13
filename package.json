@@ -22,6 +22,11 @@
       "import": "./dist/react.mjs",
       "require": "./dist/react.js"
     },
+    "./embed": {
+      "types": "./dist/embed/index.d.ts",
+      "import": "./dist/embed.mjs",
+      "require": "./dist/embed.js"
+    },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing.mjs",
@@ -47,7 +52,7 @@
   ],
   "scripts": {
     "dev": "vite --config demo/vite.config.ts",
-    "build": "vite build && vite build --config vite.worker.config.ts && node scripts/assertTreeshaken.mjs",
+    "build": "vite build && vite build --config vite.worker.config.ts && esbuild src/embed/index.ts --bundle --minify --format=iife --global-name=micuglEmbed --target=es2020 --outfile=dist/embed.global.js && node scripts/assertTreeshaken.mjs && node scripts/checkEmbedSize.mjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",
@@ -78,6 +83,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "ajv": "^8",
+    "esbuild": "^0.28.1",
     "eslint": "^9.25.0",
     "eslint-plugin-react-dom": "^1.48.4",
     "eslint-plugin-react-hooks": "^5.2.0",

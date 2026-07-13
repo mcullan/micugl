@@ -48,6 +48,87 @@ export default function App() {
 }
 ```
 
+## Embed (loading screens, no React)
+
+`micugl/embed` is a standalone micro-runtime that renders one animated fullscreen fragment
+shader **before or without** React. It is a separate ~1.6 KB gzip runtime, not a re-export of
+`micugl/core`: it has no FBOs, no ping-pong, no capability probing and no resource registry,
+because a loading screen needs none of them. (`WebGLManager` builds an `FBOManager` and probes
+four extensions in its constructor, which costs ~4.4 KB gzip for a fullscreen quad. CI enforces
+the embed runtime's size budget so it cannot drift back toward that.)
+
+```js
+import { embed } from "micugl/embed";
+
+const handle = embed(document.getElementById("loader"), {
+  fragment: FRAGMENT,           // your fragment shader source
+  uniforms: { u_tint: [0.2, 0.4, 0.9] },
+  clearColor: [0, 0, 0, 1],     // default [0,0,0,1]
+  dpr: 2,                       // devicePixelRatio cap, default 2
+});
+
+// later, once the real app has painted:
+handle.destroy();
+```
+
+Your fragment shader receives `uniform float u_time` (seconds), `uniform vec2 u_resolution`
+(drawing-buffer pixels) and `varying vec2 v_uv` (0..1) — the same convention as
+`BaseShaderComponent`, so a shader written for the React component drops straight in.
+The canvas is sized to the viewport, so give it `position:fixed;inset:0`.
+
+`embed()` returns `{ canvas, gl, animating, destroy }`. `destroy()` cancels the loop, removes the
+resize listener, deletes the program/shaders/buffer and calls `WEBGL_lose_context.loseContext()`,
+so a later React mount on a fresh canvas is a clean handoff.
+
+### Static HTML (the `<script>` build)
+
+`dist/embed.global.js` is a prebuilt minified IIFE for a static page with no bundler. Copy it out
+of `node_modules/micugl/dist/` and it exposes `window.micuglEmbed`:
+
+```html
+<canvas id="loader" style="position:fixed;inset:0"></canvas>
+<script src="/vendor/embed.global.js"></script>
+<script>
+  window.__loader = micuglEmbed.embed(document.getElementById("loader"), {
+    fragment: `precision highp float; uniform float u_time; varying vec2 v_uv;
+               void main(){ gl_FragColor = vec4(v_uv, 0.5 + 0.5 * sin(u_time), 1.0); }`,
+  });
+</script>
+```
+
+### Handing off to React
+
+The loader owns its canvas and context for its whole life; React mounts its own component on a
+**fresh** canvas. Let React paint one frame (a double `requestAnimationFrame`, or a ~200 ms opacity
+crossfade on the loader canvas), then call `handle.destroy()` and remove the loader canvas. Two GL
+contexts exist for that brief overlap, which browsers allow.
+
+### Reduced motion & Save-Data
+
+`embed()` honors `prefers-reduced-motion` and the Save-Data hint **on by default**, consistent with
+the React components (see below). When either is active it draws exactly one poster frame and never
+starts the rAF loop; `handle.animating` reports which happened.
+
+- `reducedMotion` / `saveData`: `'static-frame' | 'ignore'`, default `'static-frame'`.
+- `staticFrame` (default `0`) is the poster frame, on the same 60fps timebase as the React
+  `staticFrame` prop, so a poster picked for the React component reproduces exactly here.
+- A loading screen that animates against a user's OS accessibility preference while the rest of the
+  library respects it would read as a bug, so opting out is explicit: `reducedMotion: 'ignore'`.
+
+### Failing loud, and the one place it does not
+
+Everything fails loud with a `micugl/embed:` prefixed error: no WebGL context, shader compile
+failure (info log included), program link failure, and a uniform that is not a finite number or an
+array of 2 to 4 finite numbers.
+
+The **one deliberate exception**: a uniform whose `getUniformLocation` returns `null` is **skipped**,
+not thrown. GLSL compilers legitimately optimize out declared-but-unused uniforms, so `null` is an
+expected outcome that is indistinguishable from a typo at the GL level. `WebGLManager` already
+behaves this way. If a uniform seems to have no effect, check that the shader actually reads it.
+
+Caller uniforms are set **once**, at init. Only `u_time` and `u_resolution` are live per frame;
+animate everything else from `u_time` inside the shader.
+
 ## Core
 
 - **WebGLManager**  
