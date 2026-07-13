@@ -255,6 +255,32 @@ export interface FramebufferOptions {
   textureOptions?: Partial<TextureOptions>;
 }
 
+export interface ResolvedSourceTextureOptions {
+  minFilter: number;
+  magFilter: number;
+  wrapS: number;
+  wrapT: number;
+  flipY: boolean;
+  premultiplyAlpha: boolean;
+}
+
+export type SourceTextureOptions = Partial<ResolvedSourceTextureOptions>;
+
+export type TextureUploadSource = TexImageSource;
+
+export interface TextureSource {
+  id: string;
+  version: number;
+  options: ResolvedSourceTextureOptions;
+  getFrame: () => TextureUploadSource | null;
+  invalidation: FrameInvalidation;
+}
+
+export interface TextureBindingSpec {
+  unit: number;
+  samplerName: string;
+  source: TextureSource;
+}
 
 // ===================================================
 // Render Pass

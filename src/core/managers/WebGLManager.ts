@@ -11,10 +11,12 @@ import type {
     WebGLExtensionTypes
 } from '@/core';
 import { FBOManager } from '@/core';
+import { validateTextureUnit } from '@/core/lib/sourceTextureOptions';
 import { createScalarUpdater, createVectorUpdater } from '@/core/lib/uniformDirtyCheck';
 import type { ActiveUniformInfo } from '@/core/lib/uniformReflection';
 import { activeUniformTypes, uploadReaches } from '@/core/lib/uniformReflection';
-import type { ActiveUniformTypes, BufferData, UniformTypeMap } from '@/types';
+import { TextureManager } from '@/core/managers/TextureManager';
+import type { ActiveUniformTypes, BufferData, TextureBindingSpec, UniformTypeMap } from '@/types';
 
 declare global {
     interface WebGLRenderingContext {
@@ -28,10 +30,12 @@ export type WebGLManagerCanvas = HTMLCanvasElement | OffscreenCanvas;
 export class WebGLManager {
     private gl: WebGLRenderingContext;
     private fboManager: FBOManager;
+    private textureManager: TextureManager;
 
     resources = new Map<string, ShaderResources>();
     private compileCache = new Map<string, WebGLShader>();
     private uniformUpdateFns = new Map<string, Map<string, UniformUpdateFn<UniformType>>>();
+    private textureBindings = new Map<string, TextureBindingSpec[]>();
     private extensions = new Map<string, any>();
     private currentProgram: WebGLProgram | null = null;
 
@@ -52,7 +56,8 @@ export class WebGLManager {
 
         this.gl = ctx;
         this.fboManager = new FBOManager(ctx);
-    
+        this.textureManager = new TextureManager(ctx);
+
         this.getExtension('OES_texture_float');
         this.getExtension('OES_texture_float_linear');
         this.getExtension('OES_vertex_array_object');
@@ -349,6 +354,72 @@ export class WebGLManager {
         programUniforms.set(uniformName, updateFunction);
     }
 
+    registerTextureBinding(programId: string, binding: TextureBindingSpec): void {
+        const resources = this.resources.get(programId);
+        if (!resources) {
+            throw new Error(`Program with id ${programId} not found`);
+        }
+
+        validateTextureUnit(binding.unit, this.textureManager.maxTextureImageUnits());
+
+        const bindings = this.textureBindings.get(programId) ?? [];
+
+        for (const existing of bindings) {
+            if (existing.unit === binding.unit) {
+                throw new Error(
+                    `WebGLManager.registerTextureBinding: texture unit ${binding.unit} on program "${programId}" is `
+                    + `already bound to source "${existing.source.id}", so binding "${binding.source.id}" to it too `
+                    + 'would leave one of the two sampling the other\'s pixels. Give each texture its own unit.'
+                );
+            }
+            if (existing.source.id === binding.source.id) {
+                throw new Error(
+                    `WebGLManager.registerTextureBinding: source "${binding.source.id}" is already bound on program `
+                    + `"${programId}" at unit ${existing.unit}. A source texture id is bound once per program.`
+                );
+            }
+            if (existing.samplerName === binding.samplerName) {
+                throw new Error(
+                    `WebGLManager.registerTextureBinding: sampler "${binding.samplerName}" on program "${programId}" `
+                    + `already samples source "${existing.source.id}" at unit ${existing.unit}. One sampler uniform `
+                    + `holds one texture unit, so pointing it at "${binding.source.id}" too would leave the shader `
+                    + 'reading only whichever was registered last. Give each texture its own sampler.'
+                );
+            }
+        }
+
+        this.textureManager.defineTexture(binding.source);
+
+        bindings.push(binding);
+        this.textureBindings.set(programId, bindings);
+
+        this.setSamplerUnit(resources, programId, binding);
+    }
+
+    private setSamplerUnit(resources: ShaderResources, programId: string, binding: TextureBindingSpec): void {
+        const location = this.checkedUniformLocation(resources, programId, binding.samplerName, 'sampler2D');
+        if (location === null) {
+            return;
+        }
+
+        this.useProgram(resources.program);
+        this.gl.uniform1i(location, binding.unit);
+    }
+
+    updateTextures(programId: string): void {
+        const bindings = this.textureBindings.get(programId);
+        if (!bindings) {
+            return;
+        }
+
+        for (const { unit, source } of bindings) {
+            this.textureManager.bindToUnit(source.id, unit);
+            this.textureManager.uploadIfStale(source);
+        }
+
+        this.gl.activeTexture(this.gl.TEXTURE0);
+    }
+
     updateUniforms(programId: string, time: number, width?: number, height?: number): void {
         const programUniforms = this.uniformUpdateFns.get(programId);
         if (!programUniforms) {
@@ -412,6 +483,15 @@ export class WebGLManager {
             throw new Error(`Program with id ${programId} not found`);
         }
 
+        if (this.textureBindings.has(programId)) {
+            throw new Error(
+                `WebGLManager.prepareRender: program "${programId}" has source-texture bindings, but prepareRender `
+                + 'never binds or uploads them, so every sampler would read the 1x1 placeholder and the shader would '
+                + 'sample transparent black for the life of the program. Source textures are only wired into '
+                + 'fastRender today. Render this program through fastRender.'
+            );
+        }
+
         this.useProgram(resources.program);
 
         if (clear) {
@@ -434,6 +514,7 @@ export class WebGLManager {
         }
 
         this.updateUniforms(programId, time, width, height);
+        this.updateTextures(programId);
     }
 
     readPixels(width: number, height: number): Uint8ClampedArray {
@@ -581,6 +662,27 @@ export class WebGLManager {
         gl.deleteProgram(resources.program);
         this.resources.delete(programId);
         this.uniformUpdateFns.delete(programId);
+
+        const released = this.textureBindings.get(programId) ?? [];
+        this.textureBindings.delete(programId);
+        this.releaseSourceTextures(released);
+    }
+
+    private releaseSourceTextures(released: TextureBindingSpec[]): void {
+        for (const { source } of released) {
+            if (!this.isSourceBound(source.id)) {
+                this.textureManager.destroy(source.id);
+            }
+        }
+    }
+
+    private isSourceBound(sourceId: string): boolean {
+        for (const bindings of this.textureBindings.values()) {
+            if (bindings.some(binding => binding.source.id === sourceId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     destroyAll(): void {
@@ -593,6 +695,8 @@ export class WebGLManager {
         });
         this.compileCache.clear();
         this.currentProgram = null;
+        this.textureBindings.clear();
+        this.textureManager.destroyAll();
         this.fboManager.destroyAll();
     }
 
@@ -606,5 +710,9 @@ export class WebGLManager {
 
     get fbo(): FBOManager {
         return this.fboManager;
+    }
+
+    get textures(): TextureManager {
+        return this.textureManager;
     }
 }

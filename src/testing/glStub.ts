@@ -3,12 +3,24 @@ import {
     GL_FLOAT,
     GL_HALF_FLOAT_OES,
     GL_LINEAR,
+    GL_LINEAR_MIPMAP_LINEAR,
+    GL_MAX_TEXTURE_IMAGE_UNITS,
+    GL_MIRRORED_REPEAT,
     GL_NEAREST,
+    GL_REPEAT,
     GL_RGBA,
+    GL_TEXTURE_2D,
+    GL_TEXTURE_MAG_FILTER,
+    GL_TEXTURE_MIN_FILTER,
+    GL_TEXTURE_WRAP_S,
+    GL_TEXTURE_WRAP_T,
+    GL_TEXTURE0,
+    GL_UNPACK_FLIP_Y_WEBGL,
+    GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL,
     GL_UNSIGNED_BYTE
 } from '@/core/lib/glConstants';
 import { GL_UNIFORM_TYPES } from '@/core/lib/uniformReflection';
-import type { UniformType, WebGLExtensionName } from '@/types';
+import type { TextureUploadSource, UniformType, WebGLExtensionName } from '@/types';
 
 const GL_ACTIVE_UNIFORMS = 0x8b86;
 const GL_ARRAY_BUFFER = 0x8892;
@@ -27,22 +39,48 @@ const GL_LINK_STATUS = 0x8b82;
 const GL_MAX_TEXTURE_SIZE = 0x0d33;
 const GL_SHORT = 0x1402;
 const GL_STATIC_DRAW = 0x88e4;
-const GL_TEXTURE_2D = 0x0de1;
-const GL_TEXTURE_MAG_FILTER = 0x2800;
-const GL_TEXTURE_MIN_FILTER = 0x2801;
-const GL_TEXTURE_WRAP_S = 0x2802;
-const GL_TEXTURE_WRAP_T = 0x2803;
-const GL_TEXTURE0 = 0x84c0;
 const GL_TRIANGLE_STRIP = 0x0005;
 const GL_UNSIGNED_SHORT = 0x1403;
 const GL_VERTEX_SHADER = 0x8b31;
 const GL_VIEWPORT = 0x0ba2;
+
+const SOURCE_SIZE_KEYS: readonly (readonly [string, string])[] = [
+    ['videoWidth', 'videoHeight'],
+    ['naturalWidth', 'naturalHeight'],
+    ['displayWidth', 'displayHeight'],
+    ['width', 'height']
+];
+
+interface TextureSize {
+    width: number;
+    height: number;
+}
+
+function sourceSize(source: TextureUploadSource): TextureSize {
+    const carrier = source as unknown as Record<string, unknown>;
+
+    for (const [widthKey, heightKey] of SOURCE_SIZE_KEYS) {
+        const width = carrier[widthKey];
+        const height = carrier[heightKey];
+        if (typeof width === 'number') {
+            return { width, height: typeof height === 'number' ? height : 0 };
+        }
+    }
+
+    return { width: 0, height: 0 };
+}
 
 const ENUM_CONSTANTS = {
     ACTIVE_UNIFORMS: GL_ACTIVE_UNIFORMS,
     ARRAY_BUFFER: GL_ARRAY_BUFFER,
     BYTE: GL_BYTE,
     CLAMP_TO_EDGE: GL_CLAMP_TO_EDGE,
+    LINEAR_MIPMAP_LINEAR: GL_LINEAR_MIPMAP_LINEAR,
+    MAX_TEXTURE_IMAGE_UNITS: GL_MAX_TEXTURE_IMAGE_UNITS,
+    MIRRORED_REPEAT: GL_MIRRORED_REPEAT,
+    REPEAT: GL_REPEAT,
+    UNPACK_FLIP_Y_WEBGL: GL_UNPACK_FLIP_Y_WEBGL,
+    UNPACK_PREMULTIPLY_ALPHA_WEBGL: GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL,
     COLOR_ATTACHMENT0: GL_COLOR_ATTACHMENT0,
     COLOR_BUFFER_BIT: GL_COLOR_BUFFER_BIT,
     COMPILE_STATUS: GL_COMPILE_STATUS,
@@ -99,6 +137,22 @@ export interface TexImage2DCallRecord {
     height: number;
     format: number;
     type: number;
+    source?: TextureUploadSource;
+}
+
+export interface TexSubImage2DCallRecord {
+    xoffset: number;
+    yoffset: number;
+    width: number;
+    height: number;
+    format: number;
+    type: number;
+    source?: TextureUploadSource;
+}
+
+export interface PixelStoreCallRecord {
+    pname: number;
+    param: number;
 }
 
 export interface UniformCallRecord {
@@ -128,6 +182,7 @@ export interface GLStubConfig {
     colorReadFormat?: number;
     contextLost?: boolean;
     maxTextureSize?: number;
+    maxTextureImageUnits?: number;
     overrides?: Partial<WebGLRenderingContext>;
 }
 
@@ -135,6 +190,8 @@ export interface GLStubHandle {
     gl: WebGLRenderingContext;
     calls: readonly GLCall[];
     texImage2DCalls: readonly TexImage2DCallRecord[];
+    texSubImage2DCalls: readonly TexSubImage2DCallRecord[];
+    pixelStoreCalls: readonly PixelStoreCallRecord[];
     viewportCalls: readonly [number, number, number, number][];
     useProgramCalls: readonly WebGLProgram[];
     uniformCalls: readonly UniformCallRecord[];
@@ -160,6 +217,8 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
 
     const calls: GLCall[] = [];
     const texImage2DCalls: TexImage2DCallRecord[] = [];
+    const texSubImage2DCalls: TexSubImage2DCallRecord[] = [];
+    const pixelStoreCalls: PixelStoreCallRecord[] = [];
     const viewportCalls: [number, number, number, number][] = [];
     const useProgramCalls: WebGLProgram[] = [];
     const uniformCalls: UniformCallRecord[] = [];
@@ -175,6 +234,7 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
     let currentViewport: [number, number, number, number] = [0, 0, canvasSize.width, canvasSize.height];
 
     const textureTypes = new Map<WebGLTexture, number>();
+    const textureSizes = new Map<WebGLTexture, TextureSize>();
     const fbAttachment = new Map<WebGLFramebuffer, WebGLTexture>();
     const uniformLocations = new Map<string, WebGLUniformLocation>();
     const attributeLocations = new Map<string, number>();
@@ -221,6 +281,40 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
     const recordUniform = (name: string, location: WebGLUniformLocation | null, value: unknown, args: unknown[]): void => {
         record(name, args);
         uniformCalls.push({ name, location, value });
+    };
+
+    const allocate = (size: TextureSize, type: number): void => {
+        if (!boundTexture) {
+            return;
+        }
+        textureTypes.set(boundTexture, type);
+        textureSizes.set(boundTexture, size);
+    };
+
+    const assertFitsAllocation = (xoffset: number, yoffset: number, size: TextureSize): void => {
+        const allocated = boundTexture ? textureSizes.get(boundTexture) : undefined;
+
+        if (!allocated) {
+            throw new Error(
+                'micugl test stub: texSubImage2D into a texture that texImage2D never allocated. Real WebGL raises '
+                + 'INVALID_OPERATION, which is a GL error and not a JS exception, so the upload is silently dropped '
+                + 'and the texture samples whatever it held before.'
+            );
+        }
+
+        if (
+            xoffset < 0
+            || yoffset < 0
+            || xoffset + size.width > allocated.width
+            || yoffset + size.height > allocated.height
+        ) {
+            throw new Error(
+                `micugl test stub: texSubImage2D writes ${size.width}x${size.height} at (${xoffset}, ${yoffset}) `
+                + `into a texture allocated as ${allocated.width}x${allocated.height}. Real WebGL raises `
+                + 'INVALID_OPERATION, which is a GL error and not a JS exception, so the pixels never land and the '
+                + 'texture keeps sampling its old contents. Reallocate with texImage2D when the source resizes.'
+            );
+        }
     };
 
     const impl = {
@@ -307,22 +401,78 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         deleteShader: (shader: WebGLShader | null): void => {
             record('deleteShader', [shader]);
         },
-        texImage2D: (
-            target: number,
-            level: number,
-            internalFormat: number,
-            width: number,
-            height: number,
-            border: number,
-            format: number,
-            type: number,
-            pixels: ArrayBufferView | null
-        ): void => {
-            record('texImage2D', [target, level, internalFormat, width, height, border, format, type, pixels]);
-            if (boundTexture) {
-                textureTypes.set(boundTexture, type);
+        pixelStorei: (pname: number, param: number): void => {
+            record('pixelStorei', [pname, param]);
+            pixelStoreCalls.push({ pname, param });
+        },
+        texImage2D: (...args: unknown[]): void => {
+            record('texImage2D', args);
+
+            if (args.length === 6) {
+                const internalFormat = args[2] as number;
+                const format = args[3] as number;
+                const type = args[4] as number;
+                const source = args[5] as TextureUploadSource;
+                const size = sourceSize(source);
+
+                allocate(size, type);
+                texImage2DCalls.push({
+                    internalFormat,
+                    width: size.width,
+                    height: size.height,
+                    format,
+                    type,
+                    source
+                });
+                return;
             }
+
+            const internalFormat = args[2] as number;
+            const width = args[3] as number;
+            const height = args[4] as number;
+            const format = args[6] as number;
+            const type = args[7] as number;
+
+            allocate({ width, height }, type);
             texImage2DCalls.push({ internalFormat, width, height, format, type });
+        },
+        texSubImage2D: (...args: unknown[]): void => {
+            record('texSubImage2D', args);
+
+            const xoffset = args[2] as number;
+            const yoffset = args[3] as number;
+
+            if (args.length === 7) {
+                const format = args[4] as number;
+                const type = args[5] as number;
+                const source = args[6] as TextureUploadSource;
+                const size = sourceSize(source);
+
+                assertFitsAllocation(xoffset, yoffset, size);
+                texSubImage2DCalls.push({
+                    xoffset,
+                    yoffset,
+                    width: size.width,
+                    height: size.height,
+                    format,
+                    type,
+                    source
+                });
+                return;
+            }
+
+            const width = args[4] as number;
+            const height = args[5] as number;
+
+            assertFitsAllocation(xoffset, yoffset, { width, height });
+            texSubImage2DCalls.push({
+                xoffset,
+                yoffset,
+                width,
+                height,
+                format: args[6] as number,
+                type: args[7] as number
+            });
         },
         framebufferTexture2D: (
             fbTarget: number,
@@ -508,6 +658,9 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
             if (pname === GL_MAX_TEXTURE_SIZE) {
                 return config.maxTextureSize ?? 4096;
             }
+            if (pname === GL_MAX_TEXTURE_IMAGE_UNITS) {
+                return config.maxTextureImageUnits ?? 8;
+            }
             throw new Error(
                 `micugl test stub: unstubbed getParameter pname ${pname}. ${UNSTUBBED_METHOD_MESSAGE_SUFFIX}`
             );
@@ -546,6 +699,8 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         gl,
         calls,
         texImage2DCalls,
+        texSubImage2DCalls,
+        pixelStoreCalls,
         viewportCalls,
         useProgramCalls,
         uniformCalls,
@@ -553,6 +708,8 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
         reset: (): void => {
             calls.length = 0;
             texImage2DCalls.length = 0;
+            texSubImage2DCalls.length = 0;
+            pixelStoreCalls.length = 0;
             viewportCalls.length = 0;
             useProgramCalls.length = 0;
             uniformCalls.length = 0;

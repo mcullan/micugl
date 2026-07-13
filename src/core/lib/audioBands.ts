@@ -1,3 +1,4 @@
+import { isPowerOfTwo } from '@/core/lib/math';
 import type { AudioUniformsOptions, BandLayout } from '@/types';
 
 export interface BandRange {
@@ -45,10 +46,6 @@ const DEFAULT_BANDS_NAME = 'u_audioBands';
 const DEFAULT_LEVEL_NAME = 'u_audioLevel';
 
 const BAND_LAYOUTS: Record<BandLayout, true> = { log: true, linear: true };
-
-function isPowerOfTwo(value: number): boolean {
-    return Number.isInteger(value) && value > 0 && (value & (value - 1)) === 0;
-}
 
 function isBandCount(value: number): value is BandCount {
     return (BAND_COUNTS as readonly number[]).includes(value);
