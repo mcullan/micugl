@@ -351,6 +351,81 @@ describe('WorkerRuntime uniforms', () => {
     });
 });
 
+describe('WorkerRuntime skipDefaultUniforms', () => {
+    it('registers no built-in updaters, matching a main-thread engine that skips the defaults', () => {
+        const offscreen = createOffscreenStub();
+        const harness = createHarness();
+
+        harness.send(initMessage(offscreen.canvas, { skipDefaultUniforms: true }));
+        harness.send({ type: 'resize', renderWidth: 640, renderHeight: 480 });
+        harness.tick(1000);
+        harness.tick(2000);
+
+        expect(drawCount(offscreen.gl)).toBe(2);
+        expect(vec2Uploads(offscreen.gl)).toEqual([]);
+        expect(floatUploads(offscreen.gl)).toEqual([0.25]);
+    });
+
+    it('still uploads posted values for the uniforms the main thread did declare', () => {
+        const offscreen = createOffscreenStub();
+        const harness = createHarness();
+
+        harness.send(initMessage(offscreen.canvas, { skipDefaultUniforms: true }));
+        harness.tick(0);
+        offscreen.gl.reset();
+
+        harness.send({ type: 'setUniformValues', programId: 'main', values: { u_intensity: 0.75 } });
+        harness.tick(16);
+
+        expect(floatUploads(offscreen.gl)).toEqual([0.75]);
+    });
+});
+
+describe('WorkerRuntime motion gate', () => {
+    it('stops free-running and freezes the clock when the main thread gates motion', () => {
+        const offscreen = createOffscreenStub();
+        const harness = createHarness();
+
+        harness.send(initMessage(offscreen.canvas));
+        harness.tick(16);
+        expect(harness.pendingHandles()).toHaveLength(1);
+
+        harness.send({ type: 'setMotionGate', gate: 'static' });
+        expect(harness.pendingHandles()).toHaveLength(0);
+
+        harness.send({ type: 'renderFrame', time: 2000 });
+        expect(floatUploads(offscreen.gl)).toContain(2);
+        offscreen.gl.reset();
+
+        harness.send({ type: 'invalidate', frames: 1 });
+        harness.tick(9999);
+        harness.send({ type: 'invalidate', frames: 1 });
+        harness.tick(10999);
+
+        expect(drawCount(offscreen.gl)).toBe(2);
+        expect(floatUploads(offscreen.gl)).toEqual([]);
+    });
+
+    it('resumes free-running when the gate is released', () => {
+        const offscreen = createOffscreenStub();
+        const harness = createHarness();
+
+        harness.send(initMessage(offscreen.canvas));
+        harness.tick(16);
+
+        harness.send({ type: 'setMotionGate', gate: 'pause' });
+        expect(harness.pendingHandles()).toHaveLength(0);
+
+        harness.send({ type: 'setMotionGate', gate: 'none' });
+        expect(harness.pendingHandles()).toHaveLength(1);
+
+        harness.tick(1000);
+        harness.tick(2000);
+
+        expect(floatUploads(offscreen.gl)).toEqual(expect.arrayContaining([1]));
+    });
+});
+
 describe('WorkerRuntime scheduling', () => {
     it('cancels the scheduled frame when the main thread deactivates it, and resumes on reactivation', () => {
         const offscreen = createOffscreenStub();

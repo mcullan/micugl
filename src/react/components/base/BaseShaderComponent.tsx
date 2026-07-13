@@ -3,6 +3,7 @@ import { forwardRef, memo, useRef } from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
 import { ShaderEngine } from '@/react';
+import type { ShaderEngineWorkerProps } from '@/react/components/engine/ShaderEngine';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type { RenderControlProps, ShaderHandle, UniformParam } from '@/types';
@@ -12,6 +13,7 @@ export interface BaseShaderProps extends RenderControlProps {
     shaderConfig: ShaderProgramConfig;
     uniforms: Record<string, UniformParam>;
     skipDefaultUniforms?: boolean;
+    liveUniforms?: string[];
     debug?: boolean;
     className?: string;
     style?: CSSProperties;
@@ -35,6 +37,7 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     shaderConfig,
     uniforms,
     skipDefaultUniforms = false,
+    liveUniforms,
     debug = false,
     width,
     height,
@@ -49,6 +52,8 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     reducedMotion,
     saveData,
     staticFrame,
+    worker,
+    createWorker,
     className = '',
     style,
     renderOptions = RENDER_OPTIONS
@@ -58,6 +63,10 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
     const debugPortRef = useRef<UniformDebugPort | null>(null);
     debugPortRef.current = port;
 
+    const workerProps: ShaderEngineWorkerProps = worker === undefined || worker === false
+        ? {}
+        : { worker, createWorker, workerUniforms: { [programId]: uniforms }, liveUniforms };
+
     return (
         <ShaderEngine
             ref={ref}
@@ -65,6 +74,8 @@ const BaseShaderComponentImpl = forwardRef<ShaderHandle, BaseShaderProps>(({
             renderCallback={renderFullscreenQuad}
             uniformUpdaters={updaters}
             debugPortRef={debugPortRef}
+            {...workerProps}
+            workerSkipDefaultUniforms={skipDefaultUniforms}
             width={width}
             height={height}
             pixelRatio={pixelRatio}

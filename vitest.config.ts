@@ -4,7 +4,23 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     resolve: { alias: { '@': resolve(__dirname, 'src') } },
     test: {
-        include: ['src/**/*.test.{ts,tsx}'],
-        environment: 'node'
+        projects: [
+            {
+                extends: true,
+                test: {
+                    name: 'node',
+                    include: ['src/**/*.test.ts'],
+                    environment: 'node'
+                }
+            },
+            {
+                extends: true,
+                test: {
+                    name: 'dom',
+                    include: ['src/**/*.test.tsx'],
+                    environment: 'jsdom'
+                }
+            }
+        ]
     }
 });

@@ -159,6 +159,8 @@ export interface PingPongShaderHandle extends ShaderHandle {
   resetSimulation: (seed?: SeedOptions) => void;
 }
 
+export type WorkerMode = boolean | 'auto';
+
 export interface RenderControlProps {
   frameloop?: Frameloop;
   speed?: number;
@@ -173,6 +175,8 @@ export interface RenderControlProps {
   reducedMotion?: MotionPolicy;
   saveData?: MotionPolicy;
   staticFrame?: number;
+  worker?: WorkerMode;
+  createWorker?: () => Worker;
 }
 
 export interface WebGLExtensionTypes {

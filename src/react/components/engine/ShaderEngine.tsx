@@ -25,6 +25,8 @@ import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { useReducedMotion } from '@/react/hooks/useReducedMotion';
 import { useSaveData } from '@/react/hooks/useSaveData';
+import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
+import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { instancingContentKey, programConfigContentKey, singleProgramEntry } from '@/react/lib/contentKeys';
 import { createDelegatingInstancingConfig } from '@/react/lib/instancingConfig';
@@ -40,6 +42,17 @@ import {
     resolveResolution
 } from '@/react/lib/resolution';
 import { frameToMs } from '@/react/lib/timeKeeper';
+import type { WorkerBlock, WorkerProgramUniforms } from '@/react/lib/workerMode';
+import {
+    findWorkerBlock,
+    isWorkerRequested,
+    normalizeLiveUniformNames,
+    normalizeWorkerPrograms,
+    sampleLiveUniforms,
+    workerBlockMessage,
+    workerGetFrameMessage,
+    workerHandleUnsupportedMessage
+} from '@/react/lib/workerMode';
 import type {
     Dpr,
     InstancingConfig,
@@ -47,8 +60,10 @@ import type {
     RenderControlProps,
     RenderToBlobOptions,
     SequenceOptions,
-    ShaderHandle
+    ShaderHandle,
+    WorkerMode
 } from '@/types';
+import type { WorkerBridge } from '@/worker/WorkerBridge';
 
 interface UniformUpdaterEntry {
     name: string;
@@ -56,7 +71,7 @@ interface UniformUpdaterEntry {
     updateFn: UniformUpdateFn<UniformType>;
 }
 
-interface ShaderEngineProps extends RenderControlProps {
+interface ShaderEngineBaseProps extends Omit<RenderControlProps, 'worker' | 'createWorker'> {
     programConfigs: Record<string, ShaderProgramConfig>;
     renderCallback: ShaderRenderCallback;
     renderOptions?: RenderOptions;
@@ -67,7 +82,20 @@ interface ShaderEngineProps extends RenderControlProps {
     instancing?: InstancingConfig;
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
+    workerSkipDefaultUniforms?: boolean;
 }
+
+export type ShaderEngineWorkerProps =
+    | { worker?: false; createWorker?: never; workerUniforms?: never; liveUniforms?: never }
+    | {
+        worker: WorkerMode;
+        createWorker?: () => Worker;
+        workerUniforms: WorkerProgramUniforms;
+        liveUniforms?: string[];
+        instancing?: never;
+    };
+
+type ShaderEngineProps = ShaderEngineBaseProps & ShaderEngineWorkerProps;
 
 interface ObservedSize {
     cssWidth: number;
@@ -80,6 +108,8 @@ const DEFAULT_RENDER_OPTIONS: RenderOptions = {};
 const DEFAULT_CLASS_NAME = '';
 const DEFAULT_STYLE: CSSProperties = {};
 const DEFAULT_UNIFORM_UPDATERS: Record<string, UniformUpdaterEntry[]> = {};
+
+const LIVE_NAME_SEPARATOR = '\u0001';
 
 const scheduleFrame = (callback: (now: number) => void): number =>
     typeof requestAnimationFrame === 'function' ? requestAnimationFrame(callback) : 0;
@@ -94,6 +124,10 @@ const readNow = (): number => (typeof performance === 'object' ? performance.now
 
 const readDevicePixelRatio = (): number =>
     typeof window === 'object' ? window.devicePixelRatio : 1;
+
+const deny = (method: string) => (): never => {
+    throw new Error(workerHandleUnsupportedMessage('ShaderEngine', method));
+};
 
 let engineIdCounter = 0;
 
@@ -134,6 +168,11 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     instancing,
     debug = false,
     debugPortRef,
+    workerUniforms,
+    workerSkipDefaultUniforms = false,
+    liveUniforms,
+    worker,
+    createWorker,
     useDevicePixelRatio,
     pixelRatio,
     frameloop = 'always',
@@ -167,11 +206,32 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const instanceUploaderRef = useRef<InstanceUploader | null>(null);
     const instancingRef = useRef(instancing);
+    const bridgeRef = useRef<WorkerBridge | null>(null);
+    const renderSizeRef = useRef({ renderWidth: 0, renderHeight: 0 });
+    const workerActiveRef = useRef(false);
+
+    const [epoch, setEpoch] = useState(0);
+
+    const workerRequested = isWorkerRequested(worker);
+    const liveNames = workerRequested ? normalizeLiveUniformNames(liveUniforms) : [];
+    const liveKey = liveNames.join(LIVE_NAME_SEPARATOR);
+    const workerPrograms = workerRequested && workerUniforms
+        ? normalizeWorkerPrograms(workerUniforms)
+        : undefined;
+    const block: WorkerBlock | null = workerRequested
+        ? findWorkerBlock({
+            uniforms: workerPrograms,
+            fastPath: useFastPath,
+            instancing: instancing !== undefined,
+            liveUniforms: { programId: keyProgramId, names: liveNames }
+        })
+        : null;
+
+    const liveRef = useRef({ programId: keyProgramId, programs: workerPrograms, names: liveNames });
+    liveRef.current = { programId: keyProgramId, programs: workerPrograms, names: liveNames };
 
     const initPropsRef = useRef({ programConfigs, uniformUpdaters, instancing });
     const renderConfigRef = useRef({ useFastPath, renderOptions, renderCallback });
-
-    const [epoch, setEpoch] = useState(0);
 
     const dprMin = Array.isArray(dpr) ? dpr[0] : dpr;
     const dprMax = Array.isArray(dpr) ? dpr[1] : dpr;
@@ -264,10 +324,45 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         return { ...result, type: opts.type, quality: opts.quality };
     }, [renderFrame, drawFastPathGeometry]);
 
+    const commitSize = useCallback((
+        resolution: { renderWidth: number; renderHeight: number },
+        display?: { displayWidth: number; displayHeight: number }
+    ) => {
+        renderSizeRef.current = {
+            renderWidth: resolution.renderWidth,
+            renderHeight: resolution.renderHeight
+        };
+
+        if (workerActiveRef.current) {
+            const canvas = canvasRef.current;
+            if (canvas && display) {
+                canvas.style.width = `${display.displayWidth}px`;
+                canvas.style.height = `${display.displayHeight}px`;
+            }
+            bridgeRef.current?.resize(resolution.renderWidth, resolution.renderHeight);
+        } else {
+            const manager = managerRef.current;
+            if (!manager) return;
+
+            if (display) {
+                manager.setSize(
+                    resolution.renderWidth,
+                    resolution.renderHeight,
+                    display.displayWidth,
+                    display.displayHeight
+                );
+            } else {
+                manager.setDrawingBufferSize(resolution.renderWidth, resolution.renderHeight);
+            }
+        }
+
+        controllerRef.current?.invalidate();
+    }, []);
+
     const applySize = useCallback(() => {
-        const manager = managerRef.current;
         const canvas = canvasRef.current;
-        if (!readyRef.current || !manager || !canvas) return;
+        if (!canvas) return;
+        if (!workerActiveRef.current && (!readyRef.current || !managerRef.current)) return;
 
         const devicePixelRatio = readDevicePixelRatio();
         const disableDevicePixelRatio = useDevicePixelRatio === false;
@@ -278,7 +373,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             const hasFixed = width !== undefined || height !== undefined;
 
             if (!hasFixed && observed?.deviceWidth !== undefined && observed.deviceHeight !== undefined) {
-                const resolution = resolveDeviceResolution({
+                commitSize(resolveDeviceResolution({
                     deviceWidth: observed.deviceWidth,
                     deviceHeight: observed.deviceHeight,
                     devicePixelRatio,
@@ -286,15 +381,13 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                     maxPixelCount,
                     pixelRatioOverride: pixelRatio,
                     disableDevicePixelRatio
-                });
-                manager.setDrawingBufferSize(resolution.renderWidth, resolution.renderHeight);
-                controllerRef.current?.invalidate();
+                }));
                 return;
             }
 
             const cssWidth = width ?? observed?.cssWidth ?? canvas.clientWidth;
             const cssHeight = height ?? observed?.cssHeight ?? canvas.clientHeight;
-            const resolution = resolveResolution({
+            commitSize(resolveResolution({
                 displayWidth: cssWidth,
                 displayHeight: cssHeight,
                 devicePixelRatio,
@@ -302,28 +395,95 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                 maxPixelCount,
                 pixelRatioOverride: pixelRatio,
                 disableDevicePixelRatio
-            });
-            manager.setDrawingBufferSize(resolution.renderWidth, resolution.renderHeight);
-            controllerRef.current?.invalidate();
+            }));
             return;
         }
 
         const displayWidth = width ?? (typeof window === 'object' ? window.innerWidth : 0);
         const displayHeight = height ?? (typeof window === 'object' ? window.innerHeight : 0);
-        const resolution = resolveResolution({
-            displayWidth,
-            displayHeight,
-            devicePixelRatio,
-            dpr: resolvedDpr,
-            maxPixelCount,
-            pixelRatioOverride: pixelRatio,
-            disableDevicePixelRatio
-        });
-        manager.setSize(resolution.renderWidth, resolution.renderHeight, displayWidth, displayHeight);
-        controllerRef.current?.invalidate();
-    }, [width, height, dprMin, dprMax, maxPixelCount, pixelRatio, useDevicePixelRatio, fit]);
+        commitSize(
+            resolveResolution({
+                displayWidth,
+                displayHeight,
+                devicePixelRatio,
+                dpr: resolvedDpr,
+                maxPixelCount,
+                pixelRatioOverride: pixelRatio,
+                disableDevicePixelRatio
+            }),
+            { displayWidth, displayHeight }
+        );
+    }, [width, height, dprMin, dprMax, maxPixelCount, pixelRatio, useDevicePixelRatio, fit, commitSize]);
 
     const applySizeRef = useRef(applySize);
+
+    const postLiveUniforms = useCallback((elapsed: number) => {
+        const bridge = bridgeRef.current;
+        const { programs, programId, names } = liveRef.current;
+        if (!bridge || !programs || names.length === 0) return;
+
+        const { renderWidth, renderHeight } = renderSizeRef.current;
+        bridge.setUniformValues(
+            programId,
+            sampleLiveUniforms(names, programs[programId], elapsed, renderWidth, renderHeight)
+        );
+    }, []);
+
+    const driveFrame = useCallback((elapsed: number) => {
+        if (workerActiveRef.current) {
+            postLiveUniforms(elapsed);
+            return;
+        }
+        renderFrame(elapsed);
+    }, [postLiveUniforms, renderFrame]);
+
+    const startSamplerLoop = useCallback(() => {
+        if (liveRef.current.names.length === 0) return;
+        controllerRef.current?.start();
+    }, []);
+
+    const session = useWorkerBridge({
+        worker,
+        blocked: block !== null,
+        contentKey,
+        canvasRef,
+        controllerRef,
+        bridgeRef,
+        createWorker,
+        programs: workerPrograms,
+        debug,
+        frameloop,
+        speed,
+        motionGate,
+        staticFrame,
+        measure: () => {
+            applySizeRef.current();
+            return renderSizeRef.current;
+        },
+        buildInit: (active): WorkerBridgeInitPayload => {
+            if (!workerPrograms) {
+                throw new Error(workerBlockMessage('ShaderEngine', { kind: 'uniforms-missing' }));
+            }
+            return {
+                kind: 'single',
+                programConfigs,
+                uniforms: workerPrograms,
+                skipDefaultUniforms: workerSkipDefaultUniforms,
+                frameloop,
+                speed,
+                active,
+                renderOptions: { clear: renderOptions.clear },
+                liveUniforms: liveNames.length > 0 ? { [keyProgramId]: liveNames } : undefined
+            };
+        },
+        onConnected: () => {
+            postLiveUniforms(frameToMs(controllerRef.current?.getFrame() ?? 0));
+            startSamplerLoop();
+        }
+    });
+
+    const { active: workerActive, canvasKey, syncActive, setStopped, isStopped } = session;
+    workerActiveRef.current = workerActive;
 
     useEffect(() => {
         initPropsRef.current = { programConfigs, uniformUpdaters, instancing };
@@ -337,16 +497,25 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             requestAnimationFrame: scheduleFrame,
             cancelAnimationFrame: cancelFrame,
             now: readNow,
-            render: renderFrame
+            render: driveFrame
         });
         controllerRef.current = controller;
         return () => {
             controller.stop();
             controllerRef.current = null;
         };
-    }, [renderFrame]);
+    }, [driveFrame]);
 
     useEffect(() => {
+        if (!workerActive || liveKey.length === 0 || isStopped()) return;
+
+        const controller = controllerRef.current;
+        controller?.start();
+        return () => { controller?.stop() };
+    }, [workerActive, liveKey, isStopped]);
+
+    useEffect(() => {
+        if (workerActive) return;
         if (!canvasRef.current) return;
 
         const manager = new WebGLManager(canvasRef.current);
@@ -466,7 +635,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             instanceUploaderRef.current = null;
             emitEngineUnmount(engineIdRef.current);
         };
-    }, [contentKey, epoch, debugPortRef]);
+    }, [workerActive, contentKey, epoch, debugPortRef]);
 
     useEffect(() => {
         applySize();
@@ -505,18 +674,27 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         const onResize = () => { applySize() };
         window.addEventListener('resize', onResize);
         return () => { window.removeEventListener('resize', onResize) };
-    }, [fit, width, height, applySize]);
+    }, [fit, width, height, canvasKey, applySize]);
 
     useEffect(() => {
         const controller = controllerRef.current;
         if (!controller) return;
 
+        const setVisible = (documentVisible: boolean) => {
+            controller.setVisible(documentVisible);
+            syncActive();
+        };
+        const setIntersecting = (intersecting: boolean) => {
+            controller.setIntersecting(intersecting);
+            syncActive();
+        };
+
         const onVisibility = () => {
-            controller.setVisible(typeof document === 'object' ? !document.hidden : true);
+            setVisible(typeof document === 'object' ? !document.hidden : true);
         };
 
         if (typeof document === 'object') {
-            controller.setVisible(!document.hidden);
+            setVisible(!document.hidden);
             document.addEventListener('visibilitychange', onVisibility);
         }
 
@@ -526,12 +704,12 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             observer = new IntersectionObserver(entries => {
                 const entry = entries[entries.length - 1] as IntersectionObserverEntry | undefined;
                 if (entry) {
-                    controller.setIntersecting(entry.isIntersecting);
+                    setIntersecting(entry.isIntersecting);
                 }
             }, { threshold: 0 });
             observer.observe(canvas);
         } else {
-            controller.setIntersecting(true);
+            setIntersecting(true);
         }
 
         return () => {
@@ -540,7 +718,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             }
             observer?.disconnect();
         };
-    }, []);
+    }, [canvasKey, syncActive]);
 
     useEffect(() => {
         const controller = controllerRef.current;
@@ -549,7 +727,8 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         controller.setFrameloop(frameloop);
         controller.setSpeed(speed);
         controller.setPauseWhenHidden(pauseWhenHidden);
-    }, [frameloop, speed, pauseWhenHidden]);
+        syncActive();
+    }, [frameloop, speed, pauseWhenHidden, syncActive]);
 
     useEffect(() => {
         const controller = controllerRef.current;
@@ -562,17 +741,8 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     }, [motionGate, staticFrame]);
 
     useEffect(() => {
-        if (!debug) return;
-        let cancelled = false;
-        void import('@/react/devtools/attach').then(module => {
-            if (!cancelled) {
-                module.ensureDevtoolsMounted();
-            }
-        });
-        return () => { cancelled = true };
-    }, [debug]);
+        if (workerActive) return;
 
-    useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -591,7 +761,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             canvas.removeEventListener('webglcontextlost', onLost);
             canvas.removeEventListener('webglcontextrestored', onRestored);
         };
-    }, []);
+    }, [workerActive, canvasKey]);
 
     useEffect(() => {
         if (releaseTimerRef.current !== null) {
@@ -608,7 +778,31 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         };
     }, []);
 
-    useImperativeHandle(ref, () => ({
+    useImperativeHandle(ref, (): ShaderHandle => workerActive ? {
+        invalidate: () => {
+            postLiveUniforms(frameToMs(controllerRef.current?.getFrame() ?? 0));
+            controllerRef.current?.invalidate();
+            bridgeRef.current?.invalidate();
+        },
+        setFrame: (frame: number) => {
+            controllerRef.current?.setFrame(frame);
+            bridgeRef.current?.renderFrame(frameToMs(frame));
+        },
+        getFrame: () => { throw new Error(workerGetFrameMessage('ShaderEngine')) },
+        start: () => {
+            setStopped(false);
+            startSamplerLoop();
+        },
+        stop: () => {
+            setStopped(true);
+            controllerRef.current?.stop();
+        },
+        renderToBlob: deny('renderToBlob'),
+        renderToDataURL: deny('renderToDataURL'),
+        captureStream: deny('captureStream'),
+        record: deny('record'),
+        renderSequence: deny('renderSequence')
+    } : {
         invalidate: () => { controllerRef.current?.invalidate() },
         setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
         getFrame: () => controllerRef.current?.getFrame() ?? 0,
@@ -677,10 +871,26 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                 }
             });
         }
-    }), [captureStill, renderFrame]);
+    }, [
+        workerActive,
+        captureStill,
+        renderFrame,
+        postLiveUniforms,
+        startSamplerLoop,
+        setStopped
+    ]);
+
+    if (workerActive && block) {
+        throw new Error(workerBlockMessage('ShaderEngine', block));
+    }
+
+    if (session.error) {
+        throw session.error;
+    }
 
     return (
         <canvas
+            key={canvasKey}
             ref={canvasRef}
             className={className}
             style={style}

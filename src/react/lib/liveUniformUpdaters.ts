@@ -146,6 +146,16 @@ export function normalizeUniformName(name: string): string {
     return name.startsWith('u_') ? name : `u_${name}`;
 }
 
+export function normalizeUniformParams(
+    uniforms: Record<string, UniformParam>
+): Record<string, UniformParam> {
+    const normalized: Record<string, UniformParam> = {};
+    for (const [name, param] of Object.entries(uniforms)) {
+        normalized[normalizeUniformName(name)] = param;
+    }
+    return normalized;
+}
+
 export function uniformDescriptors(uniforms: Record<string, UniformParam>): UniformDescriptor[] {
     return Object.entries(uniforms).map(([name, param]) => ({
         name: normalizeUniformName(name),
