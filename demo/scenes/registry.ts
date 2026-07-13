@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { AudioBars } from './AudioBars';
 import { DevtoolsDebug } from './DevtoolsDebug';
 import { ExportDemo } from './ExportDemo';
+import { ImageTexture } from './ImageTexture';
 import { InstancedParticles } from './InstancedParticles';
 import { ManyCanvases } from './ManyCanvases';
 import { ManyCanvasesDevtools } from './ManyCanvasesDevtools';
@@ -31,6 +32,7 @@ export const scenes: Record<string, ComponentType> = {
     'audio-bars': AudioBars,
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
+    'image-texture': ImageTexture,
     'instanced-particles': InstancedParticles,
     'particles-components': ParticlesComponents,
     'worker-jank': WorkerJank,

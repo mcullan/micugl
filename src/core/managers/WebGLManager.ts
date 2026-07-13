@@ -388,22 +388,31 @@ export class WebGLManager {
             }
         }
 
+        const location = this.requireSamplerLocation(resources, programId, binding);
+
         this.textureManager.defineTexture(binding.source);
 
         bindings.push(binding);
         this.textureBindings.set(programId, bindings);
 
-        this.setSamplerUnit(resources, programId, binding);
-    }
-
-    private setSamplerUnit(resources: ShaderResources, programId: string, binding: TextureBindingSpec): void {
-        const location = this.checkedUniformLocation(resources, programId, binding.samplerName, 'sampler2D');
-        if (location === null) {
-            return;
-        }
-
         this.useProgram(resources.program);
         this.gl.uniform1i(location, binding.unit);
+    }
+
+    private requireSamplerLocation(
+        resources: ShaderResources,
+        programId: string,
+        binding: TextureBindingSpec
+    ): WebGLUniformLocation {
+        const location = this.checkedUniformLocation(resources, programId, binding.samplerName, 'sampler2D');
+        if (location === null) {
+            throw new Error(
+                `WebGLManager.registerTextureBinding: the shader on program "${programId}" never samples `
+                + `"${binding.samplerName}", so binding a texture to it can never affect the picture. Sample it in `
+                + 'the shader, fix the sampler name, or remove its entry from the "textures" prop.'
+            );
+        }
+        return location;
     }
 
     updateTextures(programId: string): void {

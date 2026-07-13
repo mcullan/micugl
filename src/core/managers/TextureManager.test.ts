@@ -23,7 +23,6 @@ import { TextureManager } from '@/core/managers/TextureManager';
 import type { GLStubConfig, GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
 import type {
-    ResolvedSourceTextureOptions,
     SourceTextureOptions,
     TextureSource,
     TextureUploadSource
@@ -162,7 +161,7 @@ describe('TextureManager.defineTexture', () => {
             .toThrow(/already owned by a different TextureSource/);
     });
 
-    it('never generates mipmaps', () => {
+    it('does not generate mipmaps for the placeholder of a plain LINEAR texture', () => {
         const { manager, calls } = setup();
 
         manager.defineTexture(createSource('u_image').source);
@@ -170,22 +169,25 @@ describe('TextureManager.defineTexture', () => {
         expect(calls.some(call => call.name === 'generateMipmap')).toBe(false);
     });
 
-    it('throws on a mipmap min-filter that never crossed the resolver, before it creates the texture', () => {
+    it('no longer throws on a mipmap min-filter: resizeToPOT can legalize it, so the texture is created', () => {
         const { manager, calls } = setup();
-        const handBuilt: ResolvedSourceTextureOptions = {
-            minFilter: GL_LINEAR_MIPMAP_LINEAR,
-            magFilter: GL_LINEAR,
-            wrapS: GL_CLAMP_TO_EDGE,
-            wrapT: GL_CLAMP_TO_EDGE,
-            flipY: true,
-            premultiplyAlpha: false
-        };
-        const { source } = createSource('u_image');
-        source.options = handBuilt;
+        const { source } = createSource('u_image', { minFilter: GL_LINEAR_MIPMAP_LINEAR });
 
-        expect(() => { manager.defineTexture(source) }).toThrow(/mipmap filter/);
-        expect(calls.some(call => call.name === 'createTexture')).toBe(false);
-        expect(manager.has('u_image')).toBe(false);
+        expect(() => { manager.defineTexture(source) }).not.toThrow();
+        expect(calls.some(call => call.name === 'createTexture')).toBe(true);
+        expect(manager.has('u_image')).toBe(true);
+    });
+
+    it('generates mipmaps for the 1x1 placeholder when the min-filter is a mipmap filter', () => {
+        const { manager, calls } = setup();
+        const { source } = createSource('u_image', { minFilter: GL_LINEAR_MIPMAP_LINEAR });
+
+        manager.defineTexture(source);
+
+        const sequence = calls
+            .map(call => call.name)
+            .filter(name => name === 'texImage2D' || name === 'generateMipmap');
+        expect(sequence).toEqual(['texImage2D', 'generateMipmap']);
     });
 });
 
@@ -422,6 +424,66 @@ describe('TextureManager.uploadIfStale', () => {
 
         expect(() => { manager.uploadIfStale(impostor.source) })
             .toThrow(/already owned by a different TextureSource/);
+    });
+
+    it('throws at upload for a mipmap min-filter over a non-power-of-two source, naming resizeToPOT', () => {
+        const { manager, calls, reset } = setup();
+        const image = createSource('u_image', { minFilter: GL_LINEAR_MIPMAP_LINEAR });
+        manager.defineTexture(image.source);
+
+        reset();
+        image.push(bitmap(640, 480));
+
+        expect(() => { manager.uploadIfStale(image.source) }).toThrow(/resizeToPOT/);
+        expect(calls.some(call => call.name === 'texImage2D')).toBe(false);
+        expect(calls.some(call => call.name === 'generateMipmap')).toBe(false);
+    });
+
+    it('regenerates mipmaps after the allocating texImage2D when the min-filter is a mipmap filter', () => {
+        const { manager, calls, reset } = setup();
+        const image = createSource('u_image', { minFilter: GL_LINEAR_MIPMAP_LINEAR });
+        manager.defineTexture(image.source);
+
+        reset();
+        image.push(bitmap(256, 256));
+        manager.uploadIfStale(image.source);
+
+        const sequence = calls
+            .map(call => call.name)
+            .filter(name => name === 'texImage2D' || name === 'generateMipmap');
+        expect(sequence).toEqual(['texImage2D', 'generateMipmap']);
+    });
+
+    it('regenerates mipmaps AGAIN after a same-dimension texSubImage2D, or distance sampling goes stale', () => {
+        const { manager, calls, texSubImage2DCalls, reset } = setup();
+        const image = createSource('u_image', { minFilter: GL_LINEAR_MIPMAP_LINEAR });
+        manager.defineTexture(image.source);
+
+        image.push(bitmap(256, 256));
+        manager.uploadIfStale(image.source);
+
+        reset();
+        image.push(bitmap(256, 256));
+        manager.uploadIfStale(image.source);
+
+        expect(texSubImage2DCalls).toHaveLength(1);
+        const sequence = calls
+            .map(call => call.name)
+            .filter(name => name === 'texSubImage2D' || name === 'generateMipmap');
+        expect(sequence).toEqual(['texSubImage2D', 'generateMipmap']);
+    });
+
+    it('never calls generateMipmap for a non-mipmap min-filter, allocate or update', () => {
+        const { manager, calls } = setup();
+        const image = createSource('u_image');
+        manager.defineTexture(image.source);
+
+        image.push(bitmap(256, 256));
+        manager.uploadIfStale(image.source);
+        image.push(bitmap(256, 256));
+        manager.uploadIfStale(image.source);
+
+        expect(calls.some(call => call.name === 'generateMipmap')).toBe(false);
     });
 });
 

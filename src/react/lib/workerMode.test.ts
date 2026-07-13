@@ -67,6 +67,7 @@ function blockInputs(overrides: Partial<WorkerBlockInputs> = {}): WorkerBlockInp
         uniforms: { [PROGRAM_ID]: normalizeUniformParams(simUniforms()) },
         fastPath: true,
         instancing: false,
+        textures: false,
         ...overrides
     };
 }
@@ -149,6 +150,14 @@ describe('findWorkerBlock: one list of the reasons a worker cannot run this comp
     it('blocks instancing in the render body, instead of letting the bridge throw after the worker spawns', () => {
         expect(findWorkerBlock(blockInputs({ instancing: true }))).toEqual({ kind: 'instancing' });
         expect(workerBlockMessage('ShaderEngine', { kind: 'instancing' })).toMatch(/instancing/);
+    });
+
+    it('blocks the textures prop in the render body, and names the prop and both remedies', () => {
+        expect(findWorkerBlock(blockInputs({ textures: true }))).toEqual({ kind: 'textures' });
+        const message = workerBlockMessage('BaseShaderComponent', { kind: 'textures' });
+        expect(message).toMatch(/"textures"/);
+        expect(message).toMatch(/Remove "textures"/);
+        expect(message).toMatch(/turn off worker mode/);
     });
 
     it('blocks a function uniform that is neither a built-in nor a live uniform', () => {

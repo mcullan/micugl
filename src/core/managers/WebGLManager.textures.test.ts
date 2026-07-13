@@ -182,21 +182,51 @@ describe('WebGLManager.registerTextureBinding', () => {
         }).toThrow(/is a float in the shader source/);
     });
 
-    it('skips the sampler upload without throwing when the compiler optimized the sampler out', () => {
+    it('throws when the sampler name is declared but the shader never samples it, naming all three remedies', () => {
         const { canvas, uniformCalls, reset } = createCanvasStub({ activeUniforms: { u_a: 'sampler2D' } });
         const manager = new WebGLManager(canvas);
         manager.createProgram('p', CONFIG);
 
         reset();
-        manager.registerTextureBinding('p', {
-            unit: 1,
-            samplerName: 'u_cam',
-            source: createFakeSource('u_cam', { width: 4, height: 4 }).source
-        });
+        const register = (): void => {
+            manager.registerTextureBinding('p', {
+                unit: 1,
+                samplerName: 'u_cam',
+                source: createFakeSource('u_cam', { width: 4, height: 4 }).source
+            });
+        };
 
+        expect(register).toThrow(/never samples "u_cam"/);
+        expect(register).toThrow(/Sample it in the shader/);
+        expect(register).toThrow(/fix the sampler name/);
+        expect(register).toThrow(/remove its entry from the "textures" prop/);
         expect(samplerLocation(manager, 'p', 'u_cam')).toBeNull();
         expect(uniformCalls).toHaveLength(0);
-        expect(manager.textures.has('u_cam')).toBe(true);
+    });
+
+    it('registers nothing when the sampler check throws, so a caught throw cannot leave a ghost binding uploading', () => {
+        const { canvas } = createCanvasStub({ activeUniforms: { u_a: 'sampler2D' } });
+        const manager = new WebGLManager(canvas);
+        manager.createProgram('p', CONFIG);
+
+        expect(() => {
+            manager.registerTextureBinding('p', {
+                unit: 1,
+                samplerName: 'u_cam',
+                source: createFakeSource('u_cam', { width: 4, height: 4 }).source
+            });
+        }).toThrow(/never samples "u_cam"/);
+
+        expect(manager.textures.has('u_cam')).toBe(false);
+
+        expect(() => {
+            manager.registerTextureBinding('p', {
+                unit: 1,
+                samplerName: 'u_a',
+                source: createFakeSource('u_a', { width: 4, height: 4 }).source
+            });
+        }).not.toThrow();
+        expect(manager.textures.has('u_a')).toBe(true);
     });
 
     it('throws for an unknown program', () => {

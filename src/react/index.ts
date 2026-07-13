@@ -6,6 +6,8 @@ export { ShaderEngine } from './components/engine/ShaderEngine';
 export type { AudioUniformsResult } from './hooks/useAudioUniforms';
 export { useAudioUniforms } from './hooks/useAudioUniforms';
 export { useDarkMode } from './hooks/useDarkMode';
+export type { ImageTextureDeps, ImageTextureOptions, ImageTextureResult } from './hooks/useImageTexture';
+export { useImageTexture } from './hooks/useImageTexture';
 export { usePingPongPasses } from './hooks/usePingPongPasses';
 export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';

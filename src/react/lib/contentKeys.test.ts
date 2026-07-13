@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
+import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
+import { resolveSourceTextureOptions } from '@/core/lib/sourceTextureOptions';
 import {
     framebuffersContentKey,
     instancingContentKey,
     programConfigContentKey,
     programConfigsContentKey,
-    singleProgramEntry
+    singleProgramEntry,
+    texturesContentKey
 } from '@/react/lib/contentKeys';
-import type { FramebufferOptions, InstancingConfig, ShaderProgramConfig } from '@/types';
+import type {
+    FramebufferOptions,
+    InstancingConfig,
+    ShaderProgramConfig,
+    SourceTextureOptions,
+    TextureBindingSpec,
+    TextureSource
+} from '@/types';
 
 const makeConfig = (overrides: Partial<ShaderProgramConfig> = {}): ShaderProgramConfig => ({
     vertexShader: 'attribute vec2 a_position; void main() { gl_Position = vec4(a_position, 0.0, 1.0); }',
@@ -178,6 +188,88 @@ describe('framebuffersContentKey', () => {
 
     it('is empty for an undefined record', () => {
         expect(framebuffersContentKey(undefined)).toBe('');
+    });
+});
+
+interface SourceStub {
+    source: TextureSource;
+    bump: () => void;
+}
+
+function makeSource(id: string, options?: SourceTextureOptions): SourceStub {
+    let version = 0;
+    const source: TextureSource = {
+        id,
+        get version() { return version },
+        options: resolveSourceTextureOptions(options),
+        getFrame: () => null,
+        invalidation: createFrameInvalidation()
+    };
+    return { source, bump: () => { version += 1 } };
+}
+
+function binding(samplerName: string, unit: number, source: TextureSource): TextureBindingSpec {
+    return { samplerName, unit, source };
+}
+
+describe('texturesContentKey', () => {
+    it('is empty for undefined or no bindings', () => {
+        expect(texturesContentKey(undefined)).toBe('');
+        expect(texturesContentKey([])).toBe('');
+    });
+
+    it('does not change when only a source version bumps: a re-upload must not re-init the engine', () => {
+        const a = makeSource('image-texture-1');
+        const before = texturesContentKey([binding('u_image', 0, a.source)]);
+        a.bump();
+        const after = texturesContentKey([binding('u_image', 0, a.source)]);
+
+        expect(after).toBe(before);
+    });
+
+    it('changes when a texture is added', () => {
+        const a = makeSource('image-texture-1');
+        const b = makeSource('image-texture-2');
+        const one = texturesContentKey([binding('u_image', 0, a.source)]);
+        const two = texturesContentKey([binding('u_image', 0, a.source), binding('u_overlay', 1, b.source)]);
+
+        expect(one).not.toBe(two);
+    });
+
+    it('changes when two textures swap order, because their units swap', () => {
+        const a = makeSource('image-texture-1');
+        const b = makeSource('image-texture-2');
+        const forward = texturesContentKey([binding('u_image', 0, a.source), binding('u_overlay', 1, b.source)]);
+        const swapped = texturesContentKey([binding('u_overlay', 0, b.source), binding('u_image', 1, a.source)]);
+
+        expect(forward).not.toBe(swapped);
+    });
+
+    it('changes when only the assigned units differ, holding the sampler-source pairing fixed', () => {
+        const a = makeSource('image-texture-1');
+        const b = makeSource('image-texture-2');
+        const first = texturesContentKey([binding('u_image', 0, a.source), binding('u_overlay', 1, b.source)]);
+        const second = texturesContentKey([binding('u_image', 1, a.source), binding('u_overlay', 0, b.source)]);
+
+        expect(first).not.toBe(second);
+    });
+
+    it('changes when a source is swapped for one with a different id', () => {
+        const a = makeSource('image-texture-1');
+        const c = makeSource('image-texture-9');
+        const first = texturesContentKey([binding('u_image', 0, a.source)]);
+        const second = texturesContentKey([binding('u_image', 0, c.source)]);
+
+        expect(first).not.toBe(second);
+    });
+
+    it('changes when the resolved options change', () => {
+        const a = makeSource('image-texture-1');
+        const b = makeSource('image-texture-1', { flipY: false });
+        const first = texturesContentKey([binding('u_image', 0, a.source)]);
+        const second = texturesContentKey([binding('u_image', 0, b.source)]);
+
+        expect(first).not.toBe(second);
     });
 });
 

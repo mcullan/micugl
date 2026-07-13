@@ -222,6 +222,7 @@ animate everything else from `u_time` inside the shader.
 ### Hooks
 
 - **useUniformUpdaters(programId, uniforms)** → React memoized uniform updaters
+- **useImageTexture(input, options?)** → { texture, status, error } for the `textures` prop
 - **usePingPongPasses(options)** → { passes, framebuffers } for engine
 - **useDarkMode()** → boolean dark‑mode flag
 - **useReducedMotion()** → boolean, live `prefers-reduced-motion: reduce` state
@@ -512,6 +513,53 @@ loop — calls `request('continuous')`, which drives `frameloop='demand'` at ful
 suppressed while the component is motion-gated, so a reduced-motion user gets the poster instead
 of a live stream. When in doubt, `request()`: repainting a poster once is the safe default. See
 [What repaints the poster, and what freezes](#what-repaints-the-poster-and-what-freezes).
+
+## Textures
+
+Bind an image to a `sampler2D` with the `textures` prop. `useImageTexture` owns the decode
+lifecycle and hands back a stable `TextureSource`; the prop assigns each entry a texture unit in
+insertion order and declares the sampler for you.
+
+```tsx
+const image = useImageTexture(url);            // string | Blob | ImageBitmap | HTMLImageElement
+                                               //   | HTMLCanvasElement | ImageData | null
+const overlay = useImageTexture(file);
+
+<BaseShaderComponent
+  programId="scene"
+  shaderConfig={config}
+  uniforms={{ u_strength: { type: 'float', value: 0.5 } }}
+  textures={{ image: image.texture, overlay: overlay.texture }}  // -> u_image (unit 0), u_overlay (unit 1)
+  frameloop="demand"
+/>
+```
+
+- **Sampler names.** A key `image` binds the sampler `u_image`, matching the `uniforms` convention.
+  You do not declare the sampler in `createShaderConfig` — the prop appends it. If the GLSL never
+  actually samples that name, registration throws (a texture bound to a dead sampler can never
+  affect the picture) rather than binding nowhere.
+- **`useImageTexture(input, options?)`** returns `{ texture, status, error }` where `status` is
+  `'idle' | 'loading' | 'ready' | 'error'`. `input: null` is idle (render before a file is chosen).
+  Swapping the input keeps the old frame on screen until the new one decodes — no flash.
+  Clearing the input back to `null` stops updates and the canvas keeps the last uploaded frame;
+  unmount the component or swap the `textures` record to reset it to the placeholder.
+- **CORS.** URL inputs default to `crossOrigin: 'anonymous'`, because WebGL cannot accept a
+  cross-origin image without CORS approval. If the server does not send permissive CORS headers the
+  load fails and `status` becomes `'error'`. Pass `crossOrigin` to change the mode.
+- **flipY.** Sources upload DOM-upright by default (`flipY: true`), so `texture2D(u_image, uv)` with
+  a top-left `uv` shows the image the right way up. Override per texture in the options.
+- **Failing loud.** A decode/CORS failure reaches `status: 'error'` and, if you passed no `onError`,
+  re-throws during render so it hits your nearest error boundary. Pass `onError` to tolerate it
+  (a gallery skipping a broken URL); silence is never the default.
+- **Reduced motion.** A landing image calls `request()` (discrete), so it repaints a motion-gated
+  poster exactly once instead of being suppressed — the picture updates, the clock stays frozen.
+- **`resizeToPOT`.** Off by default (nothing silently rescales your pixels). Turn it on to draw the
+  source onto a power-of-two canvas first, which legalizes `REPEAT` wrap and mipmap min-filters.
+  Mipmaps are regenerated on **every** upload, so a mipmapped dynamic source pays that cost per
+  frame; leave the default `LINEAR` filter for the common non-repeating case.
+- **Worker mode.** `textures` under `worker` throws at mount: texture frames decode on the main
+  thread and cannot cross to the worker, so it fails loud instead of sampling a blank placeholder.
+  Turn worker mode off on that component, or drop `textures`.
 
 ## Worker rendering (OffscreenCanvas)
 

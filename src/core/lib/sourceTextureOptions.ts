@@ -42,13 +42,13 @@ const DEFAULT_SOURCE_TEXTURE_OPTIONS: ResolvedSourceTextureOptions = {
     premultiplyAlpha: false
 };
 
-function mipmapFilterMessage(filter: number): string {
+function mipmapNpotMessage(filter: number, width: number, height: number): string {
     return (
-        `micugl textures: minFilter ${filter} is a mipmap filter, but source textures never call generateMipmap, `
-        + 'so a mipmap min-filter would make the texture incomplete and every sample would come back black. It is '
-        + 'also illegal on a non-power-of-two texture in WebGL1, and images, videos and webcam frames are almost '
-        + `always non-power-of-two. Use ${GL_LINEAR} (LINEAR) or ${GL_NEAREST} (NEAREST). micugl will not quietly `
-        + 'downgrade the filter for you, because a silent downgrade is a picture you did not ask for.'
+        `micugl textures: minFilter ${filter} is a mipmap filter, but the source is ${width}x${height}, which is `
+        + 'not power-of-two. WebGL1 forbids mipmap min-filters on non-power-of-two textures, so the texture would '
+        + 'be incomplete and every sample would come back black. Pass resizeToPOT: true so micugl draws the source '
+        + `onto a power-of-two canvas before uploading it, use ${GL_LINEAR} (LINEAR) or ${GL_NEAREST} (NEAREST), or `
+        + 'resize the source to a power-of-two yourself.'
     );
 }
 
@@ -62,14 +62,12 @@ function repeatingWrapMessage(axis: 'wrapS' | 'wrapT', wrap: number, width: numb
     );
 }
 
-export function assertNonMipmapMinFilter(minFilter: number): void {
-    if (MIPMAP_MIN_FILTERS.has(minFilter)) {
-        throw new Error(mipmapFilterMessage(minFilter));
-    }
+export function isMipmapMinFilter(minFilter: number): boolean {
+    return MIPMAP_MIN_FILTERS.has(minFilter);
 }
 
 export function resolveSourceTextureOptions(options?: SourceTextureOptions): ResolvedSourceTextureOptions {
-    const resolved: ResolvedSourceTextureOptions = {
+    return {
         minFilter: options?.minFilter ?? DEFAULT_SOURCE_TEXTURE_OPTIONS.minFilter,
         magFilter: options?.magFilter ?? DEFAULT_SOURCE_TEXTURE_OPTIONS.magFilter,
         wrapS: options?.wrapS ?? DEFAULT_SOURCE_TEXTURE_OPTIONS.wrapS,
@@ -77,10 +75,6 @@ export function resolveSourceTextureOptions(options?: SourceTextureOptions): Res
         flipY: options?.flipY ?? DEFAULT_SOURCE_TEXTURE_OPTIONS.flipY,
         premultiplyAlpha: options?.premultiplyAlpha ?? DEFAULT_SOURCE_TEXTURE_OPTIONS.premultiplyAlpha
     };
-
-    assertNonMipmapMinFilter(resolved.minFilter);
-
-    return resolved;
 }
 
 export function sourceTextureOptionsEqual(
@@ -102,6 +96,9 @@ export function assertNpotCompatible(
 ): void {
     if (isPowerOfTwo(width) && isPowerOfTwo(height)) {
         return;
+    }
+    if (isMipmapMinFilter(options.minFilter)) {
+        throw new Error(mipmapNpotMessage(options.minFilter, width, height));
     }
     if (!NPOT_SAFE_WRAPS.has(options.wrapS)) {
         throw new Error(repeatingWrapMessage('wrapS', options.wrapS, width, height));

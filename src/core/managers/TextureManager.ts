@@ -1,7 +1,7 @@
 import type { SourceDimensions } from '@/core/lib/sourceTextureOptions';
 import {
-    assertNonMipmapMinFilter,
     assertNpotCompatible,
+    isMipmapMinFilter,
     isUploadable,
     sourceDimensions,
     sourceTextureOptionsEqual,
@@ -84,8 +84,6 @@ export class TextureManager {
             return;
         }
 
-        assertNonMipmapMinFilter(options.minFilter);
-
         const texture = gl.createTexture() as WebGLTexture | null;
         if (!texture) {
             throw new Error(`TextureManager.defineTexture: failed to create a GL texture for "${id}"`);
@@ -99,6 +97,9 @@ export class TextureManager {
         gl.texImage2D(
             gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, PLACEHOLDER_PIXEL
         );
+        if (isMipmapMinFilter(options.minFilter)) {
+            gl.generateMipmap(gl.TEXTURE_2D);
+        }
 
         this.resources.set(id, { texture, dimensions: null, options, uploadedVersion: null, owner: source });
     }
@@ -147,6 +148,10 @@ export class TextureManager {
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
         } else {
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+        }
+
+        if (isMipmapMinFilter(options.minFilter)) {
+            gl.generateMipmap(gl.TEXTURE_2D);
         }
 
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
