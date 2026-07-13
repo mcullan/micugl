@@ -156,10 +156,59 @@ instead of stepping to it:
 - Mounting snaps: the first value a uniform is given is its starting value, never animated
   from zero. Retargeting mid-flight starts the new leg from the current interpolated value.
 
+**Springs** are the other driver: swap `{ duration, easing?, delay?, interpolate? }` for
+`{ type: 'spring', stiffness?, damping?, mass?, restDelta?, restSpeed? }`.
+
+```tsx
+color: {
+    type: 'vec3',
+    value: isDarkMode ? colorStartDark : colorStart,
+    transition: { type: 'spring', stiffness: 170, damping: 26 }
+}
+```
+
+- Defaults: `stiffness: 170`, `damping: 26`, `mass: 1`, `restDelta: 0.001`, `restSpeed: 0.01` -
+  a semi-implicit-Euler damped spring that is just this side of critically damped, so it settles
+  without a visible bounce. Lower the damping (or raise the stiffness) for an overshoot-and-settle
+  feel instead.
+- The spring integrates on a fixed substep - 1/120s, and finer when a stiff or heavily damped
+  config needs it to stay stable - regardless of the actual frame rate, so a janky tab and a smooth
+  one follow the same trajectory instead of the integrator diverging under a large per-frame `dt`.
+  A gap longer than 100ms (a tab waking from being backgrounded) is clamped, so a spring that has
+  been idle for minutes does not lurch through a decade of simulated time on the next frame.
+- Retargeting a spring mid-flight **preserves velocity** instead of resetting it to zero - that is
+  the defining difference from a tween's retarget. A fast double-click chases the new target from
+  wherever the spring already was moving, instead of visibly stopping dead and restarting.
+- `stiffness`, `damping` and `mass` must be finite and strictly positive; `restDelta` and
+  `restSpeed` must be finite and non-negative; and a spring so stiff, or so light, that no
+  affordable substep could integrate it stably throws at config resolution rather than uploading
+  the garbage a diverging integrator produces. `damping: 0` throws too: an undamped spring never
+  comes to rest, so it would oscillate around its target forever, animating and holding the render
+  loop awake for as long as it is mounted instead of letting it go idle.
+- **A spring is an accumulator, not a function of time.** A tween's value at frame `n` depends only
+  on `n`; a spring's depends on the whole sequence of frames it has been sampled at. So an
+  in-flight spring cannot be reconstructed from a pinned frame the way a tween can: capture a
+  spring by replaying the sequence from its start, or let it settle before capturing. Springs are
+  still deterministic - the same sequence of sample times always produces the same output.
+- **So the deterministic-capture calls throw while a spring is in flight**, rather than handing you
+  a frame that will not reproduce: `renderSequence()`, and `renderToBlob({ frame })` /
+  `renderToDataURL({ frame })` (plus the seeded `steps` export on `PingPongShaderEngine`) all pin a
+  time the spring has not actually been integrated to. Wait for the spring to settle, or use a
+  tween. The calls that do not synthesize a time are untouched, because they are honest about what
+  they capture: `renderToBlob()` with no `frame` grabs the live clock - whatever is on screen right
+  now - and `record()`/`captureStream()` record in real time, where a spring animating through the
+  take is the whole point. An in-flight *tween* never blocks a capture: it is a pure function of
+  the frame number, so `setFrame(n)` reproduces it exactly.
+- The `?scene=transitions` demo has a tween/spring toggle next to the palette buttons - click a
+  palette, then a different one before the first animation finishes, to see mid-flight
+  retargeting on both drivers.
+
 **Transitions run on the engine clock, not on wall time.** `speed` scales them (`speed={0.5}`
-halves their pace, `speed={0}` freezes them), and `setFrame(n)` pins them, which is what makes
-them deterministic: the same frame number always produces the same interpolated value, so
-`renderSequence()` and `renderToBlob({ frame })` capture transitions exactly.
+halves their pace, `speed={0}` freezes them), and `setFrame(n)` pins them. For a tween that is what
+makes it deterministic: the same frame number always produces the same interpolated value, so
+`renderSequence()` and `renderToBlob({ frame })` capture tweens exactly. A spring is integrated
+across frames rather than indexed by them, so those same calls throw while one is in flight - see
+the spring caveat above.
 
 **A motion gate snaps them.** Under `reducedMotion="static-frame"`/`"pause"` (the default, when
 the user has `prefers-reduced-motion: reduce` or Save-Data on) the render clock is frozen, so a

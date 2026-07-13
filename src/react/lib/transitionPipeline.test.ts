@@ -96,6 +96,116 @@ describe('a real uniform transition, driven through the production pipeline (no 
         expect(swirlUploads(stub)).toEqual([0, 2.5, 5, 7.5, 10]);
     });
 
+    it('a spring transition overshoots the target and returns before landing exactly on it, then stops uploading', () => {
+        const runtime = createTransitionRuntime(() => false);
+        const springConfig = { type: 'spring' as const, stiffness: 1200, damping: 20 };
+
+        let uniforms: Record<string, UniformParam> = {
+            swirl: { type: 'float', value: 0, transition: springConfig }
+        };
+        const descriptors = uniformDescriptors(uniforms);
+        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
+        const valuesRef = { current: collectLiveValues(uniforms) };
+        const updaters = buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+
+        const stub = createCanvasStub();
+        const manager = new WebGLManager(stub.canvas);
+        manager.createProgram(PROGRAM_ID, CONFIG);
+        updaters.forEach(u => { manager.registerUniformUpdater(PROGRAM_ID, u.name, u.type, u.updateFn) });
+        manager.setSize(WIDTH, HEIGHT, WIDTH, HEIGHT);
+
+        const commit = (nextUniforms: Record<string, UniformParam>): void => {
+            uniforms = nextUniforms;
+            valuesRef.current = collectLiveValues(uniforms);
+            runtime.applyTargets(uniforms, 'none');
+        };
+
+        commit(uniforms);
+        stub.reset();
+
+        manager.updateUniforms(PROGRAM_ID, 0);
+        expect(swirlUploads(stub)).toEqual([0]);
+
+        commit({ swirl: { type: 'float', value: 10, transition: springConfig } });
+
+        const sampleTimes = [
+            1000, 1025, 1050, 1075, 1100, 1150, 1200, 1300, 1400, 1500, 1700, 1900, 1950, 2000, 2100
+        ];
+        for (const time of sampleTimes) {
+            manager.updateUniforms(PROGRAM_ID, time);
+        }
+
+        const values = swirlUploads(stub) as number[];
+        expect(values[0]).toBe(0);
+
+        const peakIndex = values.indexOf(Math.max(...values));
+        expect(values[peakIndex]).toBeGreaterThan(10);
+        expect(values[peakIndex]).toBeCloseTo(13.413144, 3);
+
+        const troughAfterPeak = Math.min(...values.slice(peakIndex + 1));
+        expect(troughAfterPeak).toBeLessThan(10);
+
+        expect(values[values.length - 1]).toBe(10);
+
+        const uploadCountAtSettle = values.length;
+        manager.updateUniforms(PROGRAM_ID, 2200);
+        manager.updateUniforms(PROGRAM_ID, 2300);
+        expect(swirlUploads(stub).length).toBe(uploadCountAtSettle);
+    });
+
+    it('a spring retarget mid-flight preserves velocity, so a mid-flight color chase never resets speed to zero', () => {
+        const runtime = createTransitionRuntime(() => false);
+        const springConfig = { type: 'spring' as const, stiffness: 170, damping: 10 };
+
+        let uniforms: Record<string, UniformParam> = {
+            swirl: { type: 'float', value: 0, transition: springConfig }
+        };
+        const descriptors = uniformDescriptors(uniforms);
+        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
+        const valuesRef = { current: collectLiveValues(uniforms) };
+        const updaters = buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+
+        const stub = createCanvasStub();
+        const manager = new WebGLManager(stub.canvas);
+        manager.createProgram(PROGRAM_ID, CONFIG);
+        updaters.forEach(u => { manager.registerUniformUpdater(PROGRAM_ID, u.name, u.type, u.updateFn) });
+        manager.setSize(WIDTH, HEIGHT, WIDTH, HEIGHT);
+
+        const commit = (nextUniforms: Record<string, UniformParam>): void => {
+            uniforms = nextUniforms;
+            valuesRef.current = collectLiveValues(uniforms);
+            runtime.applyTargets(uniforms, 'none');
+        };
+
+        commit(uniforms);
+        stub.reset();
+        manager.updateUniforms(PROGRAM_ID, 0);
+
+        const latest = (): number => {
+            const values = swirlUploads(stub) as number[];
+            return values[values.length - 1];
+        };
+
+        commit({ swirl: { type: 'float', value: 10, transition: springConfig } });
+        manager.updateUniforms(PROGRAM_ID, 1000);
+        manager.updateUniforms(PROGRAM_ID, 1050);
+        const valueAt1050 = latest();
+        manager.updateUniforms(PROGRAM_ID, 1100);
+        const valueAt1100 = latest();
+
+        const speedBeforeRetarget = (valueAt1100 - valueAt1050) / 50;
+        expect(speedBeforeRetarget).toBeGreaterThan(0);
+
+        commit({ swirl: { type: 'float', value: 20, transition: springConfig } });
+        manager.updateUniforms(PROGRAM_ID, 1100);
+        expect(latest()).toBe(valueAt1100);
+
+        manager.updateUniforms(PROGRAM_ID, 1116);
+        const speedAfterRetarget = (latest() - valueAt1100) / 16;
+
+        expect(speedAfterRetarget).toBeGreaterThan(speedBeforeRetarget);
+    });
+
     it('a vec3 transition uploads advancing buffers every frame and lands exactly on the target', () => {
         const runtime = createTransitionRuntime(() => false);
 

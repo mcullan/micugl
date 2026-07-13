@@ -14,6 +14,7 @@ import {
     uniformDescriptors,
     uniformStructureKey
 } from '@/react/lib/liveUniformUpdaters';
+import type { SpringsInFlight } from '@/react/lib/springCapture';
 import { createTransitionRuntime, type TransitionRuntime } from '@/react/lib/transitionRuntime';
 import type { MotionPolicy, UniformParam, UniformUpdaterDef } from '@/types';
 
@@ -21,6 +22,7 @@ export interface UniformUpdatersResult {
     updaters: Record<string, UniformUpdaterDef[]>;
     port: UniformDebugPort;
     invalidation: FrameInvalidation;
+    springsInFlight: SpringsInFlight;
 }
 
 export interface UniformUpdatersOptions {
@@ -77,5 +79,10 @@ export const useUniformUpdaters = (
         };
     }, [programId, structureKey, runtime]);
 
-    return { updaters, port, invalidation: runtime.invalidation };
+    return {
+        updaters,
+        port,
+        invalidation: runtime.invalidation,
+        springsInFlight: runtime.springsInFlight
+    };
 };

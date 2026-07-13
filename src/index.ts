@@ -74,6 +74,7 @@ export type {
     ShaderRenderCallback,
     ShaderResources,
     ShaderUniformLocations,
+    SpringTransitionConfig,
     TextureBinding,
     TextureOptions,
     TweenTransitionConfig,

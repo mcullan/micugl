@@ -4,8 +4,10 @@ import { createShaderConfig } from '../../src/core/lib/createShaderConfig';
 import { vec3 } from '../../src/core/lib/vectorUtils';
 import { BaseShaderComponent } from '../../src/react/components/base/BaseShaderComponent';
 import { useReducedMotion } from '../../src/react/hooks/useReducedMotion';
-import type { UniformParam } from '../../src/types';
+import type { UniformParam, UniformTransitionConfig } from '../../src/types';
 import { QUAD_VERTEX, TRANSITION_FRAGMENT } from './shaders';
+
+type TransitionMode = 'tween' | 'spring';
 
 interface Palette {
     name: string;
@@ -31,22 +33,29 @@ const config = createShaderConfig({
     }
 });
 
+const transitionForMode = (mode: TransitionMode): UniformTransitionConfig =>
+    mode === 'spring'
+        ? { type: 'spring', stiffness: 180, damping: 12 }
+        : { duration: 600, easing: 'easeInOut' };
+
 export const Transitions = () => {
     const [paletteIndex, setPaletteIndex] = useState(0);
+    const [mode, setMode] = useState<TransitionMode>('tween');
     const reducedMotionActive = useReducedMotion();
     const palette = PALETTES[paletteIndex];
+    const transition = transitionForMode(mode);
 
     const uniforms: Record<string, UniformParam> = {
-        swirl: { type: 'float', value: palette.swirl, transition: { duration: 600, easing: 'easeInOut' } },
+        swirl: { type: 'float', value: palette.swirl, transition },
         colorStart: {
             type: 'vec3',
             value: vec3(palette.colorStart),
-            transition: { duration: 600, easing: 'easeInOut' }
+            transition
         },
         colorEnd: {
             type: 'vec3',
             value: vec3(palette.colorEnd),
-            transition: { duration: 600, easing: 'easeInOut' }
+            transition
         }
     };
 
@@ -94,14 +103,35 @@ export const Transitions = () => {
                         </button>
                     ))}
                 </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    {(['tween', 'spring'] as const).map(entry => (
+                        <button
+                            key={entry}
+                            type='button'
+                            onClick={() => { setMode(entry) }}
+                            style={{
+                                padding: '6px 10px',
+                                background: mode === entry ? '#16a34a' : '#0f3460',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {entry}
+                        </button>
+                    ))}
+                </div>
                 <div>
-                    Click palettes fast to see mid-flight retargeting: each click starts a new 600ms
-                    tween from wherever the current colors and swirl amount already are, not from the start.
+                    Click palettes fast to see mid-flight retargeting: each click starts a new leg from
+                    wherever the current colors and swirl amount already are, not from the start. The
+                    tween restarts its timing; the spring keeps its velocity, so a fast click chases the
+                    new target instead of stuttering.
                 </div>
                 <div>
                     useReducedMotion(): {String(reducedMotionActive)}
                     {reducedMotionActive
-                        ? ' (OS reduced-motion is on, so transitions snap instantly instead of tweening.)'
+                        ? ' (OS reduced-motion is on, so transitions snap instantly instead of animating.)'
                         : ''}
                 </div>
             </div>

@@ -10,11 +10,13 @@ import {
 import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
 import { normalizeUniformName } from '@/react/lib/liveUniformUpdaters';
 import type { MotionGate } from '@/react/lib/motionPolicy';
+import type { SpringsInFlight } from '@/react/lib/springCapture';
 import type { UniformParam, UniformType, UniformValue } from '@/types';
 
 export interface TransitionRuntime {
     applyTargets(uniforms: Record<string, UniformParam>, motionGate: MotionGate): void;
     sample(name: string, timeMs: number): Float32Array | number | null;
+    springsInFlight: SpringsInFlight;
     invalidation: FrameInvalidation;
 }
 
@@ -87,6 +89,7 @@ function snapToTarget(state: MotionState, target: Float32Array): void {
     state.from.set(target);
     state.to.set(target);
     state.current.set(target);
+    state.velocity.fill(0);
     state.settled = true;
 }
 
@@ -148,6 +151,14 @@ export function createTransitionRuntime(isOverridden: (name: string) => boolean)
             }
 
             return state.current.length === 1 ? state.current[0] : state.current;
+        },
+        springsInFlight: () => {
+            for (const [name, state] of states) {
+                if (state.config.kind === 'spring' && !state.settled && !isOverridden(name)) {
+                    return true;
+                }
+            }
+            return false;
         },
         invalidation
     };

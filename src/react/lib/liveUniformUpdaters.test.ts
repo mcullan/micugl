@@ -166,6 +166,7 @@ describe('buildLiveUpdaters', () => {
         const runtime: TransitionRuntime = {
             applyTargets: () => undefined,
             sample: (name, timeMs) => name === 'u_swirl' && timeMs < 100 ? 4.5 : null,
+            springsInFlight: () => false,
             invalidation: createFrameInvalidation()
         };
         const updaters = buildLiveUpdaters([{ name: 'u_swirl', type: 'float' }], true, valuesRef, runtime);
@@ -179,6 +180,7 @@ describe('buildLiveUpdaters', () => {
         const runtime: TransitionRuntime = {
             applyTargets: () => undefined,
             sample: () => null,
+            springsInFlight: () => false,
             invalidation: createFrameInvalidation()
         };
         const updaters = buildLiveUpdaters([{ name: 'u_swirl', type: 'float' }], true, valuesRef, runtime);

@@ -5,6 +5,7 @@ import { createTransitionRuntime } from '@/react/lib/transitionRuntime';
 import type { UniformParam, UniformTransitionConfig, Vec3 } from '@/types';
 
 const TWEEN: UniformTransitionConfig = { duration: 100, easing: 'linear' };
+const SPRING: UniformTransitionConfig = { type: 'spring', stiffness: 170, damping: 10 };
 
 function noOverrides(): boolean {
     return false;
@@ -12,6 +13,10 @@ function noOverrides(): boolean {
 
 function swirl(value: number): Record<string, UniformParam> {
     return { u_swirl: { type: 'float', value, transition: TWEEN } };
+}
+
+function springSwirl(value: number): Record<string, UniformParam> {
+    return { u_swirl: { type: 'float', value, transition: SPRING } };
 }
 
 function color(value: Vec3): Record<string, UniformParam> {
@@ -113,6 +118,26 @@ describe('createTransitionRuntime', () => {
         runtime.applyTargets(swirl(10), 'static');
 
         expect(runtime.sample('u_swirl', 50)).toBeNull();
+    });
+
+    it('a gate that snaps an in-flight spring clears its velocity, so lifting the gate later does not carry a phantom speed', () => {
+        const gated = createTransitionRuntime(noOverrides);
+        gated.applyTargets(springSwirl(0), 'none');
+        gated.applyTargets(springSwirl(10), 'none');
+        gated.sample('u_swirl', 0);
+        gated.sample('u_swirl', 100);
+        gated.applyTargets(springSwirl(10), 'static');
+        expect(gated.sample('u_swirl', 200)).toBeNull();
+
+        const fromRest = createTransitionRuntime(noOverrides);
+        fromRest.applyTargets(springSwirl(10), 'none');
+
+        gated.applyTargets(springSwirl(20), 'none');
+        fromRest.applyTargets(springSwirl(20), 'none');
+
+        for (const time of [300, 316, 332]) {
+            expect(gated.sample('u_swirl', time)).toBe(fromRest.sample('u_swirl', time));
+        }
     });
 
     it('a commit that lifts the gate and changes the value together animates, it does not snap', () => {

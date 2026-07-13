@@ -40,6 +40,8 @@ import {
     resolveDeviceResolution,
     resolveResolution
 } from '@/react/lib/resolution';
+import type { SpringsInFlight } from '@/react/lib/springCapture';
+import { springInFlightMessage } from '@/react/lib/springCapture';
 import { frameToMs } from '@/react/lib/timeKeeper';
 import type { WorkerBlock, WorkerProgramUniforms } from '@/react/lib/workerMode';
 import {
@@ -83,6 +85,7 @@ interface ShaderEngineBaseProps extends Omit<RenderControlProps, 'worker' | 'cre
     debugPortRef?: RefObject<UniformDebugPort | null>;
     workerSkipDefaultUniforms?: boolean;
     invalidation?: FrameInvalidation;
+    springsInFlight?: SpringsInFlight;
 }
 
 export type ShaderEngineWorkerProps =
@@ -172,6 +175,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
     workerSkipDefaultUniforms = false,
     liveUniforms,
     invalidation,
+    springsInFlight,
     worker,
     createWorker,
     useDevicePixelRatio,
@@ -285,13 +289,17 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             throw new Error('ShaderEngine.renderToBlob: WebGL context is lost');
         }
 
+        const explicitFrame = opts.frame !== undefined;
+        if (explicitFrame && springsInFlight?.()) {
+            throw new Error(springInFlightMessage('ShaderEngine', 'renderToBlob'));
+        }
+
         const canvas = manager.context.canvas as HTMLCanvasElement;
         const backingWidth = canvas.width;
         const backingHeight = canvas.height;
 
         const { width, height } = resolveExportDimensions(opts, backingWidth, backingHeight);
         const isDefaultDims = width === backingWidth && height === backingHeight;
-        const explicitFrame = opts.frame !== undefined;
         const timeMs = frameToMs(opts.frame ?? controllerRef.current?.getFrame() ?? 0);
 
         const result = captureFrame(
@@ -321,7 +329,7 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         );
 
         return { ...result, type: opts.type, quality: opts.quality };
-    }, [renderFrame, drawFastPathGeometry]);
+    }, [renderFrame, drawFastPathGeometry, springsInFlight]);
 
     const commitSize = useCallback((
         resolution: { renderWidth: number; renderHeight: number },
@@ -868,6 +876,9 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
             if (options.seed !== undefined) {
                 throw new Error('ShaderEngine.renderSequence: no simulation to seed');
             }
+            if (springsInFlight?.()) {
+                throw new Error(springInFlightMessage('ShaderEngine', 'renderSequence'));
+            }
             const canvas = manager.context.canvas as HTMLCanvasElement;
             const controller = controllerRef.current;
             const wasRunning = controller !== null && !controller.isPaused();
@@ -887,7 +898,8 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         renderFrame,
         invalidateAll,
         startSamplerLoop,
-        setStopped
+        setStopped,
+        springsInFlight
     ]);
 
     if (workerActive && block) {
