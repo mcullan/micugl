@@ -270,7 +270,11 @@ describe('useWebcamTexture: StrictMode never double-prompts (H6)', () => {
         });
 
         await mount(<StrictMode><WebcamScene deps={deps} control={control} /></StrictMode>);
-        await act(async () => { await control.start?.() });
+        await act(async () => {
+            const first = control.start?.();
+            const second = control.start?.();
+            await Promise.all([first, second]);
+        });
 
         expect(calls).toBe(1);
         expect(control.status).toBe('running');
