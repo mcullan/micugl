@@ -53,7 +53,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "bench": "playwright test --project=counters",
-    "bench:timing": "playwright test --project=timing"
+    "bench:timing": "playwright test --project=timing",
+    "test:e2e": "MICUGL_E2E=1 playwright test --project=e2e"
   },
   "peerDependencies": {
     "mp4-muxer": "^5.2.2",
