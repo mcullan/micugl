@@ -340,6 +340,106 @@ describe('useImageTexture: a superseded Blob load closes only the bitmap it crea
     });
 });
 
+describe('useImageTexture: error then recovery', () => {
+    it('clears the stored error the moment a new input starts loading, then recovers to ready', async () => {
+        const failure = new Error('decode failed');
+        let resolveSecond: ((value: ImageBitmap) => void) | null = null;
+        let decodeCalls = 0;
+        const deps: ImageTextureDeps = {
+            createImageBitmap: () => {
+                decodeCalls += 1;
+                if (decodeCalls === 1) {
+                    return Promise.reject(failure);
+                }
+                const control = deferred<ImageBitmap>();
+                resolveSecond = control.resolve;
+                return control.promise;
+            }
+        };
+        const reports: unknown[] = [];
+        const options: ImageTextureOptions = { deps, onError: error => { reports.push(error) } };
+        const probe: Probe = { current: null };
+
+        await mount(<Scene input={new Blob(['bad'])} options={options} probe={probe} />);
+        await flush();
+        expect(currentResult(probe).status).toBe('error');
+        expect(currentResult(probe).error).toBe(failure);
+
+        await mount(<Scene input={new Blob(['good'])} options={options} probe={probe} />);
+        expect(currentResult(probe).status).toBe('loading');
+        expect(currentResult(probe).error).toBeNull();
+
+        const frame = bitmap(64, 48);
+        await act(async () => {
+            resolveSecond?.(frame as unknown as ImageBitmap);
+            await Promise.resolve();
+        });
+        await flush();
+
+        expect(currentResult(probe).status).toBe('ready');
+        expect(currentResult(probe).texture.getFrame()).toBe(frame);
+        expect(reports).toEqual([failure]);
+    });
+
+    it('clears a stored error when the input is cleared to null', async () => {
+        const failure = new Error('decode failed');
+        const deps: ImageTextureDeps = { createImageBitmap: () => Promise.reject(failure) };
+        const options: ImageTextureOptions = { deps, onError: () => undefined };
+        const probe: Probe = { current: null };
+
+        await mount(<Scene input={new Blob(['bad'])} options={options} probe={probe} />);
+        await flush();
+        expect(currentResult(probe).status).toBe('error');
+        expect(currentResult(probe).error).toBe(failure);
+
+        await mount(<Scene input={null} options={options} probe={probe} />);
+        await flush();
+
+        expect(currentResult(probe).status).toBe('idle');
+        expect(currentResult(probe).error).toBeNull();
+    });
+});
+
+describe('useImageTexture: resizeToPOT owns the bitmap it decodes from a Blob', () => {
+    it('closes the decoded bitmap once the copy lands on the power-of-two canvas', async () => {
+        const decoded = closableBitmap(640, 480);
+        const deps: ImageTextureDeps = {
+            createImageBitmap: () => Promise.resolve(decoded as unknown as ImageBitmap),
+            createPotCanvas: (width, height) => ({
+                width,
+                height,
+                getContext: () => ({ drawImage: () => undefined })
+            }) as unknown as HTMLCanvasElement
+        };
+        const probe: Probe = { current: null };
+
+        await mount(<Scene input={new Blob(['x'])} options={{ resizeToPOT: true, deps }} probe={probe} />);
+        await flush();
+
+        expect(currentResult(probe).status).toBe('ready');
+        expect(decoded.closed).toBe(1);
+        expect(currentResult(probe).texture.getFrame()).not.toBe(decoded);
+    });
+
+    it('keeps an already-power-of-two bitmap open, because the bitmap itself is the frame', async () => {
+        const decoded = closableBitmap(256, 256);
+        const deps: ImageTextureDeps = {
+            createImageBitmap: () => Promise.resolve(decoded as unknown as ImageBitmap),
+            createPotCanvas: () => {
+                throw new Error('a power-of-two source must pass through without a copy');
+            }
+        };
+        const probe: Probe = { current: null };
+
+        await mount(<Scene input={new Blob(['x'])} options={{ resizeToPOT: true, deps }} probe={probe} />);
+        await flush();
+
+        expect(currentResult(probe).status).toBe('ready');
+        expect(decoded.closed).toBe(0);
+        expect(currentResult(probe).texture.getFrame()).toBe(decoded);
+    });
+});
+
 describe('useImageTexture: resizeToPOT', () => {
     it('draws a non-power-of-two source onto the injected power-of-two canvas with stretch args', async () => {
         const drawCalls: unknown[][] = [];

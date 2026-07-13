@@ -79,7 +79,7 @@ async function decodeInput(
 }
 
 export function useImageTexture(input: ImageInput | null, options?: ImageTextureOptions): ImageTextureResult {
-    const resolved = resolveSourceTextureOptions(options as SourceTextureOptions | undefined);
+    const resolved = resolveSourceTextureOptions(options);
     const resizeToPOT = options?.resizeToPOT ?? false;
     const optionsKey = `${JSON.stringify(resolved)}|${String(resizeToPOT)}`;
 
@@ -93,12 +93,11 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
     const versionRef = useRef(0);
     const invalidationRef = useRef<FrameInvalidation | null>(null);
     const invalidation = (invalidationRef.current ??= createFrameInvalidation());
-    const errorRef = useRef<unknown>(null);
 
     const sourceRef = useRef<TextureSource | null>(null);
-    const sourceKeyRef = useRef('');
-    if (sourceRef.current === null || sourceKeyRef.current !== optionsKey) {
-        sourceKeyRef.current = optionsKey;
+    const mintedOptionsKeyRef = useRef('');
+    if (sourceRef.current === null || mintedOptionsKeyRef.current !== optionsKey) {
+        mintedOptionsKeyRef.current = optionsKey;
         sourceRef.current = {
             id: idRef.current,
             get version() { return versionRef.current },
@@ -112,13 +111,13 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
     const [status, setStatus] = useState<TextureStatus>(input === null ? 'idle' : 'loading');
     const [error, setError] = useState<unknown>(null);
 
-    const configRef = useRef({
+    const loaderConfigRef = useRef({
         crossOrigin: options?.crossOrigin ?? 'anonymous',
         onError: options?.onError,
         deps: options?.deps,
         resizeToPOT
     });
-    configRef.current = {
+    loaderConfigRef.current = {
         crossOrigin: options?.crossOrigin ?? 'anonymous',
         onError: options?.onError,
         deps: options?.deps,
@@ -128,15 +127,17 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
     useEffect(() => {
         if (input === null) {
             frameRef.current = null;
+            setError(null);
             setStatus('idle');
             return;
         }
 
         let cancelled = false;
+        setError(null);
         setStatus('loading');
 
         const run = async (): Promise<void> => {
-            const { crossOrigin, deps, resizeToPOT: shouldResize, onError } = configRef.current;
+            const { crossOrigin, deps, resizeToPOT: shouldResize, onError } = loaderConfigRef.current;
             const loaderDeps: ResolvedLoaderDeps = {
                 createImageBitmap: deps?.createImageBitmap ?? (source => createImageBitmap(source)),
                 createImage: deps?.createImage ?? (() => new Image())
@@ -154,16 +155,17 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
                 const frame = shouldResize
                     ? resizeSourceToPot(decoded, deps?.createPotCanvas ?? defaultPotCanvasFactory)
                     : decoded;
+                if (frame !== decoded && isBlob(input)) {
+                    closeOwnedBitmap(decoded);
+                }
 
                 frameRef.current = frame;
                 versionRef.current += 1;
-                errorRef.current = null;
                 invalidation.request();
                 setError(null);
                 setStatus('ready');
             } catch (caught) {
                 if (cancelled) return;
-                errorRef.current = caught;
                 setError(caught);
                 setStatus('error');
                 onError?.(caught);
@@ -176,7 +178,7 @@ export function useImageTexture(input: ImageInput | null, options?: ImageTexture
     }, [input, optionsKey, invalidation]);
 
     if (status === 'error' && options?.onError === undefined) {
-        throw errorRef.current;
+        throw error;
     }
 
     return { texture: source, status, error };

@@ -388,15 +388,22 @@ export class WebGLManager {
             }
         }
 
+        const location = this.requireSamplerLocation(resources, programId, binding);
+
         this.textureManager.defineTexture(binding.source);
 
         bindings.push(binding);
         this.textureBindings.set(programId, bindings);
 
-        this.setSamplerUnit(resources, programId, binding);
+        this.useProgram(resources.program);
+        this.gl.uniform1i(location, binding.unit);
     }
 
-    private setSamplerUnit(resources: ShaderResources, programId: string, binding: TextureBindingSpec): void {
+    private requireSamplerLocation(
+        resources: ShaderResources,
+        programId: string,
+        binding: TextureBindingSpec
+    ): WebGLUniformLocation {
         const location = this.checkedUniformLocation(resources, programId, binding.samplerName, 'sampler2D');
         if (location === null) {
             throw new Error(
@@ -405,9 +412,7 @@ export class WebGLManager {
                 + 'the shader, fix the sampler name, or remove its entry from the "textures" prop.'
             );
         }
-
-        this.useProgram(resources.program);
-        this.gl.uniform1i(location, binding.unit);
+        return location;
     }
 
     updateTextures(programId: string): void {

@@ -543,9 +543,9 @@ const overlay = useImageTexture(file);
   Swapping the input keeps the old frame on screen until the new one decodes — no flash.
   Clearing the input back to `null` stops updates and the canvas keeps the last uploaded frame;
   unmount the component or swap the `textures` record to reset it to the placeholder.
-- **CORS.** URL inputs default to `crossOrigin: 'anonymous'`, so a cross-origin image needs
-  permissive CORS headers or the upload taints the canvas and throws. Pass `crossOrigin` to change
-  it.
+- **CORS.** URL inputs default to `crossOrigin: 'anonymous'`, because WebGL cannot accept a
+  cross-origin image without CORS approval. If the server does not send permissive CORS headers the
+  load fails and `status` becomes `'error'`. Pass `crossOrigin` to change the mode.
 - **flipY.** Sources upload DOM-upright by default (`flipY: true`), so `texture2D(u_image, uv)` with
   a top-left `uv` shows the image the right way up. Override per texture in the options.
 - **Failing loud.** A decode/CORS failure reaches `status: 'error'` and, if you passed no `onError`,

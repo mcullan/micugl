@@ -34,11 +34,15 @@ const config = createShaderConfig({
 
 export const ImageTexture = () => {
     const [input, setInput] = useState<ImageInput | null>(DEFAULT_IMAGE);
-    const image = useImageTexture(input);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const image = useImageTexture(input, {
+        onError: error => { setLoadError(error instanceof Error ? error.message : String(error)) }
+    });
     const overlay = useImageTexture(OVERLAY_IMAGE);
 
     const acceptFile = (file: File | undefined): void => {
         if (file) {
+            setLoadError(null);
             setInput(file);
         }
     };
@@ -82,6 +86,7 @@ export const ImageTexture = () => {
             >
                 <div>u_image status: {image.status}</div>
                 <div>u_overlay status: {overlay.status}</div>
+                {loadError !== null && <div>load error: {loadError}</div>}
                 <div>drop an image anywhere, or pick a file</div>
                 <input
                     type='file'

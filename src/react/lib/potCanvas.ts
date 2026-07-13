@@ -5,7 +5,9 @@ export type PotCanvasFactory = (width: number, height: number) => HTMLCanvasElem
 
 export function nextPowerOfTwo(value: number): number {
     if (!Number.isFinite(value) || value < 1) {
-        return 1;
+        throw new Error(
+            `micugl nextPowerOfTwo: a texture dimension must be a finite number of at least 1, got ${String(value)}.`
+        );
     }
     let pot = 1;
     while (pot < value) {
@@ -30,6 +32,13 @@ export function resizeSourceToPot(
     createCanvas: PotCanvasFactory
 ): TextureUploadSource {
     const { width, height } = sourceDimensions(source);
+    if (width < 1 || height < 1) {
+        throw new Error(
+            `micugl useImageTexture: resizeToPOT got a source measuring ${width}x${height}. A source without `
+            + 'positive dimensions has no pixels to draw onto a power-of-two canvas, and copying it would upload '
+            + 'a blank texture instead of failing loud. Size or decode the source before passing it in.'
+        );
+    }
     const potWidth = nextPowerOfTwo(width);
     const potHeight = nextPowerOfTwo(height);
 
@@ -54,6 +63,6 @@ export function resizeSourceToPot(
         );
     }
 
-    context.drawImage(source as CanvasImageSource, 0, 0, potWidth, potHeight);
+    context.drawImage(source, 0, 0, potWidth, potHeight);
     return canvas;
 }
