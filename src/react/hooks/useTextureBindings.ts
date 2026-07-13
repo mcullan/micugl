@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
+import type { NonReproducible } from '@/react/lib/captureLiveness';
 import { augmentConfigWithSamplers, buildTextureBindings } from '@/react/lib/textureBindings';
 import type { ShaderProgramConfig, TextureBindingSpec, TextureSource } from '@/types';
 
@@ -9,6 +10,20 @@ export interface TextureBindingsResult {
     bindings: TextureBindingSpec[] | undefined;
     invalidation: FrameInvalidation | null;
     config: ShaderProgramConfig;
+    texturesAreNonReproducible: () => boolean;
+}
+
+function collectNonReproducible(bindings: TextureBindingSpec[] | undefined): NonReproducible[] {
+    if (!bindings) {
+        return [];
+    }
+    const predicates: NonReproducible[] = [];
+    for (const binding of bindings) {
+        if (binding.source.nonReproducible) {
+            predicates.push(binding.source.nonReproducible);
+        }
+    }
+    return predicates;
 }
 
 export function useTextureBindings(
@@ -20,6 +35,14 @@ export function useTextureBindings(
     const relayedRef = useRef(new Map<FrameInvalidation, () => void>());
 
     const bindings = textures ? buildTextureBindings(textures) : undefined;
+
+    const nonReproducibleRef = useRef<NonReproducible[]>([]);
+    nonReproducibleRef.current = collectNonReproducible(bindings);
+
+    const texturesAreNonReproducible = useCallback(
+        () => nonReproducibleRef.current.some(isLive => isLive()),
+        []
+    );
 
     useEffect(() => {
         const relayed = relayedRef.current;
@@ -49,6 +72,7 @@ export function useTextureBindings(
     return {
         bindings,
         invalidation: textures ? fanIn : null,
-        config: bindings ? augmentConfigWithSamplers(config, bindings) : config
+        config: bindings ? augmentConfigWithSamplers(config, bindings) : config,
+        texturesAreNonReproducible
     };
 }

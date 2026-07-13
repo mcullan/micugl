@@ -1,11 +1,12 @@
 import type { CSSProperties } from 'react';
-import { forwardRef, memo, useMemo, useRef } from 'react';
+import { forwardRef, memo, useCallback, useMemo, useRef } from 'react';
 
 import type { RenderOptions, ShaderProgramConfig, ShaderRenderCallback } from '@/core';
 import { combineFrameInvalidation } from '@/core';
 import { ShaderEngine } from '@/react';
 import { useTextureBindings } from '@/react/hooks/useTextureBindings';
 import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
+import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type {
     InstanceAttribute,
@@ -68,7 +69,7 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
     style,
     renderOptions = RENDER_OPTIONS
 }, ref) => {
-    const { updaters, port, invalidation, capturesAreNonReproducible } = useUniformUpdaters(
+    const { updaters, port, invalidation, capturesAreNonReproducible: uniformsAreNonReproducible } = useUniformUpdaters(
         programId,
         uniforms,
         { skipDefaultUniforms, reducedMotion, saveData }
@@ -76,12 +77,17 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
     const {
         bindings,
         invalidation: textureInvalidation,
-        config: augmentedConfig
+        config: augmentedConfig,
+        texturesAreNonReproducible
     } = useTextureBindings(textures, shaderConfig);
     const programConfigs = { [programId]: augmentedConfig };
     const combinedInvalidation = useMemo(
         () => (textureInvalidation ? combineFrameInvalidation([invalidation, textureInvalidation]) : invalidation),
         [invalidation, textureInvalidation]
+    );
+    const capturesAreNonReproducible = useCallback<CapturesAreNonReproducible>(
+        () => uniformsAreNonReproducible() ?? (texturesAreNonReproducible() ? 'texture' : null),
+        [uniformsAreNonReproducible, texturesAreNonReproducible]
     );
     const debugPortRef = useRef<UniformDebugPort | null>(null);
     debugPortRef.current = port;
