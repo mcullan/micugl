@@ -27,6 +27,7 @@ export type WorkerBlock =
     | { kind: 'uniform-function'; programId: string; name: string }
     | { kind: 'uniform-builtin-function'; programId: string; name: string }
     | { kind: 'uniform-not-clone-safe'; programId: string; name: string }
+    | { kind: 'uniform-transition'; programId: string; name: string }
     | { kind: 'pass-uniform-function'; programId: string; passIndex: number; name: string }
     | { kind: 'pass-uniform-not-clone-safe'; programId: string; passIndex: number; name: string };
 
@@ -101,6 +102,9 @@ function findLiveUniformBlock(inputs: WorkerBlockInputs): WorkerBlock | null {
 function findProgramUniformBlock(inputs: WorkerBlockInputs): WorkerBlock | null {
     for (const [programId, params] of Object.entries(inputs.uniforms ?? {})) {
         for (const [name, param] of Object.entries(params)) {
+            if (param.transition !== undefined) {
+                return { kind: 'uniform-transition', programId, name };
+            }
             if (typeof param.value === 'function') {
                 if (isWorkerBuiltinUniformName(name)) {
                     return { kind: 'uniform-builtin-function', programId, name };
@@ -162,6 +166,13 @@ function builtinUniformFunctionMessage(programId: string, name: string): string 
         + 'this component so the main thread can call it every frame.';
 }
 
+function uniformTransitionMessage(programId: string, name: string): string {
+    return `micugl worker: uniform "${name}" on program "${programId}" has a "transition", but transitions are `
+        + 'interpolated on the main thread every frame and worker mode posts plain values; the transition would '
+        + `be ignored and "${name}" would jump straight to its new value. Remove the transition, or turn off `
+        + 'worker mode on this component.';
+}
+
 function notCloneSafeMessage(programId: string, name: string): string {
     return `micugl worker: uniform "${name}" on program "${programId}" is not structured-clone-safe, so it `
         + 'cannot be posted to a worker. Worker-mode uniform values must be a number, a number[], or a typed '
@@ -219,6 +230,8 @@ export function workerBlockMessage(component: string, block: WorkerBlock): strin
             return builtinUniformFunctionMessage(block.programId, block.name);
         case 'uniform-not-clone-safe':
             return notCloneSafeMessage(block.programId, block.name);
+        case 'uniform-transition':
+            return uniformTransitionMessage(block.programId, block.name);
         case 'pass-uniform-function':
             return passUniformFunctionMessage(block.programId, block.passIndex, block.name);
         case 'pass-uniform-not-clone-safe':

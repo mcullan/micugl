@@ -4,6 +4,7 @@ import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import { vec3 } from '@/core/lib/vectorUtils';
 import { BaseShaderComponent } from '@/react/components/base/BaseShaderComponent';
 import { useDarkMode } from '@/react/hooks/useDarkMode';
+import type { UniformTransitionConfig } from '@/types';
 
 import { marbleFragmentShader, marbleVertexShader } from './marbleShaders';
 
@@ -29,6 +30,7 @@ export interface MarbleProps {
     veinColorDark?: Vec3;
     veinFrequency?: number;
     veinWidth?: number;
+    colorTransition?: UniformTransitionConfig;
     className?: string;
     style?: CSSProperties;
 }
@@ -46,6 +48,7 @@ export const Marble = ({
     colorStartDark = COLOR_START_DARK,
     colorEndDark = COLOR_END_DARK,
     veinColorDark = VEIN_COLOR_DARK,
+    colorTransition,
     className = '',
     style
 }: MarbleProps) => {
@@ -81,15 +84,18 @@ export const Marble = ({
                 veinWidth: { value: veinWidth, type: 'float' },
                 colorStart: {
                     type: 'vec3',
-                    value: vec3(isDarkMode ? colorStartDark : colorStart)
+                    value: vec3(isDarkMode ? colorStartDark : colorStart),
+                    transition: colorTransition
                 },
                 colorEnd: {
                     type: 'vec3',
-                    value: vec3(isDarkMode ? colorEndDark : colorEnd)
+                    value: vec3(isDarkMode ? colorEndDark : colorEnd),
+                    transition: colorTransition
                 },
                 veinColor: {
                     type: 'vec3',
-                    value: vec3(isDarkMode ? veinColorDark : veinColor)
+                    value: vec3(isDarkMode ? veinColorDark : veinColor),
+                    transition: colorTransition
                 }
             }}
         />

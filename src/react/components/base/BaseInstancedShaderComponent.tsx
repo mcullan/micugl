@@ -64,7 +64,11 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
     renderOptions = RENDER_OPTIONS
 }, ref) => {
     const programConfigs = { [programId]: shaderConfig };
-    const { updaters, port } = useUniformUpdaters(programId, uniforms, { skipDefaultUniforms });
+    const { updaters, port, invalidation } = useUniformUpdaters(
+        programId,
+        uniforms,
+        { skipDefaultUniforms, reducedMotion, saveData }
+    );
     const debugPortRef = useRef<UniformDebugPort | null>(null);
     debugPortRef.current = port;
 
@@ -77,6 +81,7 @@ const BaseInstancedShaderComponentImpl = forwardRef<ShaderHandle, BaseInstancedS
             renderCallback={renderFullscreenQuad}
             uniformUpdaters={updaters}
             debugPortRef={debugPortRef}
+            invalidation={invalidation}
             width={width}
             height={height}
             pixelRatio={pixelRatio}

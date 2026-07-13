@@ -1,4 +1,6 @@
+import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
 import { createCommonUpdaters } from '@/react/lib/createUniformUpdater';
+import type { TransitionRuntime } from '@/react/lib/transitionRuntime';
 import type {
     UniformParam,
     UniformType,
@@ -31,21 +33,13 @@ export interface UniformDebugPort {
     clearOverride: (name: string) => void;
 }
 
-export interface UniformDebugPortRefs {
+export interface UniformDebugPortOptions {
     descriptorsRef: { current: UniformDescriptor[] };
     baseValuesRef: { current: LiveValues };
     overridesRef: { current: LiveValues };
     valuesRef: { current: LiveValues };
+    onChange: () => void;
 }
-
-const VEC_LENGTHS: Partial<Record<UniformType, number>> = {
-    vec2: 2,
-    vec3: 3,
-    vec4: 4,
-    mat2: 4,
-    mat3: 9,
-    mat4: 16
-};
 
 function coerceFiniteNumber(type: UniformType, value: unknown): number {
     const parsed = Number(value);
@@ -68,10 +62,7 @@ export function validateOverrideValue(type: UniformType, value: unknown): Unifor
     if (type === 'int' || type === 'sampler2D') {
         return Math.trunc(coerceFiniteNumber(type, value));
     }
-    const length = VEC_LENGTHS[type];
-    if (length === undefined) {
-        throw new Error(`micugl devtools: unsupported uniform type "${type}" for override`);
-    }
+    const length = UNIFORM_COMPONENTS[type];
     if (!isArrayLikeValue(value) || value.length !== length) {
         const gotLength = isArrayLikeValue(value) ? value.length : typeof value;
         throw new Error(
@@ -89,9 +80,9 @@ export function mergeOverrides(base: LiveValues, overrides: LiveValues): LiveVal
     return Object.keys(overrides).length === 0 ? base : { ...base, ...overrides };
 }
 
-export function createUniformDebugPort(refs: UniformDebugPortRefs): UniformDebugPort {
+export function createUniformDebugPort(options: UniformDebugPortOptions): UniformDebugPort {
     const findDescriptor = (name: string): UniformDescriptor => {
-        const found = refs.descriptorsRef.current.find(descriptor => descriptor.name === name);
+        const found = options.descriptorsRef.current.find(descriptor => descriptor.name === name);
         if (!found) {
             throw new Error(`micugl devtools: unknown uniform "${name}"`);
         }
@@ -99,22 +90,27 @@ export function createUniformDebugPort(refs: UniformDebugPortRefs): UniformDebug
     };
 
     return {
-        list: () => refs.descriptorsRef.current.map(descriptor => ({
+        list: () => options.descriptorsRef.current.map(descriptor => ({
             name: descriptor.name,
             type: descriptor.type,
-            value: refs.valuesRef.current[descriptor.name],
-            overridden: Object.prototype.hasOwnProperty.call(refs.overridesRef.current, descriptor.name)
+            value: options.valuesRef.current[descriptor.name],
+            overridden: Object.prototype.hasOwnProperty.call(options.overridesRef.current, descriptor.name)
         })),
         setOverride: (name, value) => {
             const descriptor = findDescriptor(name);
             const validated = validateOverrideValue(descriptor.type, value);
-            refs.overridesRef.current[name] = validated;
-            refs.valuesRef.current = mergeOverrides(refs.baseValuesRef.current, refs.overridesRef.current);
+            options.overridesRef.current[name] = validated;
+            options.valuesRef.current = mergeOverrides(
+                options.baseValuesRef.current,
+                options.overridesRef.current
+            );
+            options.onChange();
         },
         clearOverride: name => {
             findDescriptor(name);
-            Reflect.deleteProperty(refs.overridesRef.current, name);
-            refs.valuesRef.current[name] = refs.baseValuesRef.current[name];
+            Reflect.deleteProperty(options.overridesRef.current, name);
+            options.valuesRef.current[name] = options.baseValuesRef.current[name];
+            options.onChange();
         }
     };
 }
@@ -202,7 +198,8 @@ export function parseUniformStructureKey(
 export function buildLiveUpdaters(
     descriptors: UniformDescriptor[],
     skipDefaults: boolean,
-    valuesRef: { current: LiveValues }
+    valuesRef: { current: LiveValues },
+    runtime: TransitionRuntime
 ): UniformUpdaterDef[] {
     const hasName = (name: string): boolean => descriptors.some(d => d.name === name);
 
@@ -218,6 +215,10 @@ export function buildLiveUpdaters(
             name,
             type,
             updateFn: (time, width, height) => {
+                const sampled = runtime.sample(name, time ?? 0);
+                if (sampled !== null) {
+                    return sampled as UniformTypeMap[UniformType];
+                }
                 const current = valuesRef.current[name];
                 return typeof current === 'function'
                     ? current(time, width, height)

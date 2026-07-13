@@ -2,6 +2,8 @@ import type { MotionPolicy } from '@/types';
 
 export type MotionGate = 'none' | 'pause' | 'static';
 
+export const DEFAULT_MOTION_POLICY: MotionPolicy = 'static-frame';
+
 function gateForPolicy(policy: MotionPolicy): MotionGate {
     if (policy === 'static-frame') {
         return 'static';

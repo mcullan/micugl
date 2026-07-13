@@ -1,3 +1,4 @@
+export type { FrameInvalidation } from './core';
 export {
     createShaderConfig,
     createTypedFloat32Array,
@@ -39,6 +40,8 @@ export type {
     AttributeType,
     BufferData,
     Dpr,
+    EasingFn,
+    EasingName,
     Fit,
     Float32Array2,
     Float32Array3,
@@ -73,10 +76,12 @@ export type {
     ShaderUniformLocations,
     TextureBinding,
     TextureOptions,
+    TweenTransitionConfig,
     TypedFloat32Array,
     UniformConfig,
     UniformParam,
     UniformParamMap,
+    UniformTransitionConfig,
     UniformType,
     UniformTypeMap,
     UniformUpdateFn,

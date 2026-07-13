@@ -18,18 +18,17 @@ import type {
 } from '@/core';
 import { CAPTURE_SCRATCH_FRAMEBUFFER_ID, captureFrame } from '@/core/lib/captureFrame';
 import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
+import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
 import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
-import { useReducedMotion } from '@/react/hooks/useReducedMotion';
-import { useSaveData } from '@/react/hooks/useSaveData';
+import { useMotionGate } from '@/react/hooks/useMotionGate';
 import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
 import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
-import { resolveMotionGate } from '@/react/lib/motionPolicy';
 import { createRecording } from '@/react/lib/record';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import { runRenderSequence } from '@/react/lib/renderSequence';
@@ -72,6 +71,7 @@ interface PingPongShaderEngineBaseProps extends Omit<RenderControlProps, 'worker
     renderHeight?: number;
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
+    invalidation?: FrameInvalidation;
 }
 
 export type PingPongShaderEngineWorkerProps =
@@ -153,6 +153,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     debugPortRef,
     workerUniforms,
     workerCustomPasses = false,
+    invalidation,
     worker,
     createWorker,
     useDevicePixelRatio,
@@ -163,13 +164,11 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     dpr = DEFAULT_DPR,
     maxPixelCount = DEFAULT_MAX_PIXEL_COUNT,
     fit = 'window',
-    reducedMotion = 'static-frame',
-    saveData = 'static-frame',
+    reducedMotion,
+    saveData,
     staticFrame = 0
 }, ref) => {
-    const reducedMotionActive = useReducedMotion();
-    const saveDataActive = useSaveData();
-    const motionGate = resolveMotionGate({ reducedMotionActive, saveDataActive, reducedMotion, saveData });
+    const motionGate = useMotionGate(reducedMotion, saveData);
 
     const contentKey = `${programConfigsContentKey(programConfigs)}\u0002${framebuffersContentKey(framebuffers)}`;
 
@@ -395,6 +394,14 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
 
     const applySizeRef = useRef(applySize);
 
+    const invalidateAll = useCallback(() => {
+        if (workerActiveRef.current) {
+            bridgeRef.current?.invalidate();
+            return;
+        }
+        controllerRef.current?.invalidate();
+    }, []);
+
     const session = useWorkerBridge({
         worker,
         blocked: block !== null,
@@ -455,6 +462,11 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             controllerRef.current = null;
         };
     }, [renderFrame]);
+
+    useEffect(() => {
+        if (!invalidation) return;
+        return invalidation.connect(invalidateAll);
+    }, [invalidation, invalidateAll]);
 
     useEffect(() => {
         if (workerActive) return;
@@ -712,7 +724,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     }, []);
 
     useImperativeHandle(ref, (): PingPongShaderHandle => workerActive ? {
-        invalidate: () => { bridgeRef.current?.invalidate() },
+        invalidate: invalidateAll,
         setFrame: (frame: number) => { bridgeRef.current?.renderFrame(frameToMs(frame)) },
         getFrame: () => { throw new Error(workerGetFrameMessage('PingPongShaderEngine')) },
         start: () => { setStopped(false) },
@@ -724,7 +736,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         record: deny('record'),
         renderSequence: deny('renderSequence')
     } : {
-        invalidate: () => { controllerRef.current?.invalidate() },
+        invalidate: invalidateAll,
         setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
         getFrame: () => controllerRef.current?.getFrame() ?? 0,
         start: () => { controllerRef.current?.start() },
@@ -801,7 +813,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
                 }
             });
         }
-    }, [workerActive, resetSimulation, captureStill, setStopped]);
+    }, [workerActive, resetSimulation, captureStill, setStopped, invalidateAll]);
 
     if (workerActive && block) {
         throw new Error(workerBlockMessage('PingPongShaderEngine', block));

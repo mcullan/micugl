@@ -1,3 +1,4 @@
+import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
 import { singleProgramEntry } from '@/react/lib/contentKeys';
@@ -32,18 +33,6 @@ export interface WorkerRuntimeHost {
     now: () => number;
     close?: () => void;
 }
-
-const UNIFORM_COMPONENTS = {
-    float: 1,
-    int: 1,
-    sampler2D: 1,
-    vec2: 2,
-    vec3: 3,
-    vec4: 4,
-    mat2: 4,
-    mat3: 9,
-    mat4: 16
-} as const satisfies Record<UniformType, number>;
 
 const PROBED_EXTENSIONS: WebGLExtensionName[] = [
     'OES_texture_float',

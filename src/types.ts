@@ -304,9 +304,26 @@ export interface UniformUpdaterDef<T extends UniformType = UniformType> {
   updateFn: UniformUpdateFn<T>;
 }
 
+// ===================================================
+// Uniform Transitions
+// ===================================================
+
+export type EasingName = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+export type EasingFn = (t: number) => number;
+
+export interface TweenTransitionConfig {
+  duration: number;
+  easing?: EasingName | EasingFn;
+  delay?: number;
+  interpolate?: (from: ArrayLike<number>, to: ArrayLike<number>, t: number, out: Float32Array) => void;
+}
+
+export type UniformTransitionConfig = TweenTransitionConfig;
+
 export interface UniformParam<T extends UniformType = UniformType> {
   value: UniformValue<T>;
   type: T;
+  transition?: UniformTransitionConfig;
 }
 
 export type UniformParamMap = { [K in UniformType]: UniformParam<K> };

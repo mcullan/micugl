@@ -12,6 +12,7 @@ import { getQueryString } from './query';
 import { ReducedMotion } from './ReducedMotion';
 import { RerenderStorm } from './RerenderStorm';
 import { StaticIdle } from './StaticIdle';
+import { Transitions } from './Transitions';
 import { VisualFixed } from './VisualFixed';
 import { WorkerContextLoss } from './WorkerContextLoss';
 import { WorkerJank } from './WorkerJank';
@@ -25,6 +26,7 @@ export const scenes: Record<string, ComponentType> = {
     'many-canvases-devtools': ManyCanvasesDevtools,
     'devtools-debug': DevtoolsDebug,
     'reduced-motion': ReducedMotion,
+    'transitions': Transitions,
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
     'instanced-particles': InstancedParticles,
