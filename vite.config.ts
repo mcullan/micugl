@@ -15,6 +15,7 @@ export default defineConfig({
                 index: resolve(__dirname, 'src/index.ts'),
                 core:  resolve(__dirname, 'src/core/index.ts'),
                 react: resolve(__dirname, 'src/react/index.ts'),
+                embed: resolve(__dirname, 'src/embed/index.ts'),
                 testing: resolve(__dirname, 'src/testing/index.ts'),
                 devtools: resolve(__dirname, 'src/react/devtools/index.ts'),
             },
