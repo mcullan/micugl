@@ -12,7 +12,9 @@ import type {
 } from '@/core';
 import { FBOManager } from '@/core';
 import { createScalarUpdater, createVectorUpdater } from '@/core/lib/uniformDirtyCheck';
-import type { BufferData, UniformTypeMap } from '@/types';
+import type { ActiveUniformInfo } from '@/core/lib/uniformReflection';
+import { activeUniformTypes, uploadReaches } from '@/core/lib/uniformReflection';
+import type { ActiveUniformTypes, BufferData, UniformTypeMap } from '@/types';
 
 declare global {
     interface WebGLRenderingContext {
@@ -89,7 +91,7 @@ export class WebGLManager {
             throw new Error(`Could not link shader program: ${info}`);
         }
 
-        const uniformLocations: ShaderUniformLocations = {};
+        const uniformLocations = Object.create(null) as ShaderUniformLocations;
         for (const uniform of uniforms) {
             uniformLocations[uniform.name] = gl.getUniformLocation(program, uniform.name);
         }
@@ -101,9 +103,24 @@ export class WebGLManager {
             }
         }
 
+        const activeUniforms = this.reflectActiveUniforms(program);
+
+        for (const uniform of uniforms) {
+            const active = activeUniforms[uniform.name];
+            if (active && !uploadReaches(active, uniform.type)) {
+                gl.deleteProgram(program);
+                throw new Error(
+                    `Uniform "${uniform.name}" on program "${id}" is a ${active.glslType} in the shader source, `
+                    + `but the uniformNames passed to createShaderConfig declare it as a ${uniform.type}. `
+                    + 'Make the two agree.'
+                );
+            }
+        }
+
         const resources: ShaderResources = {
             program,
             uniforms: uniformLocations,
+            activeUniforms,
             attributes: attributeLocations,
             buffers: {}
         };
@@ -112,6 +129,21 @@ export class WebGLManager {
         this.uniformUpdateFns.set(id, new Map());
     
         return resources;
+    }
+
+    private reflectActiveUniforms(program: WebGLProgram): ActiveUniformTypes {
+        const gl = this.gl;
+        const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS) as number;
+        const infos: ActiveUniformInfo[] = [];
+
+        for (let index = 0; index < count; index++) {
+            const info = gl.getActiveUniform(program, index);
+            if (info) {
+                infos.push({ name: info.name, type: info.type, size: info.size });
+            }
+        }
+
+        return activeUniformTypes(infos);
     }
 
     private getOrCompileShader(cacheKey: string, type: number, source: string): WebGLShader {
@@ -220,7 +252,46 @@ export class WebGLManager {
         gl.bufferSubData(gl.ARRAY_BUFFER, offset, data);
     }
 
-   
+    private checkedUniformLocation(
+        resources: ShaderResources,
+        programId: string,
+        uniformName: string,
+        type: UniformType
+    ): WebGLUniformLocation | null {
+        const location = resources.uniforms[uniformName];
+
+        if (location === undefined) {
+            throw new Error(
+                `Uniform "${uniformName}" is uploaded to program "${programId}" but was never declared for it. `
+                + 'Declare it in the uniformNames passed to createShaderConfig, or stop uploading it.'
+            );
+        }
+
+        if (location === null) {
+            return null;
+        }
+
+        const active = resources.activeUniforms[uniformName];
+        if (active && !uploadReaches(active, type)) {
+            throw new Error(
+                `Uniform "${uniformName}" on program "${programId}" is a ${active.glslType} in the shader source, `
+                + `but is uploaded as a ${type}. Upload it as a ${active.glslType}, or change the shader source and `
+                + 'the uniformNames passed to createShaderConfig.'
+            );
+        }
+
+        return location;
+    }
+
+    assertUniformDeclared(programId: string, uniformName: string, type: UniformType): void {
+        const resources = this.resources.get(programId);
+        if (!resources) {
+            throw new Error(`Program with id ${programId} not found`);
+        }
+
+        this.checkedUniformLocation(resources, programId, uniformName, type);
+    }
+
     registerUniformUpdater<T extends UniformType>(
         programId: string,
         uniformName: string,
@@ -236,8 +307,8 @@ export class WebGLManager {
         if (!programUniforms) {
             throw new Error(`Program uniforms for id ${programId} not found`);
         }
-    
-        const location = resources.uniforms[uniformName];
+
+        const location = this.checkedUniformLocation(resources, programId, uniformName, type);
         if (location === null) {
             return;
         }

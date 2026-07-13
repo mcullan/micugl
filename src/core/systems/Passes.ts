@@ -140,30 +140,50 @@ export class Passes {
         return chainIsTimePure(this.passes);
     }
 
-    initializeResources(): void {
-        for (const pass of this.passes) {
-            const resources = this.webglManager.resources.get(pass.programId);
-            if (resources && !('a_position' in resources.buffers)) {
-                this.webglManager.createBuffer(
-                    pass.programId,
-                    'a_position',
-                    new Float32Array([
-                        -1.0, -1.0,
-                        1.0, -1.0,
-                        -1.0, 1.0,
-                        1.0, 1.0,
-                    ])
-                );
+    private assertUniformsDeclared(pass: CompiledPass): void {
+        for (const input of pass.inputs) {
+            this.webglManager.assertUniformDeclared(pass.programId, input.samplerName, 'sampler2D');
+        }
 
-                this.webglManager.setAttributeOnce(pass.programId, 'a_position', {
-                    name: 'a_position',
-                    size: 2,
-                    type: 'FLOAT',
-                    normalized: false,
-                    stride: 0,
-                    offset: 0
-                });
+        for (const uniform of pass.uniforms) {
+            this.webglManager.assertUniformDeclared(pass.programId, uniform.name, uniform.type);
+        }
+    }
+
+    initializeResources(): void {
+        this.compiled ??= this.compilePasses();
+
+        for (const pass of this.compiled) {
+            const resources = this.webglManager.resources.get(pass.programId);
+            if (!resources) {
+                throw new Error(`Program with id ${pass.programId} not found`);
             }
+
+            this.assertUniformsDeclared(pass);
+
+            if ('a_position' in resources.buffers) {
+                continue;
+            }
+
+            this.webglManager.createBuffer(
+                pass.programId,
+                'a_position',
+                new Float32Array([
+                    -1.0, -1.0,
+                    1.0, -1.0,
+                    -1.0, 1.0,
+                    1.0, 1.0,
+                ])
+            );
+
+            this.webglManager.setAttributeOnce(pass.programId, 'a_position', {
+                name: 'a_position',
+                size: 2,
+                type: 'FLOAT',
+                normalized: false,
+                stride: 0,
+                offset: 0
+            });
         }
     }
 }

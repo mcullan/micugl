@@ -36,7 +36,7 @@ const GL_STUB_CONFIG: GLStubConfig = {
 const CONFIG = createShaderConfig({
     vertexShader: 'void main() {}',
     fragmentShader: 'void main() {}',
-    uniformNames: { u_swirl: 'float', u_color: 'vec3' }
+    uniformNames: { u_swirl: 'float', u_color: 'vec3', u_texture0: 'sampler2D' }
 });
 
 function uploadsOf(stub: GLStubHandle, name: string): unknown[] {

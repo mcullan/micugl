@@ -417,7 +417,7 @@ describe('WorkerBridge setPasses', () => {
 
         bridge.setPasses([{
             programId: 'blur',
-            inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+            inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
             outputFramebuffer: null,
             uniforms: {
                 u_time: { type: 'float', value: (time: number) => time },
@@ -429,7 +429,7 @@ describe('WorkerBridge setPasses', () => {
             type: 'setPasses',
             passes: [{
                 programId: 'blur',
-                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read' }],
+                inputTextures: [{ id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }],
                 outputFramebuffer: null,
                 uniforms: {
                     u_time: { kind: 'builtin', type: 'float' },

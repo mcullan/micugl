@@ -550,110 +550,115 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
         const manager = new WebGLManager(canvasRef.current);
         managerRef.current = manager;
 
-        if (!manager.context.isContextLost()) {
-            const [pid, cfg] = singleProgramEntry(initPropsRef.current.programConfigs);
-            manager.createProgram(pid, cfg);
-            manager.createBuffer(pid, 'a_position', new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
-            manager.setAttributeOnce(pid, 'a_position', {
-                name: 'a_position', size: 2, type: 'FLOAT',
-                normalized: false, stride: 0, offset: 0
-            });
-            activeProgram.current = pid;
+        try {
+            if (!manager.context.isContextLost()) {
+                const [pid, cfg] = singleProgramEntry(initPropsRef.current.programConfigs);
+                manager.createProgram(pid, cfg);
+                manager.createBuffer(pid, 'a_position', new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+                manager.setAttributeOnce(pid, 'a_position', {
+                    name: 'a_position', size: 2, type: 'FLOAT',
+                    normalized: false, stride: 0, offset: 0
+                });
+                activeProgram.current = pid;
 
-            const instancingConfig = initPropsRef.current.instancing;
-            if (instancingConfig) {
-                if (!renderConfigRef.current.useFastPath) {
-                    throw new Error('ShaderEngine: instancing requires useFastPath');
+                const instancingConfig = initPropsRef.current.instancing;
+                if (instancingConfig) {
+                    if (!renderConfigRef.current.useFastPath) {
+                        throw new Error('ShaderEngine: instancing requires useFastPath');
+                    }
+
+                    const instancedAttributeConfigs = new Map(
+                        (cfg.attributes ?? [])
+                            .filter(attribute => attribute.instanced)
+                            .map(attribute => [attribute.name, attribute] as const)
+                    );
+
+                    const instancingAttributeConfigs = Object.keys(instancingConfig.attributes).map(name => {
+                        const attributeConfig = instancedAttributeConfigs.get(name);
+                        if (!attributeConfig) {
+                            throw new Error(
+                                `ShaderEngine: instancing attribute "${name}" must be declared with instanced: true in the program's attributeConfigs`
+                            );
+                        }
+                        return [name, attributeConfig] as const;
+                    });
+
+                    const delegatingConfig = createDelegatingInstancingConfig(instancingConfig, () => {
+                        const latest = instancingRef.current;
+                        if (!latest) {
+                            throw new Error('ShaderEngine: instancing prop was removed while active');
+                        }
+                        return latest;
+                    });
+
+                    const uploader = new InstanceUploader(manager, pid, delegatingConfig);
+                    uploader.initialize();
+
+                    for (const [name, attributeConfig] of instancingAttributeConfigs) {
+                        manager.setAttributeOnce(pid, name, attributeConfig);
+                    }
+
+                    instanceUploaderRef.current = uploader;
                 }
 
-                const instancedAttributeConfigs = new Map(
-                    (cfg.attributes ?? [])
-                        .filter(attribute => attribute.instanced)
-                        .map(attribute => [attribute.name, attribute] as const)
-                );
-
-                const instancingAttributeConfigs = Object.keys(instancingConfig.attributes).map(name => {
-                    const attributeConfig = instancedAttributeConfigs.get(name);
-                    if (!attributeConfig) {
-                        throw new Error(
-                            `ShaderEngine: instancing attribute "${name}" must be declared with instanced: true in the program's attributeConfigs`
-                        );
-                    }
-                    return [name, attributeConfig] as const;
+                const ups = initPropsRef.current.uniformUpdaters[pid] as UniformUpdaterEntry[] | undefined;
+                ups?.forEach(u => {
+                    manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
                 });
 
-                const delegatingConfig = createDelegatingInstancingConfig(instancingConfig, () => {
-                    const latest = instancingRef.current;
-                    if (!latest) {
-                        throw new Error('ShaderEngine: instancing prop was removed while active');
-                    }
-                    return latest;
-                });
+                readyRef.current = true;
+                applySizeRef.current();
+                controllerRef.current?.start();
 
-                const uploader = new InstanceUploader(manager, pid, delegatingConfig);
-                uploader.initialize();
+                const managerWeak = new WeakRef(manager);
+                const engineId = engineIdRef.current;
+                let lastKnownState: EngineDebugState | null = null;
 
-                for (const [name, attributeConfig] of instancingAttributeConfigs) {
-                    manager.setAttributeOnce(pid, name, attributeConfig);
-                }
-
-                instanceUploaderRef.current = uploader;
+                const handle: EngineHandle = {
+                    id: engineId,
+                    kind: 'shader',
+                    getManager: () => managerWeak.deref() ?? null,
+                    getState: () => {
+                        const currentManager = managerWeak.deref();
+                        if (!currentManager) {
+                            return lastKnownState ?? emptyDebugState(engineId);
+                        }
+                        try {
+                            const glCanvas = currentManager.context.canvas as HTMLCanvasElement;
+                            const state: EngineDebugState = {
+                                kind: 'shader',
+                                id: engineId,
+                                canvas: {
+                                    renderWidth: glCanvas.width,
+                                    renderHeight: glCanvas.height,
+                                    displayWidth: glCanvas.clientWidth,
+                                    displayHeight: glCanvas.clientHeight
+                                },
+                                programIds: Array.from(currentManager.resources.keys()),
+                                framebufferIds: currentManager.fbo.getFramebufferIds(),
+                                capabilities: currentManager.fbo.getCapabilities(),
+                                floatFilterDowngraded: currentManager.fbo.wasFloatFilterDowngraded(),
+                                frameloop: controllerRef.current?.getFrameloop(),
+                                paused: controllerRef.current?.isPaused(),
+                                speed: controllerRef.current?.getSpeed()
+                            };
+                            lastKnownState = state;
+                            return state;
+                        } catch {
+                            return lastKnownState ?? emptyDebugState(engineId);
+                        }
+                    },
+                    invalidate: () => { controllerRef.current?.invalidate() },
+                    setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
+                    getFrame: () => controllerRef.current?.getFrame() ?? 0,
+                    setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
+                    uniforms: debugPortRef?.current ?? undefined
+                };
+                emitEngineMount(handle);
             }
-
-            const ups = initPropsRef.current.uniformUpdaters[pid] as UniformUpdaterEntry[] | undefined;
-            ups?.forEach(u => {
-                manager.registerUniformUpdater(pid, u.name, u.type, u.updateFn);
-            });
-
-            readyRef.current = true;
-            applySizeRef.current();
-            controllerRef.current?.start();
-
-            const managerWeak = new WeakRef(manager);
-            const engineId = engineIdRef.current;
-            let lastKnownState: EngineDebugState | null = null;
-
-            const handle: EngineHandle = {
-                id: engineId,
-                kind: 'shader',
-                getManager: () => managerWeak.deref() ?? null,
-                getState: () => {
-                    const currentManager = managerWeak.deref();
-                    if (!currentManager) {
-                        return lastKnownState ?? emptyDebugState(engineId);
-                    }
-                    try {
-                        const glCanvas = currentManager.context.canvas as HTMLCanvasElement;
-                        const state: EngineDebugState = {
-                            kind: 'shader',
-                            id: engineId,
-                            canvas: {
-                                renderWidth: glCanvas.width,
-                                renderHeight: glCanvas.height,
-                                displayWidth: glCanvas.clientWidth,
-                                displayHeight: glCanvas.clientHeight
-                            },
-                            programIds: Array.from(currentManager.resources.keys()),
-                            framebufferIds: currentManager.fbo.getFramebufferIds(),
-                            capabilities: currentManager.fbo.getCapabilities(),
-                            floatFilterDowngraded: currentManager.fbo.wasFloatFilterDowngraded(),
-                            frameloop: controllerRef.current?.getFrameloop(),
-                            paused: controllerRef.current?.isPaused(),
-                            speed: controllerRef.current?.getSpeed()
-                        };
-                        lastKnownState = state;
-                        return state;
-                    } catch {
-                        return lastKnownState ?? emptyDebugState(engineId);
-                    }
-                },
-                invalidate: () => { controllerRef.current?.invalidate() },
-                setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
-                getFrame: () => controllerRef.current?.getFrame() ?? 0,
-                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
-                uniforms: debugPortRef?.current ?? undefined
-            };
-            emitEngineMount(handle);
+        } catch (error) {
+            manager.destroyAll();
+            throw error;
         }
 
         return () => {

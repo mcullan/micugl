@@ -224,6 +224,22 @@ export class Postprocessing {
         return passes;
     }
 
+    private assertUniformsDeclared(passes: RenderPass[]): void {
+        for (const pass of passes) {
+            if (pass.programId === COPY_PROGRAM_ID) {
+                this.ensureCopyProgram();
+            }
+
+            for (const texture of pass.inputTextures) {
+                this.webglManager.assertUniformDeclared(pass.programId, texture.samplerName, 'sampler2D');
+            }
+
+            for (const [name, uniform] of Object.entries(pass.uniforms ?? {})) {
+                this.webglManager.assertUniformDeclared(pass.programId, name, uniform.type);
+            }
+        }
+    }
+
     generatePasses(chainId: string, _time: number): RenderPass[] {
         const chain = this.chains.get(chainId);
         if (!chain) {
@@ -239,6 +255,7 @@ export class Postprocessing {
         }
 
         const passes = this.buildPasses(chain, enabledEffects);
+        this.assertUniformsDeclared(passes);
         this.passCache.set(chainId, { key, passes });
         return passes;
     }
@@ -264,7 +281,7 @@ export class Postprocessing {
                 this.webglManager.fbo.bindTexture(texture.id, texture.textureUnit);
                 this.webglManager.setUniform(
                     pass.programId,
-                    texture.samplerName ?? `u_texture${texture.textureUnit}`,
+                    texture.samplerName,
                     texture.textureUnit,
                     'sampler2D'
                 );

@@ -31,6 +31,7 @@ import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
 import { nonReproducibleCaptureMessage } from '@/react/lib/captureLiveness';
 import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
+import { declarePingPongSampler } from '@/react/lib/pingPongPasses';
 import { createRecording } from '@/react/lib/record';
 import { RenderLoop } from '@/react/lib/renderLoop';
 import { runRenderSequence } from '@/react/lib/renderSequence';
@@ -436,7 +437,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             }
             return {
                 kind: 'pingpong',
-                programConfigs,
+                programConfigs: declarePingPongSampler(programConfigs),
                 uniforms: workerPrograms,
                 passes: workerPasses,
                 framebuffers,
@@ -485,76 +486,81 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
         const manager = new WebGLManager(canvasRef.current);
         managerRef.current = manager;
 
-        if (!manager.context.isContextLost()) {
-            const { programConfigs: configs, framebuffers: fbs, passes: initialPasses } = initPropsRef.current;
+        try {
+            if (!manager.context.isContextLost()) {
+                const { programConfigs: configs, framebuffers: fbs, passes: initialPasses } = initPropsRef.current;
 
-            Object.entries(configs).forEach(([id, config]) => {
-                manager.createProgram(id, config);
-            });
+                Object.entries(declarePingPongSampler(configs)).forEach(([id, config]) => {
+                    manager.createProgram(id, config);
+                });
 
-            Object.entries(fbs ?? {}).forEach(([id, options]) => {
-                manager.fbo.createFramebuffer(id, options);
-            });
+                Object.entries(fbs ?? {}).forEach(([id, options]) => {
+                    manager.fbo.createFramebuffer(id, options);
+                });
 
-            const passSystem = new Passes(manager);
-            passSystemRef.current = passSystem;
+                const passSystem = new Passes(manager);
+                passSystemRef.current = passSystem;
 
-            initialPasses.forEach(pass => {
-                passSystem.addPass(pass);
-            });
-            appliedPassesRef.current = initialPasses;
+                initialPasses.forEach(pass => {
+                    passSystem.addPass(pass);
+                });
+                appliedPassesRef.current = initialPasses;
 
-            passSystem.initializeResources();
+                passSystem.initializeResources();
 
-            readyRef.current = true;
-            applySizeRef.current();
-            controllerRef.current?.start();
+                readyRef.current = true;
+                applySizeRef.current();
+                controllerRef.current?.start();
 
-            const managerWeak = new WeakRef(manager);
-            const engineId = engineIdRef.current;
-            let lastKnownState: EngineDebugState | null = null;
+                const managerWeak = new WeakRef(manager);
+                const engineId = engineIdRef.current;
+                let lastKnownState: EngineDebugState | null = null;
 
-            const handle: EngineHandle = {
-                id: engineId,
-                kind: 'pingpong',
-                getManager: () => managerWeak.deref() ?? null,
-                getState: () => {
-                    const currentManager = managerWeak.deref();
-                    if (!currentManager) {
-                        return lastKnownState ?? emptyDebugState(engineId);
-                    }
-                    try {
-                        const glCanvas = currentManager.context.canvas as HTMLCanvasElement;
-                        const state: EngineDebugState = {
-                            kind: 'pingpong',
-                            id: engineId,
-                            canvas: {
-                                renderWidth: glCanvas.width,
-                                renderHeight: glCanvas.height,
-                                displayWidth: glCanvas.clientWidth,
-                                displayHeight: glCanvas.clientHeight
-                            },
-                            programIds: Array.from(currentManager.resources.keys()),
-                            framebufferIds: currentManager.fbo.getFramebufferIds(),
-                            capabilities: currentManager.fbo.getCapabilities(),
-                            floatFilterDowngraded: currentManager.fbo.wasFloatFilterDowngraded(),
-                            frameloop: controllerRef.current?.getFrameloop(),
-                            paused: controllerRef.current?.isPaused(),
-                            speed: controllerRef.current?.getSpeed()
-                        };
-                        lastKnownState = state;
-                        return state;
-                    } catch {
-                        return lastKnownState ?? emptyDebugState(engineId);
-                    }
-                },
-                invalidate: () => { controllerRef.current?.invalidate() },
-                setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
-                getFrame: () => controllerRef.current?.getFrame() ?? 0,
-                setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
-                uniforms: debugPortRef?.current ?? undefined
-            };
-            emitEngineMount(handle);
+                const handle: EngineHandle = {
+                    id: engineId,
+                    kind: 'pingpong',
+                    getManager: () => managerWeak.deref() ?? null,
+                    getState: () => {
+                        const currentManager = managerWeak.deref();
+                        if (!currentManager) {
+                            return lastKnownState ?? emptyDebugState(engineId);
+                        }
+                        try {
+                            const glCanvas = currentManager.context.canvas as HTMLCanvasElement;
+                            const state: EngineDebugState = {
+                                kind: 'pingpong',
+                                id: engineId,
+                                canvas: {
+                                    renderWidth: glCanvas.width,
+                                    renderHeight: glCanvas.height,
+                                    displayWidth: glCanvas.clientWidth,
+                                    displayHeight: glCanvas.clientHeight
+                                },
+                                programIds: Array.from(currentManager.resources.keys()),
+                                framebufferIds: currentManager.fbo.getFramebufferIds(),
+                                capabilities: currentManager.fbo.getCapabilities(),
+                                floatFilterDowngraded: currentManager.fbo.wasFloatFilterDowngraded(),
+                                frameloop: controllerRef.current?.getFrameloop(),
+                                paused: controllerRef.current?.isPaused(),
+                                speed: controllerRef.current?.getSpeed()
+                            };
+                            lastKnownState = state;
+                            return state;
+                        } catch {
+                            return lastKnownState ?? emptyDebugState(engineId);
+                        }
+                    },
+                    invalidate: () => { controllerRef.current?.invalidate() },
+                    setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
+                    getFrame: () => controllerRef.current?.getFrame() ?? 0,
+                    setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
+                    uniforms: debugPortRef?.current ?? undefined
+                };
+                emitEngineMount(handle);
+            }
+        } catch (error) {
+            manager.destroyAll();
+            throw error;
         }
 
         return () => {

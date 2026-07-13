@@ -42,7 +42,7 @@ export interface RenderOptions {
   clearColor?: Vec4;
 }
 
-export type ShaderUniformLocations = Record<string, WebGLUniformLocation | null>;
+export type ShaderUniformLocations = Partial<Record<string, WebGLUniformLocation | null>>;
 export type ShaderAttributeLocations = Record<string, number>;
 
 export interface UniformConfig {
@@ -73,9 +73,30 @@ export interface InstancingConfig {
   attributes: Record<string, InstanceAttribute>;
 }
 
+export type UniformUploadCall =
+  'uniform1f'
+  | 'uniform1i'
+  | 'uniform2fv'
+  | 'uniform3fv'
+  | 'uniform4fv'
+  | 'uniform2iv'
+  | 'uniform3iv'
+  | 'uniform4iv'
+  | 'uniformMatrix2fv'
+  | 'uniformMatrix3fv'
+  | 'uniformMatrix4fv';
+
+export interface ActiveUniform {
+  glslType: string;
+  uploadCall: UniformUploadCall;
+}
+
+export type ActiveUniformTypes = Partial<Record<string, ActiveUniform>>;
+
 export interface ShaderResources {
   program: WebGLProgram;
   uniforms: ShaderUniformLocations;
+  activeUniforms: ActiveUniformTypes;
   attributes: ShaderAttributeLocations;
   buffers: Record<string, BufferData>;
 }
@@ -243,7 +264,7 @@ export interface TextureBinding {
   id: string;
   textureUnit: number;
   bindingType: 'read' | 'write' | 'readwrite';
-  samplerName?: string;
+  samplerName: string;
 }
 
 export type RenderPassUniformUpdateFn = (

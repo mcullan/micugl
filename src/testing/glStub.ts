@@ -7,8 +7,10 @@ import {
     GL_RGBA,
     GL_UNSIGNED_BYTE
 } from '@/core/lib/glConstants';
-import type { WebGLExtensionName } from '@/types';
+import { GL_UNIFORM_TYPES } from '@/core/lib/uniformReflection';
+import type { UniformType, WebGLExtensionName } from '@/types';
 
+const GL_ACTIVE_UNIFORMS = 0x8b86;
 const GL_ARRAY_BUFFER = 0x8892;
 const GL_BYTE = 0x1400;
 const GL_COLOR_ATTACHMENT0 = 0x8ce0;
@@ -37,6 +39,7 @@ const GL_VERTEX_SHADER = 0x8b31;
 const GL_VIEWPORT = 0x0ba2;
 
 const ENUM_CONSTANTS = {
+    ACTIVE_UNIFORMS: GL_ACTIVE_UNIFORMS,
     ARRAY_BUFFER: GL_ARRAY_BUFFER,
     BYTE: GL_BYTE,
     CLAMP_TO_EDGE: GL_CLAMP_TO_EDGE,
@@ -119,6 +122,7 @@ export interface GLStubConfig {
     canvas?: { width: number; height: number };
     compileFails?: boolean;
     linkFails?: boolean;
+    activeUniforms?: Record<string, UniformType>;
     missingAttributes?: string[];
     colorReadType?: number;
     colorReadFormat?: number;
@@ -175,6 +179,11 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
     const uniformLocations = new Map<string, WebGLUniformLocation>();
     const attributeLocations = new Map<string, number>();
     let nextAttributeLocation = 0;
+
+    const declaredActiveUniforms = config.activeUniforms;
+    const activeUniformEntries = Object.entries(declaredActiveUniforms ?? {});
+    const isActiveUniform = (name: string): boolean =>
+        declaredActiveUniforms === undefined || name in declaredActiveUniforms;
 
     const record = (name: string, args: unknown[]): void => {
         calls.push({ name, args });
@@ -351,9 +360,23 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
             record('getShaderParameter', [shader, pname]);
             return pname === GL_COMPILE_STATUS ? !config.compileFails : true;
         },
-        getProgramParameter: (program: WebGLProgram, pname: number): boolean => {
+        getProgramParameter: (program: WebGLProgram, pname: number): boolean | number => {
             record('getProgramParameter', [program, pname]);
-            return pname === GL_LINK_STATUS ? !config.linkFails : true;
+            if (pname === GL_LINK_STATUS) {
+                return !config.linkFails;
+            }
+            if (pname === GL_ACTIVE_UNIFORMS) {
+                return activeUniformEntries.length;
+            }
+            return true;
+        },
+        getActiveUniform: (program: WebGLProgram, index: number): WebGLActiveInfo | null => {
+            record('getActiveUniform', [program, index]);
+            const entry = activeUniformEntries[index] as [string, UniformType] | undefined;
+            if (!entry) {
+                return null;
+            }
+            return { name: entry[0], type: GL_UNIFORM_TYPES[entry[1]], size: 1 };
         },
         getShaderInfoLog: (shader: WebGLShader): string => {
             record('getShaderInfoLog', [shader]);
@@ -363,8 +386,11 @@ export function createGLStub(config: GLStubConfig = {}): GLStubHandle {
             record('getProgramInfoLog', [program]);
             return config.linkFails ? 'micugl test stub: simulated program link failure' : '';
         },
-        getUniformLocation: (program: WebGLProgram, name: string): WebGLUniformLocation => {
+        getUniformLocation: (program: WebGLProgram, name: string): WebGLUniformLocation | null => {
             record('getUniformLocation', [program, name]);
+            if (!isActiveUniform(name)) {
+                return null;
+            }
             let location = uniformLocations.get(name);
             if (!location) {
                 location = {};

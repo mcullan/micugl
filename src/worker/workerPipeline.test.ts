@@ -35,7 +35,7 @@ const HEIGHT = 200;
 const CONFIG = createShaderConfig({
     vertexShader: 'void main() {}',
     fragmentShader: 'void main() {}',
-    uniformNames: { u_intensity: 'float', u_color1: 'vec3' }
+    uniformNames: { u_intensity: 'float', u_color1: 'vec3', u_texture0: 'sampler2D' }
 });
 
 const UNIFORM_NAMES = ['u_time', 'u_resolution', 'u_intensity', 'u_color1', 'u_texture0'];
@@ -270,8 +270,8 @@ describe('worker ping-pong pipeline, driven by the real pass and uniform builder
             u_intensity: 0.5,
             u_color1: [1, 0, 0]
         });
-        expect(worker.map(draw => ({ ...draw, u_texture0: undefined })))
-            .toEqual(main.map(draw => ({ ...draw, u_texture0: undefined })));
+        expect(main.slice(1).map(draw => draw.u_texture0)).toEqual([0, 0]);
+        expect(worker).toEqual(main);
     });
 
     it('keeps worker and main thread in step as the clock advances', () => {
@@ -283,7 +283,6 @@ describe('worker ping-pong pipeline, driven by the real pass and uniform builder
             renderInWorker(built.passes, built.framebuffers, uniforms, [0, 1000, 2000]).gl
         );
 
-        expect(worker.map(draw => ({ ...draw, u_texture0: undefined })))
-            .toEqual(main.map(draw => ({ ...draw, u_texture0: undefined })));
+        expect(worker).toEqual(main);
     });
 });
