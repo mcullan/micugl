@@ -328,6 +328,32 @@ export interface UniformParam<T extends UniformType = UniformType> {
 
 export type UniformParamMap = { [K in UniformType]: UniformParam<K> };
 
+export type BandLayout = 'log' | 'linear';
+
+export type AudioStatus = 'idle' | 'starting' | 'running' | 'stopped' | 'error';
+
+export type AudioSourceSpec =
+  | { type: 'mic' }
+  | { type: 'element'; element: HTMLMediaElement }
+  | { type: 'node'; node: AudioNode; context: AudioContext };
+
+export interface AudioUniformNames {
+  bands?: string;
+  level?: string;
+}
+
+export interface AudioUniformsOptions {
+  bands?: number;
+  fftSize?: number;
+  smoothingTimeConstant?: number;
+  attack?: number;
+  release?: number;
+  minDecibels?: number;
+  maxDecibels?: number;
+  bandLayout?: BandLayout;
+  names?: AudioUniformNames;
+}
+
 // ===================================================
 // JS -> Vector and Matrix
 // ===================================================
