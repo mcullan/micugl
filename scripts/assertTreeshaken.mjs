@@ -68,6 +68,7 @@ while (queue.length > 0) {
 }
 
 const DEVTOOLS_PREFIX = `react${sep}devtools${sep}`;
+const EFFECTS_PREFIX = `effects${sep}`;
 const failures = [];
 const rel = file => relative(distRoot, file);
 
@@ -75,6 +76,9 @@ for (const file of reachable) {
     const name = rel(file);
     if (name.startsWith(DEVTOOLS_PREFIX) && !name.endsWith(`${sep}beacon.mjs`)) {
         failures.push(`devtools panel module reachable from a main bundle: ${name}`);
+    }
+    if (name === 'effects.mjs' || name.startsWith(EFFECTS_PREFIX)) {
+        failures.push(`effects module reachable from a main bundle: ${name}`);
     }
     if (name === 'testing.mjs' || name.startsWith(`testing${sep}`)) {
         failures.push(`testing module reachable from a main bundle: ${name}`);

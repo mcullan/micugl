@@ -37,6 +37,11 @@
       "import": "./dist/devtools.mjs",
       "require": "./dist/devtools.js"
     },
+    "./effects": {
+      "types": "./dist/effects/index.d.ts",
+      "import": "./dist/effects.mjs",
+      "require": "./dist/effects.js"
+    },
     "./worker": {
       "types": "./dist/worker/workerEntry.d.ts",
       "worker": "./dist/worker.mjs",

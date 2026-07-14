@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 
 import { AudioBars } from './AudioBars';
 import { DevtoolsDebug } from './DevtoolsDebug';
+import { EffectsGallery } from './EffectsGallery';
 import { ExportDemo } from './ExportDemo';
 import { ImageTexture } from './ImageTexture';
 import { InstancedParticles } from './InstancedParticles';
@@ -31,6 +32,7 @@ export const scenes: Record<string, ComponentType> = {
     'reduced-motion': ReducedMotion,
     'transitions': Transitions,
     'audio-bars': AudioBars,
+    'effects-gallery': EffectsGallery,
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
     'image-texture': ImageTexture,
