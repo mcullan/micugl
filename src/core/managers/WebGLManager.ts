@@ -314,14 +314,6 @@ export class WebGLManager {
         }
     }
 
-    assertSourceSamplerLocation(programId: string, samplerName: string): void {
-        this.assertRequiredSamplerLocation(
-            programId,
-            samplerName,
-            'Sample it in the shader, or fix the sampler name on the graph node that feeds this source.'
-        );
-    }
-
     private missingSamplerMessage(
         operation: string,
         programId: string,

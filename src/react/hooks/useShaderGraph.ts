@@ -38,8 +38,12 @@ export interface ShaderGraphResult {
 
 interface GraphMemo {
     key: string;
-    generation: number;
+    runtimes: UniformRuntime[];
     result: ShaderGraphResult;
+}
+
+function sameRuntimes(a: UniformRuntime[], b: UniformRuntime[]): boolean {
+    return a.length === b.length && a.every((runtime, index) => runtime === b[index]);
 }
 
 function buildResult(
@@ -84,7 +88,6 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
 
     const runtimesRef = useRef(new Map<string, UniformRuntime>());
     const runtimes = runtimesRef.current;
-    const generationRef = useRef(0);
 
     const ordered: UniformRuntime[] = [];
     const updatersByNode: Record<string, UniformUpdaterDef[]> = {};
@@ -94,7 +97,6 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
         if (!runtime) {
             runtime = createUniformRuntime();
             runtimes.set(pass.nodeId, runtime);
-            generationRef.current += 1;
         }
         ordered.push(runtime);
         updatersByNode[pass.nodeId] = runtime.sync(pass.valueUniforms, false);
@@ -104,11 +106,11 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
     const cached = memoRef.current;
     const memo: GraphMemo = cached !== null
         && cached.key === structureKey
-        && cached.generation === generationRef.current
+        && sameRuntimes(cached.runtimes, ordered)
         ? cached
         : {
             key: structureKey,
-            generation: generationRef.current,
+            runtimes: ordered,
             result: buildResult(plan, ordered, updatersByNode)
         };
     memoRef.current = memo;

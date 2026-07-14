@@ -65,6 +65,38 @@ describe('createUniformRuntime: skipDefaultUniforms is a per-sync argument', () 
     });
 });
 
+describe('createUniformRuntime: the poster repaint under a motion gate', () => {
+    const swirl = (value: number): Record<string, UniformParam> => ({ swirl: { type: 'float', value } });
+
+    it('repaints the poster when a plain value changes under a gate, and stays quiet when it does not', () => {
+        const runtime = createUniformRuntime();
+        const kinds: InvalidationKind[] = [];
+        runtime.invalidation.connect(kind => { kinds.push(kind) });
+
+        runtime.sync(swirl(0.25), false);
+        runtime.commit(swirl(0.25), 'static');
+        expect(kinds).toEqual([]);
+
+        runtime.commit(swirl(0.25), 'static');
+        expect(kinds).toEqual([]);
+
+        runtime.commit(swirl(0.75), 'static');
+        expect(kinds).toEqual(['discrete']);
+    });
+
+    it('leaves the repaint to the running loop when the gate is off', () => {
+        const runtime = createUniformRuntime();
+        const kinds: InvalidationKind[] = [];
+        runtime.invalidation.connect(kind => { kinds.push(kind) });
+
+        runtime.sync(swirl(0.25), false);
+        runtime.commit(swirl(0.25), 'none');
+        runtime.commit(swirl(0.75), 'none');
+
+        expect(kinds).toEqual([]);
+    });
+});
+
 describe('createUniformRuntime: the invalidation relay', () => {
     it('forwards a continuous request with its kind intact, and a discrete one as discrete', () => {
         const runtime = createUniformRuntime();

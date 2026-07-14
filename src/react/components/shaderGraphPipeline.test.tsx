@@ -776,7 +776,7 @@ describe('ShaderGraph: a live node uniform under demand (T16)', () => {
 });
 
 describe('ShaderGraph: a dead graph edge fails loud (T17)', () => {
-    it('throws at init when the shader never samples the child node sampler, naming the program and the sampler', async () => {
+    it('throws at init naming the program, the sampler and the remedy, when the shader never samples the edge', async () => {
         installStub({
             activeUniforms: {
                 u_time: 'float',
@@ -795,29 +795,9 @@ describe('ShaderGraph: a dead graph edge fails loud (T17)', () => {
                 reducedMotion='ignore'
                 saveData='ignore'
             />
-        )).rejects.toThrow(/never samples "u_tex"[\s\S]*/);
-    });
-
-    it('names the root program in that message', async () => {
-        installStub({
-            activeUniforms: {
-                u_time: 'float',
-                u_resolution: 'vec2',
-                u_gain: 'float',
-                u_mix: 'float'
-            }
-        });
-
-        await expect(mount(
-            <ShaderGraph
-                root={twoNodeGraph({ type: 'float', value: 0.375 }, { type: 'float', value: 0.875 })}
-                width={WIDTH}
-                height={HEIGHT}
-                useDevicePixelRatio={false}
-                reducedMotion='ignore'
-                saveData='ignore'
-            />
-        )).rejects.toThrow(/program "root"/);
+        )).rejects.toThrow(
+            /program "root" never samples "u_tex"[\s\S]*remove that uniform from the node/
+        );
     });
 
     it('still throws for a source leaf whose sampler the shader never samples', async () => {
@@ -887,9 +867,8 @@ describe('ShaderGraph: a dead graph edge fails loud (T17)', () => {
     });
 });
 
-describe('ShaderGraph: removing a node disposes its uniform runtime (T18)', () => {
-    it('disconnects the relay the removed node held on its param invalidation, and stops repainting for it', async () => {
-        const counting = createCountingInvalidation();
+describe('ShaderGraph: the node set and the invalidation fan-in stay in step (T18)', () => {
+    function tintScene(counting: CountingInvalidation): (withTint: boolean) => ReactElement {
         const gen = shaderNode({
             id: 'gen',
             shaderConfig: GEN_CONFIG,
@@ -907,7 +886,7 @@ describe('ShaderGraph: removing a node disposes its uniform runtime (T18)', () =
             height: 4
         });
 
-        const scene = (withTint: boolean): ReactElement => (
+        return (withTint: boolean) => (
             <ShaderGraph
                 root={shaderNode({
                     id: 'root',
@@ -924,6 +903,11 @@ describe('ShaderGraph: removing a node disposes its uniform runtime (T18)', () =
                 saveData='ignore'
             />
         );
+    }
+
+    it('disconnects the relay the removed node held on its param invalidation, and stops repainting for it', async () => {
+        const counting = createCountingInvalidation();
+        const scene = tintScene(counting);
 
         await mount(scene(true));
         act(() => { frames.tick(0) });
@@ -938,6 +922,28 @@ describe('ShaderGraph: removing a node disposes its uniform runtime (T18)', () =
         act(() => { counting.invalidation.request('discrete') });
         expect(frames.pending()).toBe(0);
         expect(count('drawArrays')).toBe(draws);
+    });
+
+    it('connects the relay a node added later holds, and repaints the whole graph when it fires', async () => {
+        const counting = createCountingInvalidation();
+        const scene = tintScene(counting);
+
+        await mount(scene(false));
+        act(() => { frames.tick(0) });
+        expect(counting.listeners()).toBe(0);
+
+        await mount(scene(true));
+        act(() => { frames.tick(16) });
+
+        expect(counting.listeners()).toBe(1);
+        expect(frames.pending()).toBe(0);
+
+        const draws = count('drawArrays');
+        act(() => { counting.invalidation.request('discrete') });
+        expect(frames.pending()).toBe(1);
+        act(() => { frames.tick(32) });
+
+        expect(count('drawArrays')).toBe(draws + 3);
     });
 });
 
