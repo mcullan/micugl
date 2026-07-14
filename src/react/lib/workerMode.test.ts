@@ -359,6 +359,35 @@ describe('findWorkerBlock: render passes', () => {
             name: 'u_amount'
         });
     });
+
+    it('blocks a pass that samples a texture source, and explains it with the textures message', () => {
+        const block = findWorkerBlock(blockInputs({
+            uniforms: { [PROGRAM_ID]: {} },
+            passes: [{
+                programId: PROGRAM_ID,
+                inputTextures: [
+                    { id: 'u_image', textureUnit: 0, bindingType: 'source', samplerName: 'u_image' }
+                ],
+                outputFramebuffer: null
+            }]
+        }));
+
+        expect(block).toEqual({ kind: 'textures' });
+        expect(workerBlockMessage('BaseShaderComponent', block!)).toMatch(/"textures" prop/);
+    });
+
+    it('does not block a pass whose inputs are all framebuffer reads', () => {
+        expect(findWorkerBlock(blockInputs({
+            uniforms: { [PROGRAM_ID]: {} },
+            passes: [{
+                programId: PROGRAM_ID,
+                inputTextures: [
+                    { id: 'fb-a', textureUnit: 0, bindingType: 'read', samplerName: 'u_texture0' }
+                ],
+                outputFramebuffer: null
+            }]
+        }))).toBeNull();
+    });
 });
 
 describe('workerPingPongUniforms', () => {

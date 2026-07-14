@@ -124,6 +124,15 @@ function findProgramUniformBlock(inputs: WorkerBlockInputs): WorkerBlock | null 
     return null;
 }
 
+function findPassTextureBlock(passes: RenderPass[]): WorkerBlock | null {
+    for (const pass of passes) {
+        if (pass.inputTextures.some(texture => texture.bindingType === 'source')) {
+            return { kind: 'textures' };
+        }
+    }
+    return null;
+}
+
 function findPassUniformBlock(passes: RenderPass[]): WorkerBlock | null {
     for (let passIndex = 0; passIndex < passes.length; passIndex++) {
         const pass = passes[passIndex];
@@ -155,6 +164,7 @@ export function findWorkerBlock(inputs: WorkerBlockInputs): WorkerBlock | null {
 
     return findLiveUniformBlock(inputs)
         ?? findProgramUniformBlock(inputs)
+        ?? findPassTextureBlock(inputs.passes ?? [])
         ?? findPassUniformBlock(inputs.passes ?? []);
 }
 

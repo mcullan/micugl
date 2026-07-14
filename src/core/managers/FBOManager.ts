@@ -261,6 +261,14 @@ export class FBOManager {
         return (resources.currentTextureIndex + 1) % resources.textures.length;
     }
 
+    getSize(id: string): { width: number; height: number } {
+        const resources = this.resources.get(id);
+        if (!resources) {
+            throw new Error(`Framebuffer with id ${id} not found`);
+        }
+        return { width: resources.width, height: resources.height };
+    }
+
     getTextureCount(id: string): number {
         const resources = this.resources.get(id);
         if (!resources) {
