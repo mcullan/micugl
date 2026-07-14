@@ -4,6 +4,8 @@ import { AudioBars } from './AudioBars';
 import { DevtoolsDebug } from './DevtoolsDebug';
 import { EffectsGallery } from './EffectsGallery';
 import { ExportDemo } from './ExportDemo';
+import { GraphInspector } from './GraphInspector';
+import { GraphPixels } from './GraphPixels';
 import { ImageTexture } from './ImageTexture';
 import { InstancedParticles } from './InstancedParticles';
 import { ManyCanvases } from './ManyCanvases';
@@ -42,7 +44,9 @@ export const scenes: Record<string, ComponentType> = {
     'particles-components': ParticlesComponents,
     'worker-jank': WorkerJank,
     'worker-context-loss': WorkerContextLoss,
-    'shader-graph': ShaderGraph
+    'shader-graph': ShaderGraph,
+    'graph-inspector': GraphInspector,
+    'graph-pixels': GraphPixels
 };
 
 export const getSceneComponent = (): ComponentType | null => {

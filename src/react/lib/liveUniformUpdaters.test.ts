@@ -372,19 +372,33 @@ describe('combineUniformDebugPorts', () => {
         const refsA = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
         const refsB = createPortRefs([{ name: 'u_b', type: 'float' }], { u_b: 2 });
         const combined = combineUniformDebugPorts([
-            createUniformDebugPort(refsA),
-            createUniformDebugPort(refsB)
+            { nodeId: 'a', port: createUniformDebugPort(refsA) },
+            { nodeId: 'b', port: createUniformDebugPort(refsB) }
         ]);
 
         expect(combined.list().map(entry => entry.name)).toEqual(['u_a', 'u_b']);
+    });
+
+    it('stamps each listed entry with its owning node id', () => {
+        const refsA = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
+        const refsB = createPortRefs([{ name: 'u_b', type: 'float' }], { u_b: 2 });
+        const combined = combineUniformDebugPorts([
+            { nodeId: 'alpha', port: createUniformDebugPort(refsA) },
+            { nodeId: 'beta', port: createUniformDebugPort(refsB) }
+        ]);
+
+        expect(combined.list().map(entry => [entry.name, entry.nodeId])).toEqual([
+            ['u_a', 'alpha'],
+            ['u_b', 'beta']
+        ]);
     });
 
     it('setOverride routes to the port that owns the uniform', () => {
         const refsA = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
         const refsB = createPortRefs([{ name: 'u_b', type: 'float' }], { u_b: 2 });
         const combined = combineUniformDebugPorts([
-            createUniformDebugPort(refsA),
-            createUniformDebugPort(refsB)
+            { nodeId: 'a', port: createUniformDebugPort(refsA) },
+            { nodeId: 'b', port: createUniformDebugPort(refsB) }
         ]);
 
         combined.setOverride('u_b', 9);
@@ -397,8 +411,8 @@ describe('combineUniformDebugPorts', () => {
         const refsA = createPortRefs([{ name: 'u_time', type: 'float' }], { u_time: 1 });
         const refsB = createPortRefs([{ name: 'u_time', type: 'float' }], { u_time: 1 });
         const combined = combineUniformDebugPorts([
-            createUniformDebugPort(refsA),
-            createUniformDebugPort(refsB)
+            { nodeId: 'a', port: createUniformDebugPort(refsA) },
+            { nodeId: 'b', port: createUniformDebugPort(refsB) }
         ]);
 
         combined.setOverride('u_time', 7);
@@ -409,7 +423,7 @@ describe('combineUniformDebugPorts', () => {
 
     it('throws for a uniform unknown to every port', () => {
         const refsA = createPortRefs([{ name: 'u_a', type: 'float' }], { u_a: 1 });
-        const combined = combineUniformDebugPorts([createUniformDebugPort(refsA)]);
+        const combined = combineUniformDebugPorts([{ nodeId: 'a', port: createUniformDebugPort(refsA) }]);
 
         expect(() => { combined.setOverride('u_missing', 1) }).toThrow(/unknown uniform/);
         expect(() => { combined.clearOverride('u_missing') }).toThrow(/unknown uniform/);

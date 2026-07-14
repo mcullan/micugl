@@ -28,6 +28,7 @@ export interface UniformListEntry {
     type: UniformType;
     value: unknown;
     overridden: boolean;
+    nodeId?: string;
 }
 
 export interface UniformDebugPort {
@@ -118,25 +119,32 @@ export function createUniformDebugPort(options: UniformDebugPortOptions): Unifor
     };
 }
 
-export function combineUniformDebugPorts(ports: UniformDebugPort[]): UniformDebugPort {
-    const portsWithName = (name: string): UniformDebugPort[] =>
-        ports.filter(port => port.list().some(entry => entry.name === name));
+export interface AttributedDebugPort {
+    nodeId: string;
+    port: UniformDebugPort;
+}
+
+export function combineUniformDebugPorts(entries: AttributedDebugPort[]): UniformDebugPort {
+    const entriesWithName = (name: string): AttributedDebugPort[] =>
+        entries.filter(entry => entry.port.list().some(item => item.name === name));
 
     return {
-        list: () => ports.flatMap(port => port.list()),
+        list: () => entries.flatMap(entry =>
+            entry.port.list().map(item => ({ ...item, nodeId: entry.nodeId }))
+        ),
         setOverride: (name, value) => {
-            const targets = portsWithName(name);
+            const targets = entriesWithName(name);
             if (targets.length === 0) {
                 throw new Error(`micugl devtools: unknown uniform "${name}"`);
             }
-            targets.forEach(port => { port.setOverride(name, value) });
+            targets.forEach(entry => { entry.port.setOverride(name, value) });
         },
         clearOverride: name => {
-            const targets = portsWithName(name);
+            const targets = entriesWithName(name);
             if (targets.length === 0) {
                 throw new Error(`micugl devtools: unknown uniform "${name}"`);
             }
-            targets.forEach(port => { port.clearOverride(name) });
+            targets.forEach(entry => { entry.port.clearOverride(name) });
         }
     };
 }

@@ -1,5 +1,7 @@
 import type { WebGLManager } from '@/core';
+import type { GraphTopology } from '@/core/lib/graphPlanning';
 import type { TextureCapabilities } from '@/core/lib/textureCapabilities';
+import type { FramebufferReadResult, FramebufferUnreadable } from '@/core/managers/FBOManager';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type { Frameloop } from '@/types';
 
@@ -16,6 +18,12 @@ export interface EngineDebugState {
     speed?: number;
 }
 
+export interface GraphDebugPort {
+    topology: () => GraphTopology;
+    readNode: (nodeId: string, maxSize?: number) => FramebufferReadResult | FramebufferUnreadable;
+    nodeUniforms: (nodeId: string) => UniformDebugPort;
+}
+
 export interface EngineHandle {
     id: string;
     kind: 'shader' | 'pingpong';
@@ -26,6 +34,7 @@ export interface EngineHandle {
     setFrame?: (frame: number) => void;
     getFrame?: () => number;
     uniforms?: UniformDebugPort;
+    graph?: GraphDebugPort;
 }
 
 export interface DevtoolsSink {

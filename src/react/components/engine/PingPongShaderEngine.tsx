@@ -19,11 +19,13 @@ import type {
 import { CAPTURE_SCRATCH_FRAMEBUFFER_ID, captureFrame } from '@/core/lib/captureFrame';
 import { resolveExportDimensions, validateRenderToBlobOptions } from '@/core/lib/captureOptions';
 import type { FrameInvalidation, InvalidationKind } from '@/core/lib/frameInvalidation';
+import type { FramebufferReadResult, FramebufferUnreadable } from '@/core/managers/FBOManager';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
-import type { EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
+import type { EngineDebugState, EngineHandle, GraphDebugPort } from '@/react/devtools/beacon';
 import { emitEngineMount, emitEngineUnmount } from '@/react/devtools/beacon';
 import { useMotionGate } from '@/react/hooks/useMotionGate';
+import type { GraphDebugSource } from '@/react/hooks/useShaderGraph';
 import type { WorkerBridgeInitPayload } from '@/react/hooks/useWorkerBridge';
 import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
@@ -76,6 +78,7 @@ interface PingPongShaderEngineBaseProps extends Omit<RenderControlProps, 'worker
     renderHeight?: number;
     debug?: boolean;
     debugPortRef?: RefObject<UniformDebugPort | null>;
+    graphDebugRef?: RefObject<GraphDebugSource | null>;
     invalidation?: FrameInvalidation;
     capturesAreNonReproducible?: CapturesAreNonReproducible;
 }
@@ -158,6 +161,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     renderHeight,
     debug = false,
     debugPortRef,
+    graphDebugRef,
     workerUniforms,
     workerCustomPasses = false,
     invalidation,
@@ -568,7 +572,76 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
                     setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
                     getFrame: () => controllerRef.current?.getFrame() ?? 0,
                     setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
-                    uniforms: debugPortRef?.current ?? undefined
+                    get uniforms() {
+                        return debugPortRef?.current ?? undefined;
+                    },
+                    get graph(): GraphDebugPort | undefined {
+                        if (!graphDebugRef?.current) {
+                            return undefined;
+                        }
+                        return {
+                            topology: () => {
+                                const source = graphDebugRef.current;
+                                if (!source) {
+                                    throw new Error('micugl devtools: graph.topology read after the engine was torn down');
+                                }
+                                return source.topology();
+                            },
+                            nodeUniforms: nodeId => {
+                                const source = graphDebugRef.current;
+                                if (!source) {
+                                    throw new Error('micugl devtools: graph.nodeUniforms read after the engine was torn down');
+                                }
+                                return source.nodeUniforms(nodeId);
+                            },
+                            readNode: (nodeId, maxSize): FramebufferReadResult | FramebufferUnreadable => {
+                                const source = graphDebugRef.current;
+                                const topology = source?.topology();
+                                const node = topology?.nodes.find(candidate => candidate.id === nodeId);
+                                if (!node) {
+                                    const known = topology?.nodes.map(candidate => candidate.id).join(', ') ?? '';
+                                    throw new Error(
+                                        `micugl devtools: graph.readNode has no node "${nodeId}". Known node ids: ${known}.`
+                                    );
+                                }
+                                const currentManager = managerWeak.deref();
+                                if (!currentManager || !readyRef.current) {
+                                    return { unreadable: 'engine destroyed' };
+                                }
+                                if (node.framebufferId !== null) {
+                                    return currentManager.fbo.debugReadFramebuffer(node.framebufferId, maxSize);
+                                }
+                                const rootCanvas = currentManager.context.canvas as HTMLCanvasElement;
+                                const rootWidth = rootCanvas.width;
+                                const rootHeight = rootCanvas.height;
+                                if (rootWidth <= 0 || rootHeight <= 0) {
+                                    return { unreadable: 'framebuffer has zero size' };
+                                }
+                                if (maxSize !== undefined && (rootWidth > maxSize || rootHeight > maxSize)) {
+                                    return {
+                                        unreadable: `framebuffer ${rootWidth}x${rootHeight} exceeds capture maxSize ${maxSize}`
+                                    };
+                                }
+                                const passSystem = passSystemRef.current;
+                                if (!passSystem) {
+                                    return { unreadable: 'engine destroyed' };
+                                }
+                                const gl = currentManager.context;
+                                const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+                                const previousViewport = gl.getParameter(gl.VIEWPORT) as ArrayLike<number>;
+                                passSystem.execute(frameToMs(controllerRef.current?.getFrame() ?? 0));
+                                const pixels = currentManager.readPixels(rootWidth, rootHeight);
+                                gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
+                                gl.viewport(
+                                    previousViewport[0],
+                                    previousViewport[1],
+                                    previousViewport[2],
+                                    previousViewport[3]
+                                );
+                                return { width: rootWidth, height: rootHeight, pixels };
+                            }
+                        };
+                    }
                 };
                 emitEngineMount(handle);
             }
@@ -584,7 +657,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             passSystemRef.current = null;
             emitEngineUnmount(engineIdRef.current);
         };
-    }, [workerActive, contentKey, epoch, debugPortRef]);
+    }, [workerActive, contentKey, epoch, debugPortRef, graphDebugRef]);
 
     useEffect(() => {
         applySize();

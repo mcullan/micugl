@@ -91,8 +91,11 @@ export const usePingPongPasses = ({
     ]);
 
     const port = useMemo(
-        () => combineUniformDebugPorts([primary.port, secondary.port]),
-        [primary.port, secondary.port]
+        () => combineUniformDebugPorts([
+            { nodeId: programId, port: primary.port },
+            { nodeId: secondaryProgramId ?? `${programId}-secondary`, port: secondary.port }
+        ]),
+        [primary.port, secondary.port, programId, secondaryProgramId]
     );
 
     const invalidation = useMemo(
