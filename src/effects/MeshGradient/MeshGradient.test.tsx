@@ -25,6 +25,7 @@ let frames: FrameQueue;
 let stub: GLStubHandle;
 let originalGetContext: unknown;
 let originalToBlob: unknown;
+let originalMatchMedia: typeof window.matchMedia | undefined;
 
 class ImageDataStub {
     constructor(
@@ -52,6 +53,8 @@ beforeEach(() => {
     };
     (globalThis as { ImageData?: unknown }).ImageData = ImageDataStub;
 
+    originalMatchMedia = window.matchMedia;
+
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -64,7 +67,23 @@ afterEach(() => {
     canvasProto.getContext = originalGetContext;
     canvasProto.toBlob = originalToBlob;
     delete (globalThis as { ImageData?: unknown }).ImageData;
+    if (originalMatchMedia) {
+        window.matchMedia = originalMatchMedia;
+    }
 });
+
+function mockReducedMotionActive(): void {
+    window.matchMedia = ((query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false
+    })) as unknown as typeof window.matchMedia;
+}
 
 async function mount(element: ReactElement): Promise<void> {
     await act(async () => {
@@ -225,5 +244,49 @@ describe('MeshGradient: audio invalidation drives demand-mode renders', () => {
         const settled = timeUploads().length;
         act(() => { frames.tick(192) });
         expect(timeUploads().length).toBe(settled);
+    });
+});
+
+const GatedAudioScene = ({ probe, deps }: { probe: { current: AudioUniformsResult | null }; deps: AudioAnalyserDriverDeps }) => {
+    const audio = useAudioUniforms(MIC, { bands: 2, fftSize: 64, bandLayout: 'linear', attack: 0.05, release: 0.4 }, deps);
+    probe.current = audio;
+
+    return (
+        <MeshGradient
+            audio={audio}
+            colors={FIXTURE_COLORS}
+            width={WIDTH}
+            height={HEIGHT}
+            useDevicePixelRatio={false}
+            saveData='ignore'
+        />
+    );
+};
+
+describe('MeshGradient: reduced motion gates the audio reaction into a frozen poster', () => {
+    it('holds u_time and u_audioLevel still while a running mic streams', async () => {
+        mockReducedMotionActive();
+        const probe: { current: AudioUniformsResult | null } = { current: null };
+        const fixture = createFixture();
+
+        await mount(<GatedAudioScene probe={probe} deps={fixture.deps} />);
+        act(() => { frames.tick(0) });
+        expect(uploadsOf('u_audioLevel')).toEqual([0]);
+        expect(frames.pending()).toBe(0);
+
+        await act(async () => { await current(probe).start() });
+        expect(frames.pending()).toBe(1);
+        fixture.hear();
+        act(() => { frames.tick(16) });
+        expect(frames.pending()).toBe(0);
+
+        const frozenTimes = timeUploads().length;
+        for (let time = 32; time <= 320; time += 16) {
+            act(() => { frames.tick(time) });
+            expect(frames.pending()).toBe(0);
+        }
+
+        expect((uploadsOf('u_audioLevel') as number[]).every(value => value === 0)).toBe(true);
+        expect(timeUploads().length).toBe(frozenTimes);
     });
 });
