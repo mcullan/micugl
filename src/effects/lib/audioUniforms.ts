@@ -13,6 +13,8 @@ export const resolveAudioReaction = (
     audio: AudioUniformsResult | undefined,
     audioStrength: number
 ): AudioReaction => {
+    const strength = assertFinite('audioStrength', audioStrength);
+
     if (audio === undefined) {
         return {
             u_audioLevel: { type: 'float', value: 0 },
@@ -30,6 +32,6 @@ export const resolveAudioReaction = (
 
     return {
         u_audioLevel: audio.uniforms[LEVEL_NAME],
-        u_audioStrength: { type: 'float', value: assertFinite('audioStrength', audioStrength) }
+        u_audioStrength: { type: 'float', value: strength }
     };
 };

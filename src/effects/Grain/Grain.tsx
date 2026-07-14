@@ -1,10 +1,11 @@
 import { forwardRef } from 'react';
 
 import { createShaderConfig } from '@/core';
-import { grainFragmentShader, grainVertexShader } from '@/effects/Grain/grainShaders';
+import { grainFragmentShader } from '@/effects/Grain/grainShaders';
 import type { GrainUniformProps } from '@/effects/Grain/grainUniforms';
 import { grainUniforms } from '@/effects/Grain/grainUniforms';
 import type { EffectRenderProps } from '@/effects/lib/effectProps';
+import { fullscreenVertexShader } from '@/effects/lib/fullscreenVertexShader';
 import { BaseShaderComponent } from '@/react';
 import type { ShaderHandle } from '@/types';
 
@@ -13,7 +14,7 @@ export interface GrainProps extends EffectRenderProps, GrainUniformProps {}
 const PROGRAM_ID = 'micugl-effect-grain';
 
 const config = createShaderConfig({
-    vertexShader: grainVertexShader,
+    vertexShader: fullscreenVertexShader,
     fragmentShader: grainFragmentShader,
     uniformNames: {
         u_color: 'vec3',

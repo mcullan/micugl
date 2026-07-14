@@ -1,9 +1,6 @@
-export { fullscreenVertexShader as meshGradientVertexShader } from '@/effects/lib/fullscreenVertexShader';
-
 export const meshGradientFragmentShader = `
     precision highp float;
 
-    uniform vec2 u_resolution;
     uniform float u_time;
     uniform vec3 u_color0;
     uniform vec3 u_color1;
@@ -52,7 +49,7 @@ export const meshGradientFragmentShader = `
 
     void main() {
         float audio = u_audioStrength * u_audioLevel;
-        float t = u_time * 0.001 * u_speed * (1.0 + 0.5 * audio);
+        float t = u_time * u_speed + 0.5 * audio;
         float warp = u_warp * (1.0 + audio);
 
         vec2 uv = v_texCoord;

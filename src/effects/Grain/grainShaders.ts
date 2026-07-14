@@ -1,5 +1,3 @@
-export { fullscreenVertexShader as grainVertexShader } from '@/effects/lib/fullscreenVertexShader';
-
 export const grainFragmentShader = `
     precision highp float;
 
@@ -22,8 +20,8 @@ export const grainFragmentShader = `
     }
 
     void main() {
-        float t = u_time * 0.001 * u_speed;
-        vec2 cell = floor(v_texCoord * u_resolution / max(u_scale, 1.0));
+        float t = u_time * u_speed;
+        vec2 cell = floor(v_texCoord * u_resolution / u_scale);
         float tick = floor(t * 24.0);
         float n = hash21(cell + vec2(tick, tick * 1.7));
 

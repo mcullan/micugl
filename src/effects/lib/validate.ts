@@ -15,10 +15,11 @@ export const assertVec3 = (name: string, value: readonly number[]): Vec3 => {
             `micugl effects: "${name}" must be a 3-number tuple [r, g, b], received length ${String(value.length)}.`
         );
     }
-    assertFinite(`${name}[0]`, value[0]);
-    assertFinite(`${name}[1]`, value[1]);
-    assertFinite(`${name}[2]`, value[2]);
-    return value as unknown as Vec3;
+    return [
+        assertFinite(`${name}[0]`, value[0]),
+        assertFinite(`${name}[1]`, value[1]),
+        assertFinite(`${name}[2]`, value[2])
+    ];
 };
 
 export const assertColors = (name: string, colors: readonly (readonly number[])[]): Vec3[] => {
@@ -27,6 +28,5 @@ export const assertColors = (name: string, colors: readonly (readonly number[])[
             `micugl effects: "${name}" must hold between 2 and 4 colors, received ${String(colors.length)}.`
         );
     }
-    colors.forEach((color, index) => assertVec3(`${name}[${index}]`, color));
-    return colors as unknown as Vec3[];
+    return colors.map((color, index) => assertVec3(`${name}[${index}]`, color));
 };

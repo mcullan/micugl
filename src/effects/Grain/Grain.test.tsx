@@ -89,5 +89,6 @@ describe('Grain: real uniforms reach the GL stub and advance', () => {
         for (let i = 1; i < times.length; i++) {
             expect(times[i]).toBeGreaterThan(times[i - 1]);
         }
+        expect(times[times.length - 1]).toBeLessThan(1);
     });
 });

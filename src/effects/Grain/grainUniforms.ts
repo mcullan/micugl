@@ -30,6 +30,11 @@ export const grainUniforms = (
     const grainColor = assertVec3('grainColor', props.grainColor ?? GRAIN_DEFAULTS.grainColor);
     const intensity = assertFinite('intensity', props.intensity ?? GRAIN_DEFAULTS.intensity);
     const scale = assertFinite('scale', props.scale ?? GRAIN_DEFAULTS.scale);
+    if (scale <= 0) {
+        throw new Error(
+            `micugl effects: "scale" must be greater than 0, received ${String(scale)}.`
+        );
+    }
     const speed = assertFinite('speed', props.speed ?? GRAIN_DEFAULTS.speed);
     const audioStrength = props.audioStrength ?? GRAIN_DEFAULTS.audioStrength;
 

@@ -523,8 +523,8 @@ of a live stream. When in doubt, `request()`: repainting a poster once is the sa
 animation multiplier (not the engine clock scale), and takes an optional `audio` prop — the object
 `useAudioUniforms` returns — whose LEVEL uniform drives a reaction. Colors are `Vec3` arrays of
 `0..1` floats. Numbers must be finite and colors well-formed; the components throw a named error
-rather than clamping or silently substituting. Every render prop except `speed` and `worker` is
-forwarded to `BaseShaderComponent`.
+rather than clamping or silently substituting. Every render prop except `speed` and the worker
+props (`worker`, `createWorker`) is forwarded to `BaseShaderComponent`.
 
 ```tsx
 import { MeshGradient, Grain } from 'micugl/effects';
@@ -557,8 +557,8 @@ const audio = useAudioUniforms({ type: 'mic' });
 | `audio` | `AudioUniformsResult` | none |
 | `audioStrength` | `number` | `1` |
 
-Audio reaction: the warp depth and drift rate grow with the audio level, so the gradient visibly
-breathes with the sound.
+Audio reaction: the warp depth grows with the audio level and the drift phase gets a bounded
+forward push, so the gradient visibly breathes with the sound and settles back when it fades.
 
 ### Grain
 

@@ -2,10 +2,8 @@ import { forwardRef } from 'react';
 
 import { createShaderConfig } from '@/core';
 import type { EffectRenderProps } from '@/effects/lib/effectProps';
-import {
-    meshGradientFragmentShader,
-    meshGradientVertexShader
-} from '@/effects/MeshGradient/meshGradientShaders';
+import { fullscreenVertexShader } from '@/effects/lib/fullscreenVertexShader';
+import { meshGradientFragmentShader } from '@/effects/MeshGradient/meshGradientShaders';
 import type { MeshGradientUniformProps } from '@/effects/MeshGradient/meshGradientUniforms';
 import { meshGradientUniforms } from '@/effects/MeshGradient/meshGradientUniforms';
 import { BaseShaderComponent } from '@/react';
@@ -16,7 +14,7 @@ export interface MeshGradientProps extends EffectRenderProps, MeshGradientUnifor
 const PROGRAM_ID = 'micugl-effect-mesh-gradient';
 
 const config = createShaderConfig({
-    vertexShader: meshGradientVertexShader,
+    vertexShader: fullscreenVertexShader,
     fragmentShader: meshGradientFragmentShader,
     uniformNames: {
         u_color0: 'vec3',

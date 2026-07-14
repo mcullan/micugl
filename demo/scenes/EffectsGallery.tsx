@@ -3,8 +3,29 @@ import { useState } from 'react';
 import { Grain } from '../../src/effects/Grain/Grain';
 import { MeshGradient } from '../../src/effects/MeshGradient/MeshGradient';
 import { useAudioUniforms } from '../../src/react/hooks/useAudioUniforms';
+import type { Vec3 } from '../../src/types';
 
 const MIC = { type: 'mic' } as const;
+
+interface ColorPreset {
+    label: string;
+    colors: Vec3[];
+}
+
+const COLOR_PRESETS: ColorPreset[] = [
+    {
+        label: 'pastel quad (4)',
+        colors: [[0.96, 0.76, 0.85], [0.74, 0.85, 0.96], [0.80, 0.95, 0.82], [0.98, 0.92, 0.76]]
+    },
+    {
+        label: 'spring trio (3)',
+        colors: [[0.96, 0.76, 0.85], [0.74, 0.85, 0.96], [0.80, 0.95, 0.82]]
+    },
+    {
+        label: 'ember duo (2)',
+        colors: [[0.10, 0.12, 0.35], [0.95, 0.55, 0.25]]
+    }
+];
 
 const panelStyle = {
     position: 'absolute',
@@ -59,13 +80,14 @@ const Knob = ({ label, value, min, max, step, onChange }: KnobProps) => (
                 value={value}
                 onChange={event => { onChange(Number(event.target.value)) }}
             />
-            <span style={{ width: '40px', textAlign: 'right' }}>{value.toFixed(2)}</span>
+            <span style={{ width: '40px', textAlign: 'right' }}>{value.toFixed(step < 1 ? 2 : 0)}</span>
         </span>
     </label>
 );
 
 export const EffectsGallery = () => {
     const [poster, setPoster] = useState(false);
+    const [presetIndex, setPresetIndex] = useState(0);
     const [meshSpeed, setMeshSpeed] = useState(0.2);
     const [warp, setWarp] = useState(0.6);
     const [warpScale, setWarpScale] = useState(1.2);
@@ -77,6 +99,8 @@ export const EffectsGallery = () => {
 
     const audio = useAudioUniforms(MIC, { attack: 0.05, release: 0.25 });
     const running = audio.status === 'running';
+    const starting = audio.status === 'starting';
+    const preset = COLOR_PRESETS[presetIndex];
 
     const half = { position: 'relative', flex: '1 1 0', minWidth: 0 } as const;
 
@@ -84,6 +108,7 @@ export const EffectsGallery = () => {
         <div style={{ width: '100vw', height: '100vh', display: 'flex' }}>
             <div style={half}>
                 <MeshGradient
+                    colors={preset.colors}
                     speed={poster ? 0 : meshSpeed}
                     warp={warp}
                     warpScale={warpScale}
@@ -111,6 +136,13 @@ export const EffectsGallery = () => {
             <div style={panelStyle}>
                 <div style={columnStyle}>
                     <strong>MeshGradient</strong>
+                    <button
+                        type='button'
+                        style={buttonStyle(false)}
+                        onClick={() => { setPresetIndex(index => (index + 1) % COLOR_PRESETS.length) }}
+                    >
+                        colors: {preset.label}
+                    </button>
                     <Knob label='speed' value={meshSpeed} min={0} max={2} step={0.05} onChange={setMeshSpeed} />
                     <Knob label='warp' value={warp} min={0} max={2} step={0.05} onChange={setWarp} />
                     <Knob label='warpScale' value={warpScale} min={0.2} max={4} step={0.1} onChange={setWarpScale} />
@@ -129,7 +161,8 @@ export const EffectsGallery = () => {
                     </button>
                     <button
                         type='button'
-                        style={buttonStyle(running)}
+                        style={{ ...buttonStyle(running), opacity: starting ? 0.5 : 1 }}
+                        disabled={starting}
                         onClick={() => {
                             if (running) {
                                 audio.stop();
@@ -138,7 +171,7 @@ export const EffectsGallery = () => {
                             }
                         }}
                     >
-                        {running ? 'audio: stop' : 'audio: start (mic)'}
+                        {starting ? 'audio: starting' : running ? 'audio: stop' : 'audio: start (mic)'}
                     </button>
                     <Knob
                         label='audioStrength'

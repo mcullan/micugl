@@ -19,9 +19,11 @@ describe('effects validate: finite numbers', () => {
 });
 
 describe('effects validate: vec3 tuples', () => {
-    it('returns a valid tuple unchanged', () => {
+    it('returns a fresh tuple with the same values', () => {
         const color: Vec3 = [0.1, 0.2, 0.3];
-        expect(assertVec3('color', color)).toBe(color);
+        const result = assertVec3('color', color);
+        expect(result).toEqual(color);
+        expect(result).not.toBe(color);
     });
 
     it('throws on the wrong tuple length', () => {
@@ -35,11 +37,13 @@ describe('effects validate: vec3 tuples', () => {
 });
 
 describe('effects validate: colors length 2 to 4', () => {
-    it('accepts 2 colors and 4 colors', () => {
+    it('accepts 2 colors and 4 colors, returning fresh tuples', () => {
         const two: Vec3[] = [[0, 0, 0], [1, 1, 1]];
         const four: Vec3[] = [[0, 0, 0], [1, 1, 1], [0.5, 0.5, 0.5], [0.2, 0.4, 0.6]];
-        expect(assertColors('colors', two)).toBe(two);
-        expect(assertColors('colors', four)).toBe(four);
+        const twoResult = assertColors('colors', two);
+        expect(twoResult).toEqual(two);
+        expect(twoResult[0]).not.toBe(two[0]);
+        expect(assertColors('colors', four)).toEqual(four);
     });
 
     it('throws for 1 color and for 5 colors', () => {

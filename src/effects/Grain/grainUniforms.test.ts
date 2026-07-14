@@ -58,6 +58,15 @@ describe('grainUniforms: prop mapping', () => {
     it('throws when a color tuple has the wrong length', () => {
         expect(() => grainUniforms({ color: [0.1, 0.2] as unknown as Vec3 })).toThrow(/"color".*3-number tuple/s);
     });
+
+    it('throws with "scale" named for zero and negative scale', () => {
+        expect(() => grainUniforms({ scale: 0 })).toThrow(/"scale".*greater than 0/s);
+        expect(() => grainUniforms({ scale: -2 })).toThrow(/"scale".*greater than 0/s);
+    });
+
+    it('passes a sub-pixel scale through without clamping', () => {
+        expect(grainUniforms({ scale: 0.5 }).u_scale.value).toBe(0.5);
+    });
 });
 
 describe('grainUniforms: audio passthrough', () => {
@@ -83,6 +92,10 @@ describe('grainUniforms: audio passthrough', () => {
 
         expect(uniforms.u_audioLevel).toBe(level);
         expect(uniforms.u_audioStrength).toEqual({ type: 'float', value: 2 });
+    });
+
+    it('throws for a non-finite audioStrength even with audio absent', () => {
+        expect(() => grainUniforms({ audioStrength: Number.NaN })).toThrow(/"audioStrength".*finite/s);
     });
 
     it('throws with an actionable message when the audio result has no u_audioLevel key', () => {
