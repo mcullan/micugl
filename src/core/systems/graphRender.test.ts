@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
 import { GL_TEXTURE0 } from '@/core/lib/glConstants';
 import type { ShaderNode } from '@/core/lib/graphPlanning';
 import { planGraph, shaderNode, toRenderPasses } from '@/core/lib/graphPlanning';
-import { resolveSourceTextureOptions } from '@/core/lib/sourceTextureOptions';
 import { WebGLManager } from '@/core/managers/WebGLManager';
 import { Passes } from '@/core/systems/Passes';
 import type { CanvasStubHandle, GLStubConfig } from '@/testing';
 import { createCanvasStub } from '@/testing';
-import type { RenderPass, ShaderProgramConfig, TextureSource, TextureUploadSource, UniformType } from '@/types';
+import { bitmap, createSource } from '@/testing/fixtures';
+import type { RenderPass, ShaderProgramConfig, TextureSource, UniformType } from '@/types';
 
 type UniformsFor = (nodeId: string) => RenderPass['uniforms'];
 
@@ -23,35 +22,6 @@ function gcfg(uniformNames: Record<string, UniformType> = {}): ShaderProgramConf
 }
 
 const f32 = (values: number[]): Float32Array => new Float32Array(values);
-
-const bitmap = (width: number, height: number): TextureUploadSource =>
-    ({ width, height }) as unknown as TextureUploadSource;
-
-interface SourceHandle {
-    source: TextureSource;
-    push: (frame: TextureUploadSource) => void;
-}
-
-function createSource(id: string): SourceHandle {
-    let frame: TextureUploadSource | null = null;
-    let version = 0;
-
-    const source: TextureSource = {
-        id,
-        get version() { return version },
-        options: resolveSourceTextureOptions(),
-        getFrame: () => frame,
-        invalidation: createFrameInvalidation()
-    };
-
-    return {
-        source,
-        push: (next: TextureUploadSource) => {
-            frame = next;
-            version += 1;
-        }
-    };
-}
 
 interface GraphSetup {
     stub: CanvasStubHandle;

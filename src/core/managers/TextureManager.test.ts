@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
 import {
     GL_CLAMP_TO_EDGE,
     GL_LINEAR,
@@ -22,51 +21,10 @@ import { resolveSourceTextureOptions } from '@/core/lib/sourceTextureOptions';
 import { TextureManager } from '@/core/managers/TextureManager';
 import type { GLStubConfig, GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
-import type {
-    SourceTextureOptions,
-    TextureSource,
-    TextureUploadSource
-} from '@/types';
-
-const video = (videoWidth: number, videoHeight: number): TextureUploadSource =>
-    ({ videoWidth, videoHeight }) as unknown as TextureUploadSource;
-
-const bitmap = (width: number, height: number): TextureUploadSource =>
-    ({ width, height }) as unknown as TextureUploadSource;
+import { bitmap, createSource, video } from '@/testing/fixtures';
 
 const indexOfCall = (calls: readonly { name: string }[], name: string): number =>
     calls.findIndex(call => call.name === name);
-
-interface SourceHandle {
-    source: TextureSource;
-    push: (frame: TextureUploadSource) => void;
-    withhold: () => void;
-    reoffer: () => void;
-}
-
-function createSource(id: string, options?: SourceTextureOptions): SourceHandle {
-    let frame: TextureUploadSource | null = null;
-    let offered = true;
-    let version = 0;
-
-    const source: TextureSource = {
-        id,
-        get version() { return version },
-        options: resolveSourceTextureOptions(options),
-        getFrame: () => (offered ? frame : null),
-        invalidation: createFrameInvalidation()
-    };
-
-    return {
-        source,
-        push: (next: TextureUploadSource) => {
-            frame = next;
-            version += 1;
-        },
-        withhold: () => { offered = false },
-        reoffer: () => { offered = true }
-    };
-}
 
 interface Setup extends GLStubHandle {
     manager: TextureManager;

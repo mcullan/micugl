@@ -12,6 +12,7 @@ import type { AudioAnalyserDriverDeps } from '@/react/lib/audioAnalyserDriver';
 import { asContext, createFakeStream, FakeContext, latestAnalyser, LOW_HALF } from '@/react/lib/fakeWebAudio';
 import type { GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
+import { uploadsOf } from '@/testing/fixtures';
 import type { FrameQueue } from '@/testing/frameQueue';
 import { createFrameQueue } from '@/testing/frameQueue';
 import type { AudioSourceSpec, AudioUniformsOptions, Frameloop, ShaderProgramConfig } from '@/types';
@@ -92,17 +93,12 @@ async function mount(element: ReactElement): Promise<void> {
     });
 }
 
-function uploadsOf(name: string): unknown[] {
-    const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
-    return stub.uniformCalls.filter(call => call.location === location).map(call => call.value);
-}
-
 function levelUploads(): number[] {
-    return uploadsOf('u_audioLevel') as number[];
+    return uploadsOf(stub, 'u_audioLevel') as number[];
 }
 
 function latestBands(): number[] {
-    const calls = uploadsOf('u_audioBands');
+    const calls = uploadsOf(stub, 'u_audioBands');
     if (calls.length === 0) {
         throw new Error('u_audioBands has never been uploaded');
     }
@@ -225,7 +221,7 @@ describe('audio uniforms reaching GL through a mounted BaseShaderComponent (real
         for (let time = 16; time <= 160; time += 16) {
             act(() => { frames.tick(time) });
         }
-        expect(uploadsOf('u_audioBands').every(value => Number.isFinite(value))).toBe(true);
+        expect(uploadsOf(stub, 'u_audioBands').every(value => Number.isFinite(value))).toBe(true);
 
         await mount(<Scene probe={probe} deps={fixture.deps} bands={4} />);
         fixture.hear();

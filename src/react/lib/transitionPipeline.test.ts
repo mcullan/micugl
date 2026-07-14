@@ -20,6 +20,7 @@ import {
 import { createTransitionRuntime } from '@/react/lib/transitionRuntime';
 import type { GLStubConfig, GLStubHandle } from '@/testing';
 import { createCanvasStub } from '@/testing';
+import { uploadsOf } from '@/testing/fixtures';
 import type { UniformParam } from '@/types';
 
 const PROGRAM_ID = 'transition-demo';
@@ -36,11 +37,6 @@ const CONFIG = createShaderConfig({
     fragmentShader: 'void main() {}',
     uniformNames: { u_swirl: 'float', u_color: 'vec3', u_texture0: 'sampler2D' }
 });
-
-function uploadsOf(stub: GLStubHandle, name: string): unknown[] {
-    const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
-    return stub.uniformCalls.filter(call => call.location === location).map(call => call.value);
-}
 
 function swirlUploads(stub: GLStubHandle): unknown[] {
     return uploadsOf(stub, 'u_swirl');
