@@ -516,6 +516,80 @@ suppressed while the component is motion-gated, so a reduced-motion user gets th
 of a live stream. When in doubt, `request()`: repainting a poster once is the safe default. See
 [What repaints the poster, and what freezes](#what-repaints-the-poster-and-what-freezes).
 
+## Effects
+
+`micugl/effects` is a set of polished, prop-driven fullscreen components. Each rides
+`BaseShaderComponent` (the fast path, no FBO), owns a local `speed` prop that is an in-shader
+animation multiplier (not the engine clock scale), and takes an optional `audio` prop — the object
+`useAudioUniforms` returns — whose LEVEL uniform drives a reaction. Colors are `Vec3` arrays of
+`0..1` floats. Numbers must be finite and colors well-formed; the components throw a named error
+rather than clamping or silently substituting. Every render prop except `speed` and `worker` is
+forwarded to `BaseShaderComponent`.
+
+```tsx
+import { MeshGradient, Grain } from 'micugl/effects';
+```
+
+### MeshGradient
+
+Four color control points drift on seeded paths and blend by inverse-distance weighting, with a
+value-noise domain warp for organic, non-radial edges. At `speed={0}` it is a still, seeded
+composition — a deliberate poster:
+
+```tsx
+<MeshGradient speed={0} seed={3} colors={[[0.96, 0.76, 0.85], [0.74, 0.85, 0.96], [0.80, 0.95, 0.82]]} />
+```
+
+Animated, with audio:
+
+```tsx
+const audio = useAudioUniforms({ type: 'mic' });
+<MeshGradient audio={audio} audioStrength={1.5} />;  // call audio.start() on a user gesture
+```
+
+| prop | type | default |
+|---|---|---|
+| `colors` | `Vec3[]` (2 to 4) | four pastels |
+| `speed` | `number` | `0.2` |
+| `warp` | `number` | `0.6` |
+| `warpScale` | `number` | `1.2` |
+| `seed` | `number` | `0` |
+| `audio` | `AudioUniformsResult` | none |
+| `audioStrength` | `number` | `1` |
+
+Audio reaction: the warp depth and drift rate grow with the audio level, so the gradient visibly
+breathes with the sound.
+
+### Grain
+
+Filmic white-noise grain re-seeded in ~24 fps steps, composited over a base color. At `speed={0}`
+it is a single frozen grain field:
+
+```tsx
+<Grain speed={0} intensity={0.08} scale={2} />
+```
+
+Animated flicker over a dark base:
+
+```tsx
+<Grain color={[0.02, 0.02, 0.04]} grainColor={[0.95, 0.95, 1]} intensity={0.12} />
+```
+
+| prop | type | default |
+|---|---|---|
+| `color` | `Vec3` | `[0, 0, 0]` |
+| `grainColor` | `Vec3` | `[1, 1, 1]` |
+| `intensity` | `number` | `0.08` |
+| `scale` | `number` (cell px) | `2` |
+| `speed` | `number` | `1` |
+| `audio` | `AudioUniformsResult` | none |
+| `audioStrength` | `number` | `1` |
+
+Audio reaction: the grain intensity scales with the audio level, so louder passages grain harder.
+
+The `audio` prop must come from `useAudioUniforms` with its default uniform names; a custom
+`names.level` option makes the effect throw, since it reads the level by its default name.
+
 ## Textures
 
 Bind an image to a `sampler2D` with the `textures` prop. `useImageTexture` owns the decode

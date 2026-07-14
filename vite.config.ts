@@ -18,6 +18,7 @@ export default defineConfig({
                 embed: resolve(__dirname, 'src/embed/index.ts'),
                 testing: resolve(__dirname, 'src/testing/index.ts'),
                 devtools: resolve(__dirname, 'src/react/devtools/index.ts'),
+                effects: resolve(__dirname, 'src/effects/index.ts'),
             },
             formats: ['es','cjs'],
             fileName: (format, entry) =>
