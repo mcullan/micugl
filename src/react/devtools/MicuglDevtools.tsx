@@ -13,6 +13,7 @@ import { FpsPanel } from '@/react/devtools/panels/FpsPanel';
 import { FramebuffersPanel } from '@/react/devtools/panels/FramebuffersPanel';
 import { FrameloopPanel } from '@/react/devtools/panels/FrameloopPanel';
 import { GlCountersPanel } from '@/react/devtools/panels/GlCountersPanel';
+import { GraphPanel } from '@/react/devtools/panels/GraphPanel';
 import { UniformsPanel } from '@/react/devtools/panels/UniformsPanel';
 import { diffCounters } from '@/testing/assertions';
 import type { GlCountersData, GlCountersHandle } from '@/testing/glCounters';
@@ -327,16 +328,22 @@ const DevtoolsPanel = ({ position, defaultOpen }: DevtoolsPanelProps): ReactElem
                                             onStep={handleStep}
                                             onSetFrame={handleSetFrame}
                                         />
-                                        <UniformsPanel engine={selected} />
-                                        {engineState.framebufferIds.length > 0
-                                            ? (
-                                                <FramebuffersPanel
-                                                    framebufferIds={engineState.framebufferIds}
-                                                    manager={selected?.getManager() ?? null}
-                                                    captureTick={captureTick}
-                                                />
-                                            )
-                                            : null}
+                                        {selected?.graph
+                                            ? <GraphPanel engine={selected} captureTick={captureTick} />
+                                            : (
+                                                <>
+                                                    <UniformsPanel engine={selected} />
+                                                    {engineState.framebufferIds.length > 0
+                                                        ? (
+                                                            <FramebuffersPanel
+                                                                framebufferIds={engineState.framebufferIds}
+                                                                manager={selected?.getManager() ?? null}
+                                                                captureTick={captureTick}
+                                                            />
+                                                        )
+                                                        : null}
+                                                </>
+                                            )}
                                     </>
                                 )
                                 : null}

@@ -3,6 +3,7 @@ import { forwardRef, memo, useRef } from 'react';
 
 import type { ShaderNode } from '@/core/lib/graphPlanning';
 import { PingPongShaderEngine } from '@/react/components/engine/PingPongShaderEngine';
+import type { GraphDebugSource } from '@/react/hooks/useShaderGraph';
 import { useShaderGraph } from '@/react/hooks/useShaderGraph';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import type { PingPongShaderHandle, RenderControlProps } from '@/types';
@@ -43,12 +44,16 @@ const ShaderGraphComponent = forwardRef<PingPongShaderHandle, ShaderGraphProps>(
         framebuffers,
         textureSources,
         port,
+        graphDebug,
         invalidation,
         capturesAreNonReproducible
     } = useShaderGraph(root, { reducedMotion, saveData });
 
     const debugPortRef = useRef<UniformDebugPort | null>(null);
     debugPortRef.current = port;
+
+    const graphDebugRef = useRef<GraphDebugSource | null>(null);
+    graphDebugRef.current = graphDebug;
 
     return (
         <PingPongShaderEngine
@@ -58,6 +63,7 @@ const ShaderGraphComponent = forwardRef<PingPongShaderHandle, ShaderGraphProps>(
             framebuffers={framebuffers}
             textureSources={textureSources}
             debugPortRef={debugPortRef}
+            graphDebugRef={graphDebugRef}
             invalidation={invalidation}
             capturesAreNonReproducible={capturesAreNonReproducible}
             className={className}

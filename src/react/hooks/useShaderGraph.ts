@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { combineFrameInvalidation } from '@/core/lib/frameInvalidation';
-import type { GraphPlan, ShaderNode } from '@/core/lib/graphPlanning';
+import type { GraphPlan, GraphTopology, ShaderNode } from '@/core/lib/graphPlanning';
 import { planGraph, toRenderPasses } from '@/core/lib/graphPlanning';
 import { useMotionGate } from '@/react/hooks/useMotionGate';
 import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
@@ -26,12 +26,18 @@ export interface ShaderGraphOptions {
     saveData?: MotionPolicy;
 }
 
+export interface GraphDebugSource {
+    topology: () => GraphTopology;
+    nodeUniforms: (nodeId: string) => UniformDebugPort;
+}
+
 export interface ShaderGraphResult {
     programConfigs: Record<string, ShaderProgramConfig>;
     passes: RenderPass[];
     framebuffers: Record<string, FramebufferOptions>;
     textureSources: TextureSource[];
     port: UniformDebugPort;
+    graphDebug: GraphDebugSource;
     invalidation: FrameInvalidation;
     capturesAreNonReproducible: CapturesAreNonReproducible;
 }
@@ -49,7 +55,8 @@ function sameRuntimes(a: UniformRuntime[], b: UniformRuntime[]): boolean {
 function buildResult(
     plan: GraphPlan,
     runtimes: UniformRuntime[],
-    updaters: Record<string, UniformUpdaterDef[]>
+    updaters: Record<string, UniformUpdaterDef[]>,
+    graphDebug: GraphDebugSource
 ): ShaderGraphResult {
     const capturesAreNonReproducible: CapturesAreNonReproducible = () => {
         for (const runtime of runtimes) {
@@ -71,7 +78,10 @@ function buildResult(
         passes: toRenderPasses(plan, nodeId => passUniformsFrom(updaters[nodeId])),
         framebuffers: plan.framebuffers,
         textureSources: plan.sources,
-        port: combineUniformDebugPorts(runtimes.map(runtime => runtime.port)),
+        port: combineUniformDebugPorts(
+            plan.passes.map((pass, index) => ({ nodeId: pass.nodeId, port: runtimes[index].port }))
+        ),
+        graphDebug,
         invalidation: combineFrameInvalidation([
             ...runtimes.map(runtime => runtime.invalidation),
             ...plan.sources.map(source => source.invalidation)
@@ -88,6 +98,25 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
 
     const runtimesRef = useRef(new Map<string, UniformRuntime>());
     const runtimes = runtimesRef.current;
+
+    const topologyRef = useRef(plan.topology);
+    topologyRef.current = plan.topology;
+
+    const graphDebugRef = useRef<GraphDebugSource | null>(null);
+    graphDebugRef.current ??= {
+        topology: () => topologyRef.current,
+        nodeUniforms: (nodeId: string): UniformDebugPort => {
+            const runtime = runtimesRef.current.get(nodeId);
+            if (!runtime) {
+                const known = [...runtimesRef.current.keys()].join(', ');
+                throw new Error(
+                    `micugl devtools: graph has no node "${nodeId}". Known node ids: ${known}.`
+                );
+            }
+            return runtime.port;
+        }
+    };
+    const graphDebug = graphDebugRef.current;
 
     const ordered: UniformRuntime[] = [];
     const updatersByNode: Record<string, UniformUpdaterDef[]> = {};
@@ -111,7 +140,7 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
         : {
             key: structureKey,
             runtimes: ordered,
-            result: buildResult(plan, ordered, updatersByNode)
+            result: buildResult(plan, ordered, updatersByNode, graphDebug)
         };
     memoRef.current = memo;
 

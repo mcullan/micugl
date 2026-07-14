@@ -1,5 +1,7 @@
 /** @experimental */
-export type { DevtoolsSink, EngineDebugState, EngineHandle } from '@/react/devtools/beacon';
+export type { DevtoolsSink, EngineDebugState, EngineHandle, GraphDebugPort } from '@/react/devtools/beacon';
+/** @experimental */
+export type { FramebufferReadResult, FramebufferUnreadable } from '@/core/managers/FBOManager';
 /** @experimental */
 export { listEngines, setDevtoolsSink } from '@/react/devtools/beacon';
 /** @experimental */

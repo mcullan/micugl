@@ -763,6 +763,46 @@ ref handle -- works the same way.
 
 Run the demo scene: `bun run dev`, then open `/?scene=shader-graph`.
 
+### Inspecting a graph
+
+Mount `<MicuglDevtools />` alongside a `ShaderGraph` and the panel replaces its flat uniforms and
+framebuffers sections with a per-node DAG view: the topology tree, per-node uniform controls, and an
+opt-in thumbnail per node (root included). The panel reads nothing but the engine's public graph
+port -- the same surface you can drive from the console.
+
+Every mounted engine registers a handle on `listEngines()`. A graph engine's handle carries an
+`@experimental` `graph` port:
+
+```ts
+import { listEngines } from 'micugl/devtools';
+
+const graph = listEngines()[0].graph;          // undefined for single-program engines
+
+graph.topology();                               // the plan the compiler actually built
+graph.readNode('noise');                        // that node's framebuffer pixels
+graph.nodeUniforms('noise').setOverride('u_scale', 12);
+```
+
+`topology()` returns exactly what `planGraph` emitted -- per node its `framebufferId` (`null` for the
+root), declared `width` / `height` (`0` means canvas-sized), `edges`, `sources`, and `uniformNames`.
+
+**Two ways to reach a uniform.** `handle.uniforms` is the combined port across all nodes: each listed
+entry carries the `nodeId` it came from, and `setOverride(name, value)` **fans** across every node
+that declares that name (two nodes both declaring `u_gain` both move). To target one node, go through
+`graph.nodeUniforms(nodeId).setOverride(...)` -- it changes that node alone and leaves a sibling that
+shares the name untouched.
+
+**`readNode` pixels.** `readNode(nodeId, maxSize?)` returns `{ width, height, pixels }` where `pixels`
+is an RGBA `Uint8ClampedArray` of `UNSIGNED_BYTE` samples, **not** premultiplied -- the bytes are what
+the framebuffer stored. Rows come back in raw `readPixels` order, **bottom-up**: row `0` is the visual
+bottom of the image, for the root read and every framebuffer read alike. Flip vertically for display.
+A non-readable target (zero size, a `maxSize` your buffer exceeds, a float framebuffer, an engine that
+was torn down) returns `{ unreadable: reason }` instead of pixels; only a caller mistake -- an unknown
+node id -- throws. The root read renders the current live-clock frame in the same task and reads it
+back, so it perturbs timing the way any framebuffer capture does.
+
+Run the demo scene: `bun run dev`, then open `/?scene=graph-inspector`.
+
 ## Worker rendering (OffscreenCanvas)
 
 `worker` moves the GL context and the render loop off the main thread, onto an

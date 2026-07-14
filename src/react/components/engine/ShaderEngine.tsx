@@ -677,7 +677,9 @@ const ShaderEngineComponent = forwardRef<ShaderHandle, ShaderEngineProps>(({
                     setFrame: (frame: number) => { controllerRef.current?.setFrame(frame) },
                     getFrame: () => controllerRef.current?.getFrame() ?? 0,
                     setFrameloop: mode => { controllerRef.current?.setFrameloop(mode) },
-                    uniforms: debugPortRef?.current ?? undefined
+                    get uniforms() {
+                        return debugPortRef?.current ?? undefined;
+                    }
                 };
                 emitEngineMount(handle);
             }
