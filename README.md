@@ -743,9 +743,18 @@ framebuffer nobody reads.
 
 **Node output size.** A non-root node may set `width` / `height`; it defaults to the canvas size.
 `u_resolution` on a node is that node's OWN output size, not the canvas: a `256x256` node sees
-`(256, 256)`, and only the root sees the canvas dimensions. `u_time` is in seconds, as everywhere
-else. The root renders to the canvas and must not set `width` / `height` (the component props own
-that).
+`(256, 256)`, and only the root sees the canvas dimensions. The root renders to the canvas and must
+not set `width` / `height` (the component props own that).
+
+**Two time units, one rule each.** `u_time` arrives in the shader in **seconds**, so GLSL reads it
+unscaled. A function-valued uniform's callback is handed the frame time in **milliseconds**, so
+scale it yourself:
+
+```tsx
+uniforms: {
+    scale: { type: 'float', value: time => 6 + 2 * Math.sin((time ?? 0) * 0.001 * 0.4) }
+}
+```
 
 **Not available for graphs.** Worker mode: a graph's texture sources decode on the main thread, so
 `ShaderGraph` takes no `worker` prop by construction. Everything else the single-program components

@@ -1,4 +1,4 @@
-import { act, type ReactElement } from 'react';
+import { act, type ReactElement, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createShaderConfig } from '@/core/lib/createShaderConfig';
 import type { FrameInvalidation, InvalidationKind } from '@/core/lib/frameInvalidation';
 import { createFrameInvalidation } from '@/core/lib/frameInvalidation';
-import { GL_FLOAT, GL_UNSIGNED_BYTE } from '@/core/lib/glConstants';
+import { GL_FLOAT, GL_LINEAR, GL_NEAREST, GL_UNSIGNED_BYTE } from '@/core/lib/glConstants';
 import type { ShaderNode } from '@/core/lib/graphPlanning';
 import { shaderNode } from '@/core/lib/graphPlanning';
 import { resolveSourceTextureOptions } from '@/core/lib/sourceTextureOptions';
@@ -23,9 +23,11 @@ import { createFrameQueue } from '@/testing/frameQueue';
 import type {
     PingPongShaderHandle,
     RenderPass,
+    SourceTextureOptions,
     TextureSource,
     TextureUploadSource,
-    UniformParam
+    UniformParam,
+    Vec4
 } from '@/types';
 
 const WIDTH = 320;
@@ -197,6 +199,19 @@ function count(name: string): number {
     return stub.calls.filter(call => call.name === name).length;
 }
 
+function clearColors(): number[][] {
+    return stub.calls
+        .filter(call => call.name === 'clearColor')
+        .map(call => call.args as number[]);
+}
+
+function minFilters(): number[] {
+    const pname = stub.gl.TEXTURE_MIN_FILTER;
+    return stub.calls
+        .filter(call => call.name === 'texParameteri' && call.args[1] === pname)
+        .map(call => call.args[2] as number);
+}
+
 function sourceUploads(): { width: number; height: number }[] {
     return stub.texImage2DCalls
         .filter(call => call.source !== undefined)
@@ -209,7 +224,7 @@ interface FakeSource {
     setLive: (live: boolean) => void;
 }
 
-function createFakeSource(id: string): FakeSource {
+function createFakeSource(id: string, options?: SourceTextureOptions): FakeSource {
     const invalidation = createFrameInvalidation();
     let frame: TextureUploadSource | null = null;
     let version = 0;
@@ -218,7 +233,7 @@ function createFakeSource(id: string): FakeSource {
     const source: TextureSource = {
         id,
         get version() { return version },
-        options: resolveSourceTextureOptions(),
+        options: resolveSourceTextureOptions(options),
         getFrame: () => frame,
         invalidation,
         nonReproducible: () => live
@@ -978,5 +993,124 @@ describe('ShaderGraph: the combined debug port (T20)', () => {
 
         expect(uploads('u_mix')).toEqual([0.875, 0.125]);
         expect(uploads('u_gain')).toEqual([0.375, 0.375]);
+    });
+});
+
+describe('ShaderGraph: a StrictMode effect remount keeps every node runtime live (T22)', () => {
+    it('still lands a value change on GL and still holds the param relay after the effects are re-run', async () => {
+        const counting = createCountingInvalidation();
+
+        const scene = (mix: number): ReactElement => (
+            <StrictMode>
+                <ShaderGraph
+                    root={twoNodeGraph(
+                        { type: 'float', value: 0.375, invalidation: counting.invalidation },
+                        { type: 'float', value: mix }
+                    )}
+                    width={WIDTH}
+                    height={HEIGHT}
+                    useDevicePixelRatio={false}
+                    reducedMotion='ignore'
+                    saveData='ignore'
+                />
+            </StrictMode>
+        );
+
+        await mount(scene(0.875));
+        act(() => { frames.tick(0) });
+
+        expect(uploads('u_mix')).toEqual([0.875]);
+        expect(counting.listeners()).toBe(1);
+
+        await mount(scene(0.125));
+        const draws = count('drawArrays');
+        act(() => { frames.tick(16) });
+
+        expect(count('drawArrays')).toBe(draws + 2);
+        expect(uploads('u_mix')).toEqual([0.875, 0.125]);
+        expect(counting.listeners()).toBe(1);
+    });
+});
+
+describe('ShaderGraph: a renderOptions change reaches GL (T23)', () => {
+    it('re-applies the root pass with the new clearColor', async () => {
+        const gen = shaderNode({
+            id: 'gen',
+            shaderConfig: GEN_CONFIG,
+            uniforms: { gain: { type: 'float', value: 0.375 } },
+            width: 16,
+            height: 8
+        });
+
+        const scene = (clearColor: Vec4): ReactElement => (
+            <ShaderGraph
+                root={shaderNode({
+                    id: 'root',
+                    shaderConfig: ROOT_CONFIG,
+                    uniforms: { tex: gen, mix: { type: 'float', value: 0.875 } },
+                    renderOptions: { clear: true, clearColor }
+                })}
+                width={WIDTH}
+                height={HEIGHT}
+                useDevicePixelRatio={false}
+                reducedMotion='ignore'
+                saveData='ignore'
+            />
+        );
+
+        await mount(scene([0.25, 0.5, 0.75, 1]));
+        act(() => { frames.tick(0) });
+        expect(clearColors()).toContainEqual([0.25, 0.5, 0.75, 1]);
+
+        await mount(scene([0.125, 0.375, 0.625, 1]));
+        stub.reset();
+        act(() => { frames.tick(16) });
+
+        expect(count('drawArrays')).toBe(2);
+        expect(clearColors()).toContainEqual([0.125, 0.375, 0.625, 1]);
+        expect(clearColors()).not.toContainEqual([0.25, 0.5, 0.75, 1]);
+    });
+});
+
+describe('ShaderGraph: a texture-source options change reaches GL (T24)', () => {
+    it('re-defines the texture when a re-minted source keeps its id but changes its options', async () => {
+        const scene = (minFilter: number): ReactElement => {
+            const image = createFakeSource('img', { minFilter });
+            return (
+                <ShaderGraph
+                    root={shaderNode({
+                        id: 'root',
+                        shaderConfig: ROOT_CONFIG,
+                        uniforms: {
+                            tex: shaderNode({
+                                id: 'gen',
+                                shaderConfig: GEN_CONFIG,
+                                uniforms: { gain: { type: 'float', value: 0.375 }, img: image.source },
+                                width: 16,
+                                height: 8
+                            }),
+                            mix: { type: 'float', value: 0.875 }
+                        }
+                    })}
+                    width={WIDTH}
+                    height={HEIGHT}
+                    useDevicePixelRatio={false}
+                    reducedMotion='ignore'
+                    saveData='ignore'
+                />
+            );
+        };
+
+        await mount(scene(GL_LINEAR));
+        act(() => { frames.tick(0) });
+        expect(minFilters()).toContain(GL_LINEAR);
+        expect(minFilters()).not.toContain(GL_NEAREST);
+
+        stub.reset();
+        await mount(scene(GL_NEAREST));
+        act(() => { frames.tick(16) });
+
+        expect(count('drawArrays')).toBe(2);
+        expect(minFilters()).toContain(GL_NEAREST);
     });
 });

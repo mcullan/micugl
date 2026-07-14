@@ -36,16 +36,17 @@ export interface ShaderGraphResult {
     capturesAreNonReproducible: CapturesAreNonReproducible;
 }
 
-interface GraphMemo extends ShaderGraphResult {
+interface GraphMemo {
     key: string;
+    generation: number;
+    result: ShaderGraphResult;
 }
 
-function buildMemo(
-    key: string,
+function buildResult(
     plan: GraphPlan,
     runtimes: UniformRuntime[],
     updaters: Record<string, UniformUpdaterDef[]>
-): GraphMemo {
+): ShaderGraphResult {
     const capturesAreNonReproducible: CapturesAreNonReproducible = () => {
         for (const runtime of runtimes) {
             const blocker = runtime.capturesAreNonReproducible();
@@ -62,7 +63,6 @@ function buildMemo(
     };
 
     return {
-        key,
         programConfigs: plan.programConfigs,
         passes: toRenderPasses(plan, nodeId => passUniformsFrom(updaters[nodeId])),
         framebuffers: plan.framebuffers,
@@ -84,6 +84,7 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
 
     const runtimesRef = useRef(new Map<string, UniformRuntime>());
     const runtimes = runtimesRef.current;
+    const generationRef = useRef(0);
 
     const ordered: UniformRuntime[] = [];
     const updatersByNode: Record<string, UniformUpdaterDef[]> = {};
@@ -93,24 +94,29 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
         if (!runtime) {
             runtime = createUniformRuntime();
             runtimes.set(pass.nodeId, runtime);
+            generationRef.current += 1;
         }
         ordered.push(runtime);
         updatersByNode[pass.nodeId] = runtime.sync(pass.valueUniforms, false);
     }
 
     const memoRef = useRef<GraphMemo | null>(null);
-    if (memoRef.current === null || memoRef.current.key !== structureKey) {
-        memoRef.current = buildMemo(structureKey, plan, ordered, updatersByNode);
-    }
-    const memo = memoRef.current;
-
-    const planRef = useRef<GraphPlan>(plan);
-    planRef.current = plan;
+    const cached = memoRef.current;
+    const memo: GraphMemo = cached !== null
+        && cached.key === structureKey
+        && cached.generation === generationRef.current
+        ? cached
+        : {
+            key: structureKey,
+            generation: generationRef.current,
+            result: buildResult(plan, ordered, updatersByNode)
+        };
+    memoRef.current = memo;
 
     useEffect(() => {
         const present = new Set<string>();
 
-        for (const pass of planRef.current.passes) {
+        for (const pass of plan.passes) {
             const runtime = runtimes.get(pass.nodeId);
             if (runtime) {
                 present.add(pass.nodeId);
@@ -129,17 +135,8 @@ export const useShaderGraph = (root: ShaderNode, options?: ShaderGraphOptions): 
     useEffect(() => {
         return () => {
             runtimes.forEach(runtime => { runtime.dispose() });
-            runtimes.clear();
         };
     }, [runtimes]);
 
-    return {
-        programConfigs: memo.programConfigs,
-        passes: memo.passes,
-        framebuffers: memo.framebuffers,
-        textureSources: memo.textureSources,
-        port: memo.port,
-        invalidation: memo.invalidation,
-        capturesAreNonReproducible: memo.capturesAreNonReproducible
-    };
+    return memo.result;
 };

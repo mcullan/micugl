@@ -8,9 +8,7 @@ import { Passes } from '@/core/systems/Passes';
 import {
     buildLiveUpdaters,
     collectLiveValues,
-    parseUniformStructureKey,
-    uniformDescriptors,
-    uniformStructureKey
+    uniformDescriptors
 } from '@/react/lib/liveUniformUpdaters';
 import {
     buildPasses,
@@ -56,10 +54,9 @@ function realUpdaters(
     programId: string,
     uniforms: Record<string, UniformParam>
 ): Record<string, UniformUpdaterDef[]> {
-    const parsed = parseUniformStructureKey(uniformStructureKey(uniformDescriptors(uniforms), false));
     const valuesRef = { current: collectLiveValues(uniforms) };
     const runtime = createTransitionRuntime(() => false);
-    return { [programId]: buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime) };
+    return { [programId]: buildLiveUpdaters(uniformDescriptors(uniforms), false, valuesRef, runtime) };
 }
 
 function realPingPong(uniforms: Record<string, UniformParam>): {

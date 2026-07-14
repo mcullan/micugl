@@ -251,28 +251,6 @@ export function uniformStructureKey(descriptors: UniformDescriptor[], skipDefaul
     return [head, ...body].join(ENTRY_SEPARATOR);
 }
 
-export function parseUniformStructureKey(
-    key: string
-): { skipDefaults: boolean; descriptors: UniformDescriptor[] } {
-    const parts = key.split(ENTRY_SEPARATOR);
-    const skipDefaults = parts[0] === `${HEAD_PREFIX}1`;
-    const descriptors: UniformDescriptor[] = [];
-
-    for (let i = 1; i < parts.length; i++) {
-        const part = parts[i];
-        if (part.length === 0) {
-            continue;
-        }
-        const separatorIndex = part.indexOf(FIELD_SEPARATOR);
-        descriptors.push({
-            name: part.slice(0, separatorIndex),
-            type: part.slice(separatorIndex + 1) as UniformType
-        });
-    }
-
-    return { skipDefaults, descriptors };
-}
-
 export function buildLiveUpdaters(
     descriptors: UniformDescriptor[],
     skipDefaults: boolean,

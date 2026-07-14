@@ -80,7 +80,7 @@ export const ShaderGraph = () => {
         id: 'noise',
         shaderConfig: noiseConfig,
         uniforms: {
-            scale: { type: 'float', value: (time?: number) => 6.0 + 2.0 * Math.sin((time ?? 0) * 0.4) }
+            scale: { type: 'float', value: (time?: number) => 6.0 + 2.0 * Math.sin((time ?? 0) * 0.001 * 0.4) }
         },
         width: 256,
         height: 256

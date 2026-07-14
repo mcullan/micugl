@@ -10,7 +10,6 @@ import {
     type LiveValues,
     mergeOverrides,
     normalizeUniformName,
-    parseUniformStructureKey,
     type UniformDebugPortOptions,
     type UniformDescriptor,
     uniformDescriptors,
@@ -74,33 +73,22 @@ describe('uniformStructureKey', () => {
             .not.toBe(uniformStructureKey(uniformDescriptors(uniformsA), true));
     });
 
-    it('round-trips through parseUniformStructureKey', () => {
-        const descriptors = uniformDescriptors(uniformsA);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
-
-        expect(parsed.skipDefaults).toBe(true);
-        expect(parsed.descriptors).toEqual(descriptors);
-    });
-
-    it('round-trips an empty uniform set', () => {
-        const parsed = parseUniformStructureKey(uniformStructureKey([], false));
-
-        expect(parsed.skipDefaults).toBe(false);
-        expect(parsed.descriptors).toEqual([]);
-    });
-
-    it('round-trips every uniform type without the head separator leaking into the body', () => {
+    it('separates every uniform type from its neighbours, with no key collisions', () => {
         const descriptors: UniformDescriptor[] = [
             { name: 'u_i', type: 'int' },
             { name: 'u_tex', type: 'sampler2D' },
             { name: 'u_xform', type: 'mat4' },
             { name: 'u_color', type: 'vec3' }
         ];
+        const swapped: UniformDescriptor[] = [
+            { name: 'u_i', type: 'sampler2D' },
+            { name: 'u_tex', type: 'int' },
+            { name: 'u_xform', type: 'mat4' },
+            { name: 'u_color', type: 'vec3' }
+        ];
 
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
-
-        expect(parsed.skipDefaults).toBe(true);
-        expect(parsed.descriptors).toEqual(descriptors);
+        expect(uniformStructureKey(descriptors, true)).not.toBe(uniformStructureKey(swapped, true));
+        expect(uniformStructureKey([], false)).not.toBe(uniformStructureKey([], true));
     });
 });
 

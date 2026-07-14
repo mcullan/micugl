@@ -10,9 +10,7 @@ import {
     collectLiveValues,
     createUniformDebugPort,
     type LiveValues,
-    parseUniformStructureKey,
-    uniformDescriptors,
-    uniformStructureKey
+    uniformDescriptors
 } from '@/react/lib/liveUniformUpdaters';
 import {
     buildPasses,
@@ -56,9 +54,8 @@ describe('a real uniform transition, driven through the production pipeline (no 
             swirl: { type: 'float', value: 0, transition: { duration: 100, easing: 'linear' } }
         };
         const descriptors = uniformDescriptors(uniforms);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
         const valuesRef = { current: collectLiveValues(uniforms) };
-        const updaters = buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+        const updaters = buildLiveUpdaters(descriptors, true, valuesRef, runtime);
 
         const stub = createCanvasStub();
         const manager = new WebGLManager(stub.canvas);
@@ -104,9 +101,8 @@ describe('a real uniform transition, driven through the production pipeline (no 
             swirl: { type: 'float', value: 0, transition: springConfig }
         };
         const descriptors = uniformDescriptors(uniforms);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
         const valuesRef = { current: collectLiveValues(uniforms) };
-        const updaters = buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+        const updaters = buildLiveUpdaters(descriptors, true, valuesRef, runtime);
 
         const stub = createCanvasStub();
         const manager = new WebGLManager(stub.canvas);
@@ -161,9 +157,8 @@ describe('a real uniform transition, driven through the production pipeline (no 
             swirl: { type: 'float', value: 0, transition: springConfig }
         };
         const descriptors = uniformDescriptors(uniforms);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
         const valuesRef = { current: collectLiveValues(uniforms) };
-        const updaters = buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+        const updaters = buildLiveUpdaters(descriptors, true, valuesRef, runtime);
 
         const stub = createCanvasStub();
         const manager = new WebGLManager(stub.canvas);
@@ -213,9 +208,8 @@ describe('a real uniform transition, driven through the production pipeline (no 
             color: { type: 'vec3', value: vec3([0, 0, 0]), transition: { duration: 100, easing: 'linear' } }
         };
         const descriptors = uniformDescriptors(uniforms);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
         const valuesRef = { current: collectLiveValues(uniforms) };
-        const updaters = buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+        const updaters = buildLiveUpdaters(descriptors, true, valuesRef, runtime);
 
         const stub = createCanvasStub();
         const manager = new WebGLManager(stub.canvas);
@@ -269,7 +263,6 @@ describe('a real uniform transition, driven through the production pipeline (no 
             swirl: { type: 'float', value: 0, transition: { duration: 100, easing: 'linear' } }
         };
         const descriptors = uniformDescriptors(uniforms);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
         const baseValuesRef = { current: collectLiveValues(uniforms) };
         const valuesRef = { current: collectLiveValues(uniforms) };
         const descriptorsRef = { current: descriptors };
@@ -282,12 +275,7 @@ describe('a real uniform transition, driven through the production pipeline (no 
             onChange: () => { overrideAwareRuntime.invalidation.request() }
         });
         overrideAwareRuntime.invalidation.connect(() => { repaints.push(1) });
-        const updaters = buildLiveUpdaters(
-            parsed.descriptors,
-            parsed.skipDefaults,
-            valuesRef,
-            overrideAwareRuntime
-        );
+        const updaters = buildLiveUpdaters(descriptors, true, valuesRef, overrideAwareRuntime);
 
         const stub = createCanvasStub();
         const manager = new WebGLManager(stub.canvas);
@@ -343,9 +331,8 @@ describe('a real uniform transition, driven through the production pipeline (no 
 
         commit(uniforms);
         const descriptors = uniformDescriptors(uniforms);
-        const parsed = parseUniformStructureKey(uniformStructureKey(descriptors, true));
         const primaryUpdaters = {
-            [PROGRAM_ID]: buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime)
+            [PROGRAM_ID]: buildLiveUpdaters(descriptors, true, valuesRef, runtime)
         };
         const { passes, framebuffers } = buildPasses(
             PROGRAM_ID,
