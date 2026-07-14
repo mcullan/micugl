@@ -1,3 +1,6 @@
+import { createShaderConfig } from '@/core';
+import { fullscreenVertexShader } from '@/effects/lib/fullscreenVertexShader';
+
 export const meshGradientFragmentShader = `
     precision highp float;
 
@@ -74,3 +77,21 @@ export const meshGradientFragmentShader = `
         gl_FragColor = vec4(col, 1.0);
     }
 `;
+
+export const meshGradientConfig = createShaderConfig({
+    vertexShader: fullscreenVertexShader,
+    fragmentShader: meshGradientFragmentShader,
+    uniformNames: {
+        u_color0: 'vec3',
+        u_color1: 'vec3',
+        u_color2: 'vec3',
+        u_color3: 'vec3',
+        u_colorCount: 'float',
+        u_speed: 'float',
+        u_warp: 'float',
+        u_warpScale: 'float',
+        u_seed: 'float',
+        u_audioLevel: 'float',
+        u_audioStrength: 'float'
+    }
+});

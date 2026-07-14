@@ -1,9 +1,7 @@
 import { forwardRef } from 'react';
 
-import { createShaderConfig } from '@/core';
 import type { EffectRenderProps } from '@/effects/lib/effectProps';
-import { fullscreenVertexShader } from '@/effects/lib/fullscreenVertexShader';
-import { meshGradientFragmentShader } from '@/effects/MeshGradient/meshGradientShaders';
+import { meshGradientConfig } from '@/effects/MeshGradient/meshGradientShaders';
 import type { MeshGradientUniformProps } from '@/effects/MeshGradient/meshGradientUniforms';
 import { meshGradientUniforms } from '@/effects/MeshGradient/meshGradientUniforms';
 import { BaseShaderComponent } from '@/react';
@@ -13,23 +11,7 @@ export interface MeshGradientProps extends EffectRenderProps, MeshGradientUnifor
 
 const PROGRAM_ID = 'micugl-effect-mesh-gradient';
 
-const config = createShaderConfig({
-    vertexShader: fullscreenVertexShader,
-    fragmentShader: meshGradientFragmentShader,
-    uniformNames: {
-        u_color0: 'vec3',
-        u_color1: 'vec3',
-        u_color2: 'vec3',
-        u_color3: 'vec3',
-        u_colorCount: 'float',
-        u_speed: 'float',
-        u_warp: 'float',
-        u_warpScale: 'float',
-        u_seed: 'float',
-        u_audioLevel: 'float',
-        u_audioStrength: 'float'
-    }
-});
+const config = meshGradientConfig;
 
 export const MeshGradient = forwardRef<ShaderHandle, MeshGradientProps>((props, ref) => {
     const {
