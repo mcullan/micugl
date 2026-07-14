@@ -513,6 +513,30 @@ describe('graph inspector: a zero-size root canvas degrades to unreadable (C3)',
     });
 });
 
+describe('graph inspector: the root maxSize refusal matches the fbo path and leaves no ghost state (C3)', () => {
+    it('refuses an oversized root read with the same message shape as debugReadFramebuffer and does not touch GL', async () => {
+        await mount(graphScene(sharedGainGraph(0.25, 0.75, 0.875)));
+        act(() => { frames.tick(0) });
+
+        const handle = currentHandle();
+        const gl = handle.getManager()?.context;
+        if (!gl) {
+            throw new Error('no gl context');
+        }
+        const sentinel = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sentinel);
+
+        const rootRefusal = handle.graph?.readNode('root', 100);
+        expect(rootRefusal).toEqual({ unreadable: `framebuffer ${WIDTH}x${HEIGHT} exceeds capture maxSize 100` });
+        expect(gl.getParameter(gl.FRAMEBUFFER_BINDING)).toBe(sentinel);
+
+        const fboRefusal = handle.graph?.readNode('glow', 4);
+        const rootPattern = (rootRefusal as { unreadable: string }).unreadable.replace(/\d+/g, '#');
+        const fboPattern = (fboRefusal as { unreadable: string }).unreadable.replace(/\d+/g, '#');
+        expect(rootPattern).toBe(fboPattern);
+    });
+});
+
 function fakeGraphPort(): GraphDebugPort {
     const listFor = (nodeId: string): UniformListEntry[] => [
         { name: `u_${nodeId}`, type: 'float', value: 0.5, overridden: false, nodeId }
