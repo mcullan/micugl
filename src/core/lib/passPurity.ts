@@ -8,7 +8,8 @@ export function chainIsTimePure(passes: RenderPass[]): boolean {
             if (input.bindingType === 'readwrite') {
                 return false;
             }
-            if (input.bindingType === 'read' && !written.has(input.id)) {
+            const readsAnFbo = input.bindingType === 'read' || input.bindingType === 'node';
+            if (readsAnFbo && !written.has(input.id)) {
                 return false;
             }
         }

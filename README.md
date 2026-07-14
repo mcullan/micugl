@@ -696,6 +696,64 @@ const cam = useWebcamTexture();                                 // never auto-st
   lazily inside `start()` / the mount effect, so the hooks render on the server and only reach for the
   camera in the browser.
 
+## Composing shaders
+
+`ShaderGraph` renders a directed acyclic graph of shader nodes in one canvas: every non-root node
+renders into its own framebuffer, and a parent samples that framebuffer through a sampler uniform.
+
+```tsx
+import { createShaderConfig, shaderNode, ShaderGraph } from 'micugl';
+
+const noise = shaderNode({
+    id: 'noise',
+    shaderConfig: noiseConfig,
+    uniforms: { scale: { type: 'float', value: 8 } },
+    width: 256,
+    height: 256
+});
+
+const root = shaderNode({
+    id: 'composite',
+    shaderConfig: compositeConfig,
+    uniforms: {
+        noise,
+        photo: image.texture,
+        vignette: { type: 'float', value: 0.4, transition: { duration: 600 } }
+    }
+});
+
+<ShaderGraph root={root} />;
+```
+
+A node's `uniforms` accepts three kinds of value, and the key names the uniform in every case:
+
+- a **uniform param** (`{ type, value, transition?, invalidation?, nonReproducible? }`) behaves
+  exactly as it does on the single-program components: transitions, function values, audio-driven
+  values and the motion gate all work per node;
+- a **child node**, which renders first, into its own framebuffer;
+- a **texture source** (a `TextureSource` from `useImageTexture` / `useVideoTexture` /
+  `useWebcamTexture`), which is uploaded and bound for you.
+
+**Sampler names.** The uniform key becomes the sampler name, normalized with the usual `u_` prefix:
+`{ noise }` is sampled as `uniform sampler2D u_noise`. micugl declares those samplers on the node's
+program for you, so `createShaderConfig` does not need to list them. Two texture inputs on one node
+that resolve to the same sampler name are a hard error, and so is a sampler the node's shader never
+samples: an edge that cannot affect the picture fails at init rather than rendering into a
+framebuffer nobody reads.
+
+**Node output size.** A non-root node may set `width` / `height`; it defaults to the canvas size.
+`u_resolution` on a node is that node's OWN output size, not the canvas: a `256x256` node sees
+`(256, 256)`, and only the root sees the canvas dimensions. `u_time` is in seconds, as everywhere
+else. The root renders to the canvas and must not set `width` / `height` (the component props own
+that).
+
+**Not available for graphs.** Worker mode: a graph's texture sources decode on the main thread, so
+`ShaderGraph` takes no `worker` prop by construction. Everything else the single-program components
+offer -- `frameloop`, `speed`, `reducedMotion` / `saveData`, `debug`, capture and export through the
+ref handle -- works the same way.
+
+Run the demo scene: `bun run dev`, then open `/?scene=shader-graph`.
+
 ## Worker rendering (OffscreenCanvas)
 
 `worker` moves the GL context and the render loop off the main thread, onto an

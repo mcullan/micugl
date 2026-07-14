@@ -174,6 +174,14 @@ export class Passes {
                 this.webglManager.assertSourceSamplerLocation(pass.programId, input.samplerName);
                 continue;
             }
+            if (input.requireSampler) {
+                this.webglManager.assertRequiredSamplerLocation(
+                    pass.programId,
+                    input.samplerName,
+                    'Sample it in the shader, or remove that uniform from the node.'
+                );
+                continue;
+            }
             this.webglManager.assertUniformDeclared(pass.programId, input.samplerName, 'sampler2D');
         }
 

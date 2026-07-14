@@ -29,7 +29,7 @@ import { useWorkerBridge } from '@/react/hooks/useWorkerBridge';
 import { pixelsToBlob, pixelsToDataURL } from '@/react/lib/captureBlob';
 import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
 import { nonReproducibleCaptureMessage } from '@/react/lib/captureLiveness';
-import { framebuffersContentKey, programConfigsContentKey } from '@/react/lib/contentKeys';
+import { framebuffersContentKey, programConfigsContentKey, textureSourcesContentKey } from '@/react/lib/contentKeys';
 import type { UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import { declarePingPongSampler } from '@/react/lib/pingPongPasses';
 import { createRecording } from '@/react/lib/record';
@@ -60,6 +60,7 @@ import type {
     RenderToBlobOptions,
     SeedOptions,
     SequenceOptions,
+    TextureSource,
     WorkerMode
 } from '@/types';
 import type { WorkerBridge } from '@/worker/WorkerBridge';
@@ -68,6 +69,7 @@ interface PingPongShaderEngineBaseProps extends Omit<RenderControlProps, 'worker
     programConfigs: Record<string, ShaderProgramConfig>;
     passes: RenderPass[];
     framebuffers?: Record<string, FramebufferOptions>;
+    textureSources?: TextureSource[];
     className?: string;
     style?: CSSProperties;
     renderWidth?: number;
@@ -147,6 +149,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     programConfigs,
     passes,
     framebuffers,
+    textureSources,
     className = DEFAULT_CLASS_NAME,
     style = DEFAULT_STYLE,
     width,
@@ -175,7 +178,8 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
 }, ref) => {
     const motionGate = useMotionGate(reducedMotion, saveData);
 
-    const contentKey = `${programConfigsContentKey(programConfigs)}\u0002${framebuffersContentKey(framebuffers)}`;
+    const contentKey = `${programConfigsContentKey(programConfigs)}\u0002${framebuffersContentKey(framebuffers)}`
+        + `\u0002${textureSourcesContentKey(textureSources)}`;
 
     const engineIdRef = useRef<string>('');
     if (!engineIdRef.current) {
@@ -209,12 +213,12 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
             uniforms: workerPrograms,
             fastPath: true,
             instancing: false,
-            textures: false,
+            textures: (textureSources?.length ?? 0) > 0,
             passes: workerPasses
         })
         : null;
 
-    const initPropsRef = useRef({ programConfigs, framebuffers, passes });
+    const initPropsRef = useRef({ programConfigs, framebuffers, passes, textureSources });
 
     const dprMin = Array.isArray(dpr) ? dpr[0] : dpr;
     const dprMax = Array.isArray(dpr) ? dpr[1] : dpr;
@@ -457,7 +461,7 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
     workerActiveRef.current = workerActive;
 
     useEffect(() => {
-        initPropsRef.current = { programConfigs, framebuffers, passes };
+        initPropsRef.current = { programConfigs, framebuffers, passes, textureSources };
         applySizeRef.current = applySize;
     });
 
@@ -489,7 +493,12 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
 
         try {
             if (!manager.context.isContextLost()) {
-                const { programConfigs: configs, framebuffers: fbs, passes: initialPasses } = initPropsRef.current;
+                const {
+                    programConfigs: configs,
+                    framebuffers: fbs,
+                    passes: initialPasses,
+                    textureSources: sources
+                } = initPropsRef.current;
 
                 Object.entries(declarePingPongSampler(configs)).forEach(([id, config]) => {
                     manager.createProgram(id, config);
@@ -497,6 +506,10 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
 
                 Object.entries(fbs ?? {}).forEach(([id, options]) => {
                     manager.fbo.createFramebuffer(id, options);
+                });
+
+                (sources ?? []).forEach(source => {
+                    manager.textures.defineTexture(source);
                 });
 
                 const passSystem = new Passes(manager);

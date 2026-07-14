@@ -14,6 +14,7 @@ import { PingPongSim } from './PingPongSim';
 import { getQueryString } from './query';
 import { ReducedMotion } from './ReducedMotion';
 import { RerenderStorm } from './RerenderStorm';
+import { ShaderGraph } from './ShaderGraph';
 import { StaticIdle } from './StaticIdle';
 import { Transitions } from './Transitions';
 import { VisualFixed } from './VisualFixed';
@@ -40,7 +41,8 @@ export const scenes: Record<string, ComponentType> = {
     'instanced-particles': InstancedParticles,
     'particles-components': ParticlesComponents,
     'worker-jank': WorkerJank,
-    'worker-context-loss': WorkerContextLoss
+    'worker-context-loss': WorkerContextLoss,
+    'shader-graph': ShaderGraph
 };
 
 export const getSceneComponent = (): ComponentType | null => {

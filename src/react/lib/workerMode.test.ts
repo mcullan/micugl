@@ -152,11 +152,12 @@ describe('findWorkerBlock: one list of the reasons a worker cannot run this comp
         expect(workerBlockMessage('ShaderEngine', { kind: 'instancing' })).toMatch(/instancing/);
     });
 
-    it('blocks the textures prop in the render body, and names the prop and both remedies', () => {
+    it('blocks texture sources in the render body, and names the prop, graph nodes and both remedies', () => {
         expect(findWorkerBlock(blockInputs({ textures: true }))).toEqual({ kind: 'textures' });
         const message = workerBlockMessage('BaseShaderComponent', { kind: 'textures' });
         expect(message).toMatch(/"textures"/);
-        expect(message).toMatch(/Remove "textures"/);
+        expect(message).toMatch(/shader graph node/);
+        expect(message).toMatch(/Remove the texture sources/);
         expect(message).toMatch(/turn off worker mode/);
     });
 

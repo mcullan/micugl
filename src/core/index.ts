@@ -13,6 +13,16 @@ export {
     GL_RGBA,
     GL_UNSIGNED_BYTE
 } from '@/core/lib/glConstants';
+export type {
+    GraphPlan,
+    GraphTopology,
+    GraphTopologyNode,
+    GraphUniformValue,
+    PlannedInput,
+    PlannedPass,
+    ShaderNode
+} from '@/core/lib/graphPlanning';
+export { isShaderNode, planGraph, shaderNode, toRenderPasses } from '@/core/lib/graphPlanning';
 export { isPowerOfTwo } from '@/core/lib/math';
 export type { SourceDimensions, UploadMode } from '@/core/lib/sourceTextureOptions';
 export {

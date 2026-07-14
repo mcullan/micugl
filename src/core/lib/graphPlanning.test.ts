@@ -5,7 +5,7 @@ import { GL_LINEAR, GL_NEAREST } from '@/core/lib/glConstants';
 import type { GraphUniformValue } from '@/core/lib/graphPlanning';
 import { isShaderNode, planGraph, shaderNode, toRenderPasses } from '@/core/lib/graphPlanning';
 import { resolveSourceTextureOptions } from '@/core/lib/sourceTextureOptions';
-import type { ShaderProgramConfig, TextureSource, UniformType } from '@/types';
+import type { ShaderProgramConfig, TextureSource, UniformParam, UniformType } from '@/types';
 
 function cfg(uniformNames: Record<string, UniformType> = {}): ShaderProgramConfig {
     return {
@@ -346,7 +346,7 @@ describe('toRenderPasses', () => {
         expect(passes[0].renderOptions).toEqual({ clear: true });
 
         expect(passes[1].inputTextures).toEqual([
-            { id: 'leaf-out', textureUnit: 0, bindingType: 'read', samplerName: 'u_tex' }
+            { id: 'leaf-out', textureUnit: 0, bindingType: 'node', samplerName: 'u_tex' }
         ]);
         expect(passes[1].outputFramebuffer).toBeNull();
         expect(passes[1].uniforms).toEqual({ u_k: { type: 'float', value: 22 } });
@@ -360,5 +360,46 @@ describe('isShaderNode', () => {
         expect(isShaderNode(node)).toBe(true);
         expect(isShaderNode({ type: 'float', value: 0 })).toBe(false);
         expect(isShaderNode(fakeSource('s'))).toBe(false);
+    });
+});
+
+describe('planGraph: valueUniforms', () => {
+    it('keeps only the params of a node that mixes a param, a child node and a source, under normalized names', () => {
+        const image = fakeSource('img');
+        const leaf = shaderNode({ id: 'leaf', shaderConfig: cfg(), uniforms: {} });
+        const root = shaderNode({
+            id: 'root',
+            shaderConfig: cfg({ u_gain: 'float' }),
+            uniforms: {
+                tex: leaf,
+                img: image,
+                gain: { type: 'float', value: 0.375 }
+            }
+        });
+
+        const plan = planGraph(root);
+        const rootPass = plan.passes.find(pass => pass.nodeId === 'root');
+
+        expect(rootPass?.valueUniforms).toEqual({ u_gain: { type: 'float', value: 0.375 } });
+        expect(plan.passes.find(pass => pass.nodeId === 'leaf')?.valueUniforms).toEqual({});
+    });
+
+    it('carries the very param object through, so a transition and an invalidation survive planning', () => {
+        const invalidation = createFrameInvalidation();
+        const param: UniformParam = {
+            type: 'float',
+            value: 0.5,
+            invalidation,
+            transition: { duration: 120 }
+        };
+        const root = shaderNode({
+            id: 'root',
+            shaderConfig: cfg({ u_level: 'float' }),
+            uniforms: { level: param }
+        });
+
+        const plan = planGraph(root);
+
+        expect(plan.passes[0].valueUniforms.u_level).toBe(param);
     });
 });

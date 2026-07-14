@@ -8,6 +8,7 @@ export interface CompiledFboInput {
     isPingPong: boolean;
     pingPongUseReadIndex: boolean;
     staticIndex: number;
+    requireSampler: boolean;
 }
 
 export interface CompiledSourceInput {
@@ -69,6 +70,17 @@ export function compilePass(pass: RenderPass, isPingPong: (id: string) => boolea
                     textureUnit: texture.textureUnit,
                     samplerName: texture.samplerName
                 };
+            case 'node':
+                return {
+                    kind: 'fbo',
+                    id: texture.id,
+                    textureUnit: texture.textureUnit,
+                    samplerName: texture.samplerName,
+                    isPingPong: isPingPong(texture.id),
+                    pingPongUseReadIndex: true,
+                    staticIndex: 0,
+                    requireSampler: true
+                };
             case 'read':
             case 'write':
             case 'readwrite':
@@ -79,7 +91,8 @@ export function compilePass(pass: RenderPass, isPingPong: (id: string) => boolea
                     samplerName: texture.samplerName,
                     isPingPong: isPingPong(texture.id),
                     pingPongUseReadIndex: texture.bindingType === 'read' || texture.bindingType === 'readwrite',
-                    staticIndex: texture.bindingType === 'read' ? 0 : 1
+                    staticIndex: texture.bindingType === 'read' ? 0 : 1,
+                    requireSampler: false
                 };
             default: {
                 const unreachable: never = texture.bindingType;
