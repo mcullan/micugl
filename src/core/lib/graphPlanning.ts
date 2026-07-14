@@ -228,7 +228,8 @@ function visit(state: PlanState, node: ShaderNode, isRoot: boolean): void {
     if (textureUnit > state.maxTextureUnits) {
         throw new Error(
             `micugl graph: node "${node.id}" binds ${textureUnit} texture inputs, past the limit of `
-            + `${state.maxTextureUnits}. WebGL1 guarantees at least 8 texture units. Reduce the node's texture inputs.`
+            + `${state.maxTextureUnits} texture units for one node. Reduce the node's texture inputs, or split the `
+            + 'work across more graph nodes.'
         );
     }
 

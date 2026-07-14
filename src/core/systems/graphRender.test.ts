@@ -168,6 +168,41 @@ describe('graph render: source upload gating (T15)', () => {
         expect(stub.texSubImage2DCalls).toHaveLength(1);
         expect(stub.texSubImage2DCalls[0]).toMatchObject({ width: 4, height: 4 });
     });
+
+    it('re-binds the source every frame even when the upload is skipped, so the sampler never goes stale', () => {
+        const image = createSource('img');
+        const root = shaderNode({ id: 'R', shaderConfig: gcfg(), uniforms: { img: image.source } });
+
+        const { stub, passSystem } = setupGraph(root);
+
+        image.push(bitmap(4, 4));
+        stub.reset();
+
+        passSystem.execute(1);
+        const boundAtUnitZero = (): unknown[] => {
+            const bound: unknown[] = [];
+            let unit: unknown;
+            for (const call of stub.calls) {
+                if (call.name === 'activeTexture') {
+                    unit = call.args[0];
+                }
+                if (call.name === 'bindTexture' && unit === GL_TEXTURE0) {
+                    bound.push(call.args[1]);
+                }
+            }
+            return bound;
+        };
+        const sourceTexture = boundAtUnitZero()[0];
+        expect(sourceTexture).toBeDefined();
+
+        stub.reset();
+        passSystem.execute(2);
+
+        expect(stub.texImage2DCalls).toHaveLength(0);
+        expect(stub.texSubImage2DCalls).toHaveLength(0);
+        expect(boundAtUnitZero()).toContain(sourceTexture);
+        expect(stub.calls.filter(call => call.name === 'drawArrays')).toHaveLength(1);
+    });
 });
 
 describe('graph render: one source feeding two nodes (T16)', () => {
