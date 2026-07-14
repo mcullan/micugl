@@ -305,12 +305,23 @@ export class WebGLManager {
 
         const location = this.checkedUniformLocation(resources, programId, samplerName, 'sampler2D');
         if (location === null) {
-            throw new Error(
-                `WebGLManager.assertSourceSamplerLocation: the shader on program "${programId}" never samples `
-                + `"${samplerName}", so binding a source texture to it can never affect the picture. Sample it in `
-                + 'the shader, or fix the sampler name on the graph node that feeds this source.'
-            );
+            throw new Error(this.missingSamplerMessage(
+                'Passes.initializeResources',
+                programId,
+                samplerName,
+                'Sample it in the shader, or fix the sampler name on the graph node that feeds this source.'
+            ));
         }
+    }
+
+    private missingSamplerMessage(
+        operation: string,
+        programId: string,
+        samplerName: string,
+        remedy: string
+    ): string {
+        return `${operation}: the shader on program "${programId}" never samples "${samplerName}", so binding `
+            + `a texture to it can never affect the picture. ${remedy}`;
     }
 
     registerUniformUpdater<T extends UniformType>(
@@ -422,11 +433,12 @@ export class WebGLManager {
     ): WebGLUniformLocation {
         const location = this.checkedUniformLocation(resources, programId, binding.samplerName, 'sampler2D');
         if (location === null) {
-            throw new Error(
-                `WebGLManager.registerTextureBinding: the shader on program "${programId}" never samples `
-                + `"${binding.samplerName}", so binding a texture to it can never affect the picture. Sample it in `
-                + 'the shader, fix the sampler name, or remove its entry from the "textures" prop.'
-            );
+            throw new Error(this.missingSamplerMessage(
+                'WebGLManager.registerTextureBinding',
+                programId,
+                binding.samplerName,
+                'Sample it in the shader, fix the sampler name, or remove its entry from the "textures" prop.'
+            ));
         }
         return location;
     }

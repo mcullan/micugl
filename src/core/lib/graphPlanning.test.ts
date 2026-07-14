@@ -86,6 +86,28 @@ describe('planGraph: malformed graphs', () => {
         expect(() => planGraph(root)).toThrow(/node "root"/);
         expect(() => planGraph(root)).toThrow(/uniform "bad"/);
     });
+
+    it('throws naming node and uniform when a uniform value is null, not a raw type error', () => {
+        const root = shaderNode({
+            id: 'root',
+            shaderConfig: cfg(),
+            uniforms: { hook: null as unknown as GraphUniformValue }
+        });
+
+        expect(() => planGraph(root)).toThrow(/node "root"/);
+        expect(() => planGraph(root)).toThrow(/uniform "hook"/);
+    });
+
+    it('throws naming node and uniform when a uniform value is undefined, not a raw type error', () => {
+        const root = shaderNode({
+            id: 'root',
+            shaderConfig: cfg(),
+            uniforms: { hook: undefined as unknown as GraphUniformValue }
+        });
+
+        expect(() => planGraph(root)).toThrow(/node "root"/);
+        expect(() => planGraph(root)).toThrow(/uniform "hook"/);
+    });
 });
 
 describe('planGraph: framebuffers and root', () => {
@@ -190,6 +212,16 @@ describe('planGraph: sampler names', () => {
 
         expect(() => planGraph(root)).toThrow(/for both a texture sampler and a value/);
     });
+
+    it('throws when two value uniforms normalize to the same name', () => {
+        const root = shaderNode({
+            id: 'root',
+            shaderConfig: cfg({ u_k: 'float' }),
+            uniforms: { k: { type: 'float', value: 1 }, u_k: { type: 'float', value: 2 } }
+        });
+
+        expect(() => planGraph(root)).toThrow(/two value uniforms that both resolve to "u_k"/);
+    });
 });
 
 describe('planGraph: sources', () => {
@@ -237,9 +269,15 @@ describe('planGraph: program configs', () => {
 });
 
 describe('planGraph: topology', () => {
-    it('emits a topology derivable from the passes, with a null framebuffer only for the root', () => {
+    it('emits a topology whose nodes, edges, sources, dims and uniform names match the built plan', () => {
         const source = fakeSource('img');
-        const leaf = shaderNode({ id: 'leaf', shaderConfig: cfg(), uniforms: { img: source } });
+        const leaf = shaderNode({
+            id: 'leaf',
+            shaderConfig: cfg(),
+            uniforms: { img: source },
+            width: 16,
+            height: 8
+        });
         const root = shaderNode({
             id: 'root',
             shaderConfig: cfg({ u_k: 'float' }),
@@ -250,26 +288,36 @@ describe('planGraph: topology', () => {
 
         expect(plan.topology.rootId).toBe('root');
 
+        const topoIds = plan.topology.nodes.map(topoNode => topoNode.id).sort();
+        expect(topoIds).toEqual(plan.order.map(node => node.id).sort());
+        expect(topoIds).toEqual(plan.passes.map(pass => pass.nodeId).sort());
+
+        const topoById = new Map(plan.topology.nodes.map(topoNode => [topoNode.id, topoNode]));
+
+        expect(topoById.get('leaf')).toEqual({
+            id: 'leaf',
+            framebufferId: 'leaf-out',
+            width: 16,
+            height: 8,
+            edges: [],
+            sources: [{ samplerName: 'u_img', sourceId: 'img' }],
+            uniformNames: []
+        });
+
+        expect(topoById.get('root')).toEqual({
+            id: 'root',
+            framebufferId: null,
+            width: 0,
+            height: 0,
+            edges: [{ samplerName: 'u_tex', childId: 'leaf' }],
+            sources: [],
+            uniformNames: ['u_k']
+        });
+
         for (const topoNode of plan.topology.nodes) {
             const pass = plan.passes.find(candidate => candidate.nodeId === topoNode.id);
-            expect(pass).toBeDefined();
             expect(topoNode.framebufferId).toBe(pass?.outputFramebufferId);
-
-            const edgeChildIds = topoNode.edges.map(edge => edge.childId);
-            const sourceIds = topoNode.sources.map(entry => entry.sourceId);
-            for (const input of pass?.inputs ?? []) {
-                if (input.kind === 'node') {
-                    expect(edgeChildIds).toContain(input.childId);
-                } else {
-                    expect(sourceIds).toContain(input.sourceId);
-                }
-            }
         }
-
-        const nullFramebufferIds = plan.topology.nodes
-            .filter(topoNode => topoNode.framebufferId === null)
-            .map(topoNode => topoNode.id);
-        expect(nullFramebufferIds).toEqual(['root']);
     });
 });
 
@@ -285,21 +333,23 @@ describe('toRenderPasses', () => {
         });
 
         const plan = planGraph(root);
+        const valueById: Record<string, number> = { leaf: 11, root: 22 };
         const uniformsFor = (nodeId: string): Record<string, { type: UniformType; value: number }> =>
-            ({ u_k: { type: 'float', value: nodeId.length } });
+            ({ u_k: { type: 'float', value: valueById[nodeId] } });
         const passes = toRenderPasses(plan, uniformsFor);
 
         expect(passes[0].inputTextures).toEqual([
             { id: 'img', textureUnit: 0, bindingType: 'source', samplerName: 'u_img' }
         ]);
         expect(passes[0].outputFramebuffer).toBe('leaf-out');
-        expect(passes[0].uniforms).toEqual({ u_k: { type: 'float', value: 4 } });
+        expect(passes[0].uniforms).toEqual({ u_k: { type: 'float', value: 11 } });
         expect(passes[0].renderOptions).toEqual({ clear: true });
 
         expect(passes[1].inputTextures).toEqual([
             { id: 'leaf-out', textureUnit: 0, bindingType: 'read', samplerName: 'u_tex' }
         ]);
         expect(passes[1].outputFramebuffer).toBeNull();
+        expect(passes[1].uniforms).toEqual({ u_k: { type: 'float', value: 22 } });
         expect(passes[1].renderOptions).toEqual({ clear: false });
     });
 });

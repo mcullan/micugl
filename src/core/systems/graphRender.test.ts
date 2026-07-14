@@ -301,12 +301,23 @@ describe('graph render: source with a null sampler location (T20)', () => {
 
         expect(() => { passSystem.initializeResources() }).toThrow(/never samples "u_img"/);
         expect(() => { passSystem.initializeResources() }).toThrow(/program "R"/);
+    });
 
-        const corrected = createSource('img');
-        const correctedRoot = shaderNode({ id: 'R', shaderConfig: gcfg(), uniforms: { img: corrected.source } });
-        expect(() => setupGraph(correctedRoot, {
-            stubConfig: { activeUniforms: { u_img: 'sampler2D' } }
-        })).not.toThrow();
+    it('recovers on the same passSystem once the throwing cause is fixed, with no ghost state', () => {
+        const image = createSource('img');
+        const root = shaderNode({ id: 'R', shaderConfig: gcfg(), uniforms: { img: image.source } });
+
+        const { manager, passSystem } = setupGraph(root, {
+            stubConfig: { activeUniforms: { u_img: 'sampler2D' } },
+            defineSources: false,
+            initialize: false
+        });
+
+        expect(() => { passSystem.initializeResources() }).toThrow(/defineTexture/);
+
+        manager.textures.defineTexture(image.source);
+
+        expect(() => { passSystem.initializeResources() }).not.toThrow();
     });
 });
 

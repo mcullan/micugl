@@ -67,7 +67,10 @@ export function shaderNode(node: Omit<ShaderNode, 'kind'>): ShaderNode {
 }
 
 export function isShaderNode(value: GraphUniformValue): value is ShaderNode {
-    return (value as { kind?: unknown }).kind === 'shader-node';
+    const candidate = value as unknown;
+    return typeof candidate === 'object'
+        && candidate !== null
+        && (candidate as { kind?: unknown }).kind === 'shader-node';
 }
 
 function isTextureSource(value: unknown): value is TextureSource {
@@ -205,8 +208,15 @@ function visit(state: PlanState, node: ShaderNode, isRoot: boolean): void {
             continue;
         }
         if (isUniformParam(value)) {
-            valueNameSet.add(normalizeUniformName(key));
-            uniformNames.push(normalizeUniformName(key));
+            const valueName = normalizeUniformName(key);
+            if (valueNameSet.has(valueName)) {
+                throw new Error(
+                    `micugl graph: node "${node.id}" has two value uniforms that both resolve to "${valueName}". `
+                    + 'One name names one uniform, so the second would overwrite the first. Rename one of the uniforms.'
+                );
+            }
+            valueNameSet.add(valueName);
+            uniformNames.push(valueName);
             continue;
         }
         throw new Error(

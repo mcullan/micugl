@@ -61,23 +61,34 @@ export function planPassSwaps(pass: RenderPass, isPingPong: (id: string) => bool
 
 export function compilePass(pass: RenderPass, isPingPong: (id: string) => boolean): CompiledPass {
     const inputs: CompiledInput[] = pass.inputTextures.map(texture => {
-        if (texture.bindingType === 'source') {
-            return {
-                kind: 'source',
-                id: texture.id,
-                textureUnit: texture.textureUnit,
-                samplerName: texture.samplerName
-            };
+        switch (texture.bindingType) {
+            case 'source':
+                return {
+                    kind: 'source',
+                    id: texture.id,
+                    textureUnit: texture.textureUnit,
+                    samplerName: texture.samplerName
+                };
+            case 'read':
+            case 'write':
+            case 'readwrite':
+                return {
+                    kind: 'fbo',
+                    id: texture.id,
+                    textureUnit: texture.textureUnit,
+                    samplerName: texture.samplerName,
+                    isPingPong: isPingPong(texture.id),
+                    pingPongUseReadIndex: texture.bindingType === 'read' || texture.bindingType === 'readwrite',
+                    staticIndex: texture.bindingType === 'read' ? 0 : 1
+                };
+            default: {
+                const unreachable: never = texture.bindingType;
+                throw new Error(
+                    `micugl: pass on program "${pass.programId}" has a texture binding of type `
+                    + `"${String(unreachable)}", which compilePass does not handle. This is a bug in micugl.`
+                );
+            }
         }
-        return {
-            kind: 'fbo',
-            id: texture.id,
-            textureUnit: texture.textureUnit,
-            samplerName: texture.samplerName,
-            isPingPong: isPingPong(texture.id),
-            pingPongUseReadIndex: texture.bindingType === 'read' || texture.bindingType === 'readwrite',
-            staticIndex: texture.bindingType === 'read' ? 0 : 1
-        };
     });
 
     const uniforms: CompiledUniform[] = pass.uniforms
