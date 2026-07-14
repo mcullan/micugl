@@ -1,5 +1,6 @@
 import type { FrameInvalidation } from '@/core/lib/frameInvalidation';
 import { UNIFORM_COMPONENTS } from '@/core/lib/uniformComponents';
+import { normalizeUniformName } from '@/core/lib/uniformNames';
 import type { NonReproducible } from '@/react/lib/captureLiveness';
 import { createCommonUpdaters } from '@/react/lib/createUniformUpdater';
 import type { TransitionRuntime } from '@/react/lib/transitionRuntime';
@@ -140,9 +141,7 @@ export function combineUniformDebugPorts(ports: UniformDebugPort[]): UniformDebu
     };
 }
 
-export function normalizeUniformName(name: string): string {
-    return name.startsWith('u_') ? name : `u_${name}`;
-}
+export { normalizeUniformName };
 
 export function normalizeUniformParams(
     uniforms: Record<string, UniformParam>

@@ -100,7 +100,7 @@ describe('compilePass', () => {
         };
 
         const compiled = compilePass(pass, allPingPong);
-        expect(compiled.inputs.map(i => i.pingPongUseReadIndex)).toEqual([true, false, true]);
-        expect(compiled.inputs.map(i => i.staticIndex)).toEqual([0, 1, 1]);
+        expect(compiled.inputs.map(i => i.kind === 'fbo' ? i.pingPongUseReadIndex : null)).toEqual([true, false, true]);
+        expect(compiled.inputs.map(i => i.kind === 'fbo' ? i.staticIndex : null)).toEqual([0, 1, 1]);
     });
 });

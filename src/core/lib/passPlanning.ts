@@ -1,6 +1,7 @@
 import type { RenderOptions, RenderPass, RenderPassUniformValue, UniformType } from '@/types';
 
-export interface CompiledInput {
+export interface CompiledFboInput {
+    kind: 'fbo';
     id: string;
     textureUnit: number;
     samplerName: string;
@@ -8,6 +9,15 @@ export interface CompiledInput {
     pingPongUseReadIndex: boolean;
     staticIndex: number;
 }
+
+export interface CompiledSourceInput {
+    kind: 'source';
+    id: string;
+    textureUnit: number;
+    samplerName: string;
+}
+
+export type CompiledInput = CompiledFboInput | CompiledSourceInput;
 
 export interface CompiledUniform {
     name: string;
@@ -50,14 +60,25 @@ export function planPassSwaps(pass: RenderPass, isPingPong: (id: string) => bool
 }
 
 export function compilePass(pass: RenderPass, isPingPong: (id: string) => boolean): CompiledPass {
-    const inputs: CompiledInput[] = pass.inputTextures.map(texture => ({
-        id: texture.id,
-        textureUnit: texture.textureUnit,
-        samplerName: texture.samplerName,
-        isPingPong: isPingPong(texture.id),
-        pingPongUseReadIndex: texture.bindingType === 'read' || texture.bindingType === 'readwrite',
-        staticIndex: texture.bindingType === 'read' ? 0 : 1
-    }));
+    const inputs: CompiledInput[] = pass.inputTextures.map(texture => {
+        if (texture.bindingType === 'source') {
+            return {
+                kind: 'source',
+                id: texture.id,
+                textureUnit: texture.textureUnit,
+                samplerName: texture.samplerName
+            };
+        }
+        return {
+            kind: 'fbo',
+            id: texture.id,
+            textureUnit: texture.textureUnit,
+            samplerName: texture.samplerName,
+            isPingPong: isPingPong(texture.id),
+            pingPongUseReadIndex: texture.bindingType === 'read' || texture.bindingType === 'readwrite',
+            staticIndex: texture.bindingType === 'read' ? 0 : 1
+        };
+    });
 
     const uniforms: CompiledUniform[] = pass.uniforms
         ? Object.entries(pass.uniforms).map(([name, uniform]) => ({

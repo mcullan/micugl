@@ -48,7 +48,16 @@ export class Passes {
 
         this.webglManager.prepareRender(pass.programId, pass.renderOptions);
 
+        let boundSource = false;
         for (const input of pass.inputs) {
+            if (input.kind === 'source') {
+                this.webglManager.textures.bindToUnit(input.id, input.textureUnit);
+                this.webglManager.textures.uploadIfStaleById(input.id);
+                this.webglManager.setUniform(pass.programId, input.samplerName, input.textureUnit, 'sampler2D');
+                boundSource = true;
+                continue;
+            }
+
             let textureIndex = input.staticIndex;
             if (input.isPingPong) {
                 textureIndex = input.pingPongUseReadIndex
@@ -58,6 +67,10 @@ export class Passes {
 
             fbo.bindTexture(input.id, input.textureUnit, textureIndex);
             this.webglManager.setUniform(pass.programId, input.samplerName, input.textureUnit, 'sampler2D');
+        }
+
+        if (boundSource) {
+            gl.activeTexture(gl.TEXTURE0);
         }
 
         this.webglManager.updateUniforms(pass.programId, time, width, height);
@@ -83,7 +96,14 @@ export class Passes {
         const resolvedHeight = height ?? gl.canvas.height;
 
         for (const pass of this.compiled) {
+            let passWidth = resolvedWidth;
+            let passHeight = resolvedHeight;
+
             if (pass.outputFramebuffer !== null) {
+                const size = fbo.getSize(pass.outputFramebuffer);
+                passWidth = size.width;
+                passHeight = size.height;
+
                 if (pass.outputIsPingPong) {
                     fbo.bindFramebuffer(pass.outputFramebuffer, fbo.getWriteIndex(pass.outputFramebuffer));
                 } else {
@@ -93,7 +113,7 @@ export class Passes {
                 fbo.bindFramebuffer(null);
             }
 
-            this.runCompiledPass(pass, time, resolvedWidth, resolvedHeight);
+            this.runCompiledPass(pass, time, passWidth, passHeight);
 
             for (const id of pass.swapIds) {
                 fbo.swapTextures(id);
@@ -142,6 +162,18 @@ export class Passes {
 
     private assertUniformsDeclared(pass: CompiledPass): void {
         for (const input of pass.inputs) {
+            if (input.kind === 'source') {
+                if (!this.webglManager.textures.has(input.id)) {
+                    throw new Error(
+                        `Passes.initializeResources: pass on program "${pass.programId}" samples source texture `
+                        + `"${input.id}", but no such source texture is defined. Call `
+                        + 'TextureManager.defineTexture(source) for it before initializing the passes, or the sampler '
+                        + 'would read the 1x1 placeholder for the life of the program.'
+                    );
+                }
+                this.webglManager.assertSourceSamplerLocation(pass.programId, input.samplerName);
+                continue;
+            }
             this.webglManager.assertUniformDeclared(pass.programId, input.samplerName, 'sampler2D');
         }
 

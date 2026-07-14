@@ -125,6 +125,14 @@ export class TextureManager {
         resources.uploadedVersion = source.version;
     }
 
+    uploadIfStaleById(id: string): void {
+        const resources = this.resources.get(id);
+        if (!resources) {
+            throw new Error(unknownTextureMessage('uploadIfStaleById', id));
+        }
+        this.uploadIfStale(resources.owner);
+    }
+
     private uploadFrame(resources: SourceTextureResources, id: string, frame: TextureUploadSource): void {
         const gl = this.gl;
         const dimensions = sourceDimensions(frame);

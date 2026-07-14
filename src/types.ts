@@ -300,7 +300,7 @@ export type ImageInput =
 export interface TextureBinding {
   id: string;
   textureUnit: number;
-  bindingType: 'read' | 'write' | 'readwrite';
+  bindingType: 'read' | 'write' | 'readwrite' | 'source';
   samplerName: string;
 }
 

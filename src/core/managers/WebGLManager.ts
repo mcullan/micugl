@@ -297,6 +297,22 @@ export class WebGLManager {
         this.checkedUniformLocation(resources, programId, uniformName, type);
     }
 
+    assertSourceSamplerLocation(programId: string, samplerName: string): void {
+        const resources = this.resources.get(programId);
+        if (!resources) {
+            throw new Error(`Program with id ${programId} not found`);
+        }
+
+        const location = this.checkedUniformLocation(resources, programId, samplerName, 'sampler2D');
+        if (location === null) {
+            throw new Error(
+                `WebGLManager.assertSourceSamplerLocation: the shader on program "${programId}" never samples `
+                + `"${samplerName}", so binding a source texture to it can never affect the picture. Sample it in `
+                + 'the shader, or fix the sampler name on the graph node that feeds this source.'
+            );
+        }
+    }
+
     registerUniformUpdater<T extends UniformType>(
         programId: string,
         uniformName: string,
