@@ -24,6 +24,7 @@ function passKey(pass: PlannedPass): string {
 
     return [
         pass.nodeId,
+        pass.programId,
         pass.outputFramebufferId ?? '',
         serializeRenderOptions(pass.renderOptions ?? {}),
         inputs,

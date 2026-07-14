@@ -590,6 +590,52 @@ Audio reaction: the grain intensity scales with the audio level, so louder passa
 The `audio` prop must come from `useAudioUniforms` with its default uniform names; a custom
 `names.level` option makes the effect throw, since it reads the level by its default name.
 
+### Composing effects
+
+Each effect also ships a **node factory** for `ShaderGraph`: `meshGradientNode`, `grainNode`,
+`blurNode`, and `ditherNode`. A factory returns a `ShaderNode` you feed to another node or hand to
+`<ShaderGraph root={...} />`, so effects compose into one canvas with one GL context. Every factory
+takes an explicit `id` (graphs key their structure on node ids, so an auto-generated id would churn
+the plan) plus the node placement options (`width`, `height`, `textureOptions`, `renderOptions`)
+alongside the same uniform props the component takes.
+
+```tsx
+import { meshGradientNode, blurNode, ditherNode, grainNode } from 'micugl/effects';
+import { ShaderGraph } from 'micugl';
+
+const gradient = meshGradientNode({ id: 'gradient', speed: 0.4, width: 512, height: 512 });
+const blurred = blurNode({ id: 'blur', src: gradient, radius: 24, width: 512, height: 512 });
+const root = ditherNode({ id: 'dither', src: blurred, levels: 3, scale: 2 });
+
+<ShaderGraph root={root} />;
+```
+
+- **`blurNode({ id, src, radius? })`** is a separable Gaussian: ONE fragment program run as two
+  passes, an X pass (`${id}-x`, horizontal) feeding the Y pass (the returned node, vertical). The
+  planner deduplicates them into a single linked program because both passes share the module-level
+  blur config and the same uniform shape; each pass still uploads its own `u_direction` every frame.
+  `radius` scales the tap spacing in texels; `radius: 0` is a legal identity blur, negative or
+  non-finite throws. Placement options apply to BOTH passes, so the intermediate matches the output
+  surface. `src` is any node or texture source. `blurNode` is legal as the graph root only when you
+  omit `width`/`height`: the returned node renders straight to the canvas and its `${id}-x`
+  intermediate falls back to the canvas size. Supplying `width`/`height` on a root `blurNode` throws,
+  because the root renders to the canvas whose size is set by the component props — put a node above
+  it if you need explicit dimensions.
+- **`ditherNode({ id, src?, ... })`** has two variants. With `src` it orders-dithers whatever it
+  samples; without `src` it dithers a built-in animated two-stop gradient (`colorA`/`colorB`,
+  `speed`). The gradient props (`colorA`, `colorB`, `speed`) apply only to the no-`src` variant;
+  passing any of them together with `src` throws. `levels` sets the per-channel quantization
+  (default 3, minimum 2), `matrixLevels` picks the Bayer matrix size (`1 | 2 | 3` -> 2x2 / 4x4 /
+  8x8), `scale` is the dither cell size in output pixels. `levels < 2` or `scale <= 0` throws.
+- **`meshGradientNode` / `grainNode`** are thin `shaderNode` wrappers over the same configs the
+  `MeshGradient` / `Grain` components use, taking the same uniform props (including `audio`).
+
+**Program dedup.** Two nodes share one linked GL program when they use the same `shaderConfig`
+object, declare the same sampler names, and carry the same value-uniform key set. This is automatic
+and conservative: it is what makes the blur one program, and two effect nodes of the same kind (even
+if only one is audio-driven) collapse to one program while keeping their own per-pass values. To
+opt a node out, give it its own config object.
+
 ## Textures
 
 Bind an image to a `sampler2D` with the `textures` prop. `useImageTexture` owns the decode

@@ -1,3 +1,6 @@
+import { createShaderConfig } from '@/core';
+import { fullscreenVertexShader } from '@/effects/lib/fullscreenVertexShader';
+
 export const grainFragmentShader = `
     precision highp float;
 
@@ -30,3 +33,17 @@ export const grainFragmentShader = `
         gl_FragColor = vec4(col, 1.0);
     }
 `;
+
+export const grainConfig = createShaderConfig({
+    vertexShader: fullscreenVertexShader,
+    fragmentShader: grainFragmentShader,
+    uniformNames: {
+        u_color: 'vec3',
+        u_grainColor: 'vec3',
+        u_intensity: 'float',
+        u_scale: 'float',
+        u_speed: 'float',
+        u_audioLevel: 'float',
+        u_audioStrength: 'float'
+    }
+});

@@ -121,6 +121,30 @@ interface PlanState {
     onStack: Set<ShaderNode>;
     pathStack: string[];
     topologyNodes: GraphTopologyNode[];
+    configIndex: Map<ShaderProgramConfig, number>;
+    dedupCanonical: Map<string, string>;
+}
+
+function configIdOf(state: PlanState, config: ShaderProgramConfig): number {
+    const existing = state.configIndex.get(config);
+    if (existing !== undefined) {
+        return existing;
+    }
+    const next = state.configIndex.size;
+    state.configIndex.set(config, next);
+    return next;
+}
+
+function programDedupKey(
+    configId: number,
+    samplerNames: string[],
+    valueNames: string[]
+): string {
+    return [
+        String(configId),
+        [...samplerNames].sort().join(','),
+        [...valueNames].sort().join(',')
+    ].join('|');
 }
 
 function registerSource(state: PlanState, nodeId: string, source: TextureSource): void {
@@ -258,11 +282,24 @@ function visit(state: PlanState, node: ShaderNode, isRoot: boolean): void {
         };
     }
 
-    state.programConfigs[node.id] = augmentConfig(node.shaderConfig, samplerNames);
+    const dedupKey = programDedupKey(
+        configIdOf(state, node.shaderConfig),
+        samplerNames,
+        Object.keys(valueUniforms)
+    );
+    const canonical = state.dedupCanonical.get(dedupKey);
+    let programId: string;
+    if (canonical === undefined) {
+        programId = node.id;
+        state.dedupCanonical.set(dedupKey, node.id);
+        state.programConfigs[node.id] = augmentConfig(node.shaderConfig, samplerNames);
+    } else {
+        programId = canonical;
+    }
 
     state.passes.push({
         nodeId: node.id,
-        programId: node.id,
+        programId,
         outputFramebufferId,
         inputs,
         valueUniforms,
@@ -297,7 +334,9 @@ export function planGraph(root: ShaderNode, options?: { maxTextureUnits?: number
         idToNode: new Map(),
         onStack: new Set(),
         pathStack: [],
-        topologyNodes: []
+        topologyNodes: [],
+        configIndex: new Map(),
+        dedupCanonical: new Map()
     };
 
     visit(state, root, true);

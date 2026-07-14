@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 
 import { AudioBars } from './AudioBars';
 import { DevtoolsDebug } from './DevtoolsDebug';
+import { EffectsComposed } from './EffectsComposed';
 import { EffectsGallery } from './EffectsGallery';
 import { ExportDemo } from './ExportDemo';
 import { GraphInspector } from './GraphInspector';
@@ -36,6 +37,7 @@ export const scenes: Record<string, ComponentType> = {
     'transitions': Transitions,
     'audio-bars': AudioBars,
     'effects-gallery': EffectsGallery,
+    'effects-composed': EffectsComposed,
     'visual-fixed': VisualFixed,
     'export-demo': ExportDemo,
     'image-texture': ImageTexture,
