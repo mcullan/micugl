@@ -446,6 +446,73 @@ describe('graph inspector: the root read restores the framebuffer binding (T11)'
     });
 });
 
+describe('graph inspector: a lost or throwing root read degrades to unreadable and restores the binding (C3)', () => {
+    it('restores the sentinel binding when the read throws mid-capture and degrades to unreadable', async () => {
+        installStub({
+            overrides: {
+                readPixels: (): void => {
+                    throw new Error('simulated read failure');
+                }
+            }
+        });
+        await mount(graphScene(sharedGainGraph(0.25, 0.75, 0.875)));
+        act(() => { frames.tick(0) });
+
+        const handle = currentHandle();
+        const gl = handle.getManager()?.context;
+        if (!gl) {
+            throw new Error('no gl context');
+        }
+        const sentinel = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sentinel);
+
+        const result = handle.graph?.readNode('root');
+        expect(result).toEqual({ unreadable: 'engine destroyed' });
+        expect(gl.getParameter(gl.FRAMEBUFFER_BINDING)).toBe(sentinel);
+    });
+
+    it('degrades to unreadable when the context is lost after mount and leaves the binding untouched', async () => {
+        const config: GLStubConfig = {};
+        installStub(config);
+        await mount(graphScene(sharedGainGraph(0.25, 0.75, 0.875)));
+        act(() => { frames.tick(0) });
+
+        const handle = currentHandle();
+        const gl = handle.getManager()?.context;
+        if (!gl) {
+            throw new Error('no gl context');
+        }
+        const sentinel = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sentinel);
+
+        config.contextLost = true;
+
+        const result = handle.graph?.readNode('root');
+        expect(result).toEqual({ unreadable: 'engine destroyed' });
+        expect(gl.getParameter(gl.FRAMEBUFFER_BINDING)).toBe(sentinel);
+    });
+});
+
+describe('graph inspector: a zero-size root canvas degrades to unreadable (C3)', () => {
+    it('returns the zero-size reason for a root read when the canvas has no backing size', async () => {
+        await mount(
+            <ShaderGraph
+                root={sharedGainGraph(0.25, 0.75, 0.875)}
+                width={0}
+                height={0}
+                useDevicePixelRatio={false}
+                frameloop='demand'
+                reducedMotion='ignore'
+                saveData='ignore'
+            />
+        );
+        act(() => { frames.tick(0) });
+
+        const result = currentHandle().graph?.readNode('root');
+        expect(result).toEqual({ unreadable: 'framebuffer has zero size' });
+    });
+});
+
 function fakeGraphPort(): GraphDebugPort {
     const listFor = (nodeId: string): UniformListEntry[] => [
         { name: `u_${nodeId}`, type: 'float', value: 0.5, overridden: false, nodeId }

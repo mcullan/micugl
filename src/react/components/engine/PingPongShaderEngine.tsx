@@ -627,18 +627,26 @@ const PingPongShaderEngineComponent = forwardRef<PingPongShaderHandle, PingPongS
                                     return { unreadable: 'engine destroyed' };
                                 }
                                 const gl = currentManager.context;
+                                if (gl.isContextLost()) {
+                                    return { unreadable: 'engine destroyed' };
+                                }
                                 const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
                                 const previousViewport = gl.getParameter(gl.VIEWPORT) as ArrayLike<number>;
-                                passSystem.execute(frameToMs(controllerRef.current?.getFrame() ?? 0));
-                                const pixels = currentManager.readPixels(rootWidth, rootHeight);
-                                gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
-                                gl.viewport(
-                                    previousViewport[0],
-                                    previousViewport[1],
-                                    previousViewport[2],
-                                    previousViewport[3]
-                                );
-                                return { width: rootWidth, height: rootHeight, pixels };
+                                try {
+                                    passSystem.execute(frameToMs(controllerRef.current?.getFrame() ?? 0));
+                                    const pixels = currentManager.readPixels(rootWidth, rootHeight);
+                                    return { width: rootWidth, height: rootHeight, pixels };
+                                } catch {
+                                    return { unreadable: 'engine destroyed' };
+                                } finally {
+                                    gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
+                                    gl.viewport(
+                                        previousViewport[0],
+                                        previousViewport[1],
+                                        previousViewport[2],
+                                        previousViewport[3]
+                                    );
+                                }
                             }
                         };
                     }
