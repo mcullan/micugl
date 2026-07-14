@@ -21,6 +21,7 @@ import {
 import { createTransitionRuntime } from '@/react/lib/transitionRuntime';
 import type { GLStubConfig, GLStubHandle } from '@/testing';
 import { createCanvasStub, createGLStub } from '@/testing';
+import { uploadsOf } from '@/testing/fixtures';
 import type {
     RenderPass,
     ShaderProgramConfig,
@@ -66,14 +67,6 @@ function build(
     manager.createProgram(PROGRAM_ID, config);
     manager.setSize(WIDTH, HEIGHT, WIDTH, HEIGHT);
     return { manager, stub };
-}
-
-function uploadsOf(stub: GLStubHandle, name: string): unknown[] {
-    const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
-    if (location === null) {
-        return [];
-    }
-    return stub.uniformCalls.filter(call => call.location === location).map(call => call.value);
 }
 
 function uploadCallsOf(stub: GLStubHandle, name: string): string[] {

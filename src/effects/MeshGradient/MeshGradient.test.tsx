@@ -10,6 +10,7 @@ import type { AudioAnalyserDriverDeps } from '@/react/lib/audioAnalyserDriver';
 import { asContext, createFakeStream, FakeContext, latestAnalyser, LOW_HALF } from '@/react/lib/fakeWebAudio';
 import type { GLStubHandle } from '@/testing';
 import { createGLStub } from '@/testing';
+import { uploadsOf } from '@/testing/fixtures';
 import type { FrameQueue } from '@/testing/frameQueue';
 import { createFrameQueue } from '@/testing/frameQueue';
 import type { AudioSourceSpec, Frameloop, ShaderHandle, Vec3 } from '@/types';
@@ -92,13 +93,8 @@ async function mount(element: ReactElement): Promise<void> {
     });
 }
 
-function uploadsOf(name: string): unknown[] {
-    const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
-    return stub.uniformCalls.filter(call => call.location === location).map(call => call.value);
-}
-
 function timeUploads(): number[] {
-    return uploadsOf('u_time') as number[];
+    return uploadsOf(stub, 'u_time') as number[];
 }
 
 interface Fixture {
@@ -171,7 +167,7 @@ describe('MeshGradient: real uniforms reach the GL stub and advance', () => {
             act(() => { frames.tick(time) });
         }
 
-        const color0 = uploadsOf('u_color0').map(value => Array.from(value as Float32Array));
+        const color0 = uploadsOf(stub, 'u_color0').map(value => Array.from(value as Float32Array));
         expect(color0.length).toBeGreaterThan(0);
         expect(color0[0]).toEqual(Array.from(new Float32Array([0.13, 0.71, 0.29])));
 
@@ -271,7 +267,7 @@ describe('MeshGradient: reduced motion gates the audio reaction into a frozen po
 
         await mount(<GatedAudioScene probe={probe} deps={fixture.deps} />);
         act(() => { frames.tick(0) });
-        expect(uploadsOf('u_audioLevel')).toEqual([0]);
+        expect(uploadsOf(stub, 'u_audioLevel')).toEqual([0]);
         expect(frames.pending()).toBe(0);
 
         await act(async () => { await current(probe).start() });
@@ -286,7 +282,7 @@ describe('MeshGradient: reduced motion gates the audio reaction into a frozen po
             expect(frames.pending()).toBe(0);
         }
 
-        expect((uploadsOf('u_audioLevel') as number[]).every(value => value === 0)).toBe(true);
+        expect((uploadsOf(stub, 'u_audioLevel') as number[]).every(value => value === 0)).toBe(true);
         expect(timeUploads().length).toBe(frozenTimes);
     });
 });

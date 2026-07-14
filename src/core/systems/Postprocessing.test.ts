@@ -6,6 +6,7 @@ import type { PostProcessEffect } from '@/core/systems/Postprocessing';
 import { Postprocessing } from '@/core/systems/Postprocessing';
 import type { GLStubHandle } from '@/testing';
 import { createCanvasStub } from '@/testing';
+import { uploadsOf } from '@/testing/fixtures';
 import type { FramebufferOptions, UniformType } from '@/types';
 
 const WIDTH = 64;
@@ -40,14 +41,6 @@ function makeEffect(id: string, enabled: boolean): PostProcessEffect {
         uniforms: { amount: { type: 'float', value: 0.25 } },
         enabled
     };
-}
-
-function uploadsOf(stub: GLStubHandle, name: string): unknown[] {
-    const location = stub.gl.getUniformLocation({} as WebGLProgram, name);
-    if (location === null) {
-        return [];
-    }
-    return stub.uniformCalls.filter(call => call.location === location).map(call => call.value);
 }
 
 describe('Postprocessing pass caching', () => {
