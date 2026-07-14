@@ -33,6 +33,7 @@ export interface PlannedPass {
     programId: string;
     outputFramebufferId: string | null;
     inputs: PlannedInput[];
+    valueUniforms: Record<string, UniformParam>;
     renderOptions: RenderOptions | undefined;
 }
 
@@ -66,11 +67,10 @@ export function shaderNode(node: Omit<ShaderNode, 'kind'>): ShaderNode {
     return { kind: 'shader-node', ...node };
 }
 
-export function isShaderNode(value: GraphUniformValue): value is ShaderNode {
-    const candidate = value as unknown;
-    return typeof candidate === 'object'
-        && candidate !== null
-        && (candidate as { kind?: unknown }).kind === 'shader-node';
+export function isShaderNode(value: unknown): value is ShaderNode {
+    return typeof value === 'object'
+        && value !== null
+        && (value as { kind?: unknown }).kind === 'shader-node';
 }
 
 function isTextureSource(value: unknown): value is TextureSource {
@@ -172,6 +172,7 @@ function visit(state: PlanState, node: ShaderNode, isRoot: boolean): void {
     const edges: { samplerName: string; childId: string }[] = [];
     const sourceRefs: { samplerName: string; sourceId: string }[] = [];
     const uniformNames: string[] = [];
+    const valueUniforms: Record<string, UniformParam> = {};
     const samplerNames: string[] = [];
     const samplerNameSet = new Set<string>();
     const valueNameSet = new Set<string>();
@@ -217,6 +218,7 @@ function visit(state: PlanState, node: ShaderNode, isRoot: boolean): void {
             }
             valueNameSet.add(valueName);
             uniformNames.push(valueName);
+            valueUniforms[valueName] = value;
             continue;
         }
         throw new Error(
@@ -263,6 +265,7 @@ function visit(state: PlanState, node: ShaderNode, isRoot: boolean): void {
         programId: node.id,
         outputFramebufferId,
         inputs,
+        valueUniforms,
         renderOptions: node.renderOptions
     });
 
@@ -320,7 +323,7 @@ export function toRenderPasses(
                 ? {
                     id: framebufferId(input.childId),
                     textureUnit: input.textureUnit,
-                    bindingType: 'read' as const,
+                    bindingType: 'node' as const,
                     samplerName: input.samplerName
                 }
                 : {

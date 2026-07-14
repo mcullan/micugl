@@ -1,7 +1,13 @@
-import type { FramebufferOptions, InstancingConfig, ShaderProgramConfig, TextureBindingSpec } from '@/types';
+import type {
+    FramebufferOptions,
+    InstancingConfig,
+    ShaderProgramConfig,
+    TextureBindingSpec,
+    TextureSource
+} from '@/types';
 
-const FIELD_SEPARATOR = '\u0000';
-const ENTRY_SEPARATOR = '\u0001';
+export const FIELD_SEPARATOR = '\u0000';
+export const ENTRY_SEPARATOR = '\u0001';
 
 export function singleProgramEntry(
     programConfigs: Record<string, ShaderProgramConfig>
@@ -76,5 +82,14 @@ export function instancingContentKey(instancing: InstancingConfig | undefined): 
                 String(attribute.capacity ?? '')
             ].join(FIELD_SEPARATOR);
         })
+        .join(ENTRY_SEPARATOR);
+}
+
+export function textureSourcesContentKey(sources: TextureSource[] | undefined): string {
+    if (!sources || sources.length === 0) {
+        return '';
+    }
+    return sources
+        .map(source => [source.id, JSON.stringify(source.options)].join(FIELD_SEPARATOR))
         .join(ENTRY_SEPARATOR);
 }

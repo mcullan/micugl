@@ -171,7 +171,19 @@ export class Passes {
                         + 'would read the 1x1 placeholder for the life of the program.'
                     );
                 }
-                this.webglManager.assertSourceSamplerLocation(pass.programId, input.samplerName);
+                this.webglManager.assertRequiredSamplerLocation(
+                    pass.programId,
+                    input.samplerName,
+                    'Sample it in the shader, or fix the sampler name on the graph node that feeds this source.'
+                );
+                continue;
+            }
+            if (input.requireSampler) {
+                this.webglManager.assertRequiredSamplerLocation(
+                    pass.programId,
+                    input.samplerName,
+                    'Sample it in the shader, or remove that uniform from the node.'
+                );
                 continue;
             }
             this.webglManager.assertUniformDeclared(pass.programId, input.samplerName, 'sampler2D');

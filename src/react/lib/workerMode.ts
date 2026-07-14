@@ -225,9 +225,10 @@ function instancingMessage(component: string): string {
 }
 
 function texturesMessage(component: string): string {
-    return `${component}: the "textures" prop is not supported in worker mode (v1). Texture sources decode media `
+    return `${component}: texture sources are not supported in worker mode (v1). Texture sources decode media `
         + 'on the main thread and their frames cannot cross to the worker, so the samplers would read a blank '
-        + 'placeholder. Remove "textures", or turn off worker mode on this component.';
+        + 'placeholder. Remove the texture sources, whether they arrive through the "textures" prop or as texture '
+        + 'inputs on a shader graph node, or turn off worker mode on this component.';
 }
 
 function missingLiveUniformMessage(name: string): string {

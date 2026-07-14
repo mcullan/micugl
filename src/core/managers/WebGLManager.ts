@@ -297,7 +297,7 @@ export class WebGLManager {
         this.checkedUniformLocation(resources, programId, uniformName, type);
     }
 
-    assertSourceSamplerLocation(programId: string, samplerName: string): void {
+    assertRequiredSamplerLocation(programId: string, samplerName: string, remedy: string): void {
         const resources = this.resources.get(programId);
         if (!resources) {
             throw new Error(`Program with id ${programId} not found`);
@@ -309,7 +309,7 @@ export class WebGLManager {
                 'Passes.initializeResources',
                 programId,
                 samplerName,
-                'Sample it in the shader, or fix the sampler name on the graph node that feeds this source.'
+                remedy
             ));
         }
     }

@@ -65,7 +65,7 @@ export function serializeRenderOptions(options: PingPongRenderOptions): string {
 
 export type PassUniforms = Record<string, { type: UniformType; value: RenderPassUniformValue }>;
 
-function passUniformsFrom(updaters: UniformUpdaterDef[]): PassUniforms {
+export function passUniformsFrom(updaters: UniformUpdaterDef[]): PassUniforms {
     const result: PassUniforms = {};
     for (const updater of updaters) {
         result[updater.name] = { type: updater.type, value: updater.updateFn };

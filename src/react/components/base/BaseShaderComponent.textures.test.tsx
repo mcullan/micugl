@@ -355,7 +355,7 @@ describe('BaseShaderComponent textures, worker mode', () => {
                 reducedMotion='ignore'
                 saveData='ignore'
             />
-        )).rejects.toThrow(/"textures" prop is not supported in worker mode/);
+        )).rejects.toThrow(/texture sources are not supported in worker mode/);
     });
 });
 

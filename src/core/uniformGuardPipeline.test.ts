@@ -10,9 +10,7 @@ import { Passes } from '@/core/systems/Passes';
 import {
     buildLiveUpdaters,
     collectLiveValues,
-    parseUniformStructureKey,
-    uniformDescriptors,
-    uniformStructureKey
+    uniformDescriptors
 } from '@/react/lib/liveUniformUpdaters';
 import {
     buildPasses,
@@ -44,10 +42,9 @@ const FBO_CONFIG: Partial<GLStubConfig> = {
 };
 
 function realUpdaters(uniforms: Record<string, UniformParam>, skipDefaults: boolean): UniformUpdaterDef[] {
-    const parsed = parseUniformStructureKey(uniformStructureKey(uniformDescriptors(uniforms), skipDefaults));
     const valuesRef = { current: collectLiveValues(uniforms) };
     const runtime = createTransitionRuntime(() => false);
-    return buildLiveUpdaters(parsed.descriptors, parsed.skipDefaults, valuesRef, runtime);
+    return buildLiveUpdaters(uniformDescriptors(uniforms), skipDefaults, valuesRef, runtime);
 }
 
 function register(

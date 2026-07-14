@@ -3,6 +3,8 @@ export { BasePingPongShaderComponent } from './components/base/BasePingPongShade
 export { BaseShaderComponent } from './components/base/BaseShaderComponent';
 export { PingPongShaderEngine } from './components/engine/PingPongShaderEngine';
 export { ShaderEngine } from './components/engine/ShaderEngine';
+export type { ShaderGraphProps } from './components/ShaderGraph';
+export { ShaderGraph } from './components/ShaderGraph';
 export type { AudioUniformsResult } from './hooks/useAudioUniforms';
 export { useAudioUniforms } from './hooks/useAudioUniforms';
 export { useDarkMode } from './hooks/useDarkMode';
@@ -11,6 +13,8 @@ export { useImageTexture } from './hooks/useImageTexture';
 export { usePingPongPasses } from './hooks/usePingPongPasses';
 export { useReducedMotion } from './hooks/useReducedMotion';
 export { useSaveData } from './hooks/useSaveData';
+export type { ShaderGraphOptions, ShaderGraphResult } from './hooks/useShaderGraph';
+export { useShaderGraph } from './hooks/useShaderGraph';
 export { useUniformUpdaters } from './hooks/useUniformUpdaters';
 export type {
     VideoInput,
