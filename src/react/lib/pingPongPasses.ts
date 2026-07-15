@@ -143,3 +143,66 @@ export function buildPasses(
 
     return { passes, framebuffers };
 }
+
+const FEEDBACK_SIM_RENDER_OPTIONS: PingPongRenderOptions = { clear: false };
+
+export function buildFeedbackPasses(
+    programId: string,
+    secondaryProgramId: string | undefined,
+    iterations: number,
+    primaryUniforms: Record<string, UniformUpdaterDef[]>,
+    secondaryUniforms: Record<string, UniformUpdaterDef[]>,
+    framebufferOptions: FramebufferOptions,
+    renderOptions: PingPongRenderOptions,
+    framebuffersOverride?: Record<string, FramebufferOptions>
+): PingPongPassesResult {
+    if (secondaryProgramId === undefined) {
+        throw new Error(
+            'buildFeedbackPasses: a feedback accumulator needs a secondaryProgramId. The simulation program writes '
+            + 'RGBA state into the feedback buffer, and a separate render program reads that state to the canvas.'
+        );
+    }
+    if (iterations < 1) {
+        throw new Error(
+            `buildFeedbackPasses: iterations must be at least 1, received ${String(iterations)}. Each iteration is one `
+            + 'sub-step of the feedback simulation.'
+        );
+    }
+
+    const feedbackId = `${programId}-feedback`;
+    const framebuffers = framebuffersOverride ?? {
+        [feedbackId]: { ...framebufferOptions, textureCount: 2 }
+    };
+
+    const passes: RenderPass[] = [];
+
+    for (let i = 0; i < iterations; i++) {
+        passes.push({
+            programId,
+            inputTextures: [{
+                id: feedbackId,
+                textureUnit: 0,
+                bindingType: 'readwrite',
+                samplerName: PING_PONG_SAMPLER.name
+            }],
+            outputFramebuffer: feedbackId,
+            uniforms: passUniformsFrom(primaryUniforms[programId]),
+            renderOptions: FEEDBACK_SIM_RENDER_OPTIONS
+        });
+    }
+
+    passes.push({
+        programId: secondaryProgramId,
+        inputTextures: [{
+            id: feedbackId,
+            textureUnit: 0,
+            bindingType: 'read',
+            samplerName: PING_PONG_SAMPLER.name
+        }],
+        outputFramebuffer: null,
+        uniforms: passUniformsFrom(secondaryUniforms[secondaryProgramId]),
+        renderOptions
+    });
+
+    return { passes, framebuffers };
+}

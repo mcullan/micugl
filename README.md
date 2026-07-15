@@ -130,7 +130,8 @@ function App() {
     return () => { cancelAnimationFrame(outer) };
   }, []);
 
-  return <RippleScene style={{ width: "100vw", height: "100vh" }} />;
+  // Ripple is imported from 'micugl/effects'
+  return <Ripple style={{ width: "100vw", height: "100vh" }} />;
 }
 ```
 
@@ -518,16 +519,18 @@ of a live stream. When in doubt, `request()`: repainting a poster once is the sa
 
 ## Effects
 
-`micugl/effects` is a set of polished, prop-driven fullscreen components. Each rides
-`BaseShaderComponent` (the fast path, no FBO), owns a local `speed` prop that is an in-shader
-animation multiplier (not the engine clock scale), and takes an optional `audio` prop — the object
-`useAudioUniforms` returns — whose LEVEL uniform drives a reaction. Colors are `Vec3` arrays of
-`0..1` floats. Numbers must be finite and colors well-formed; the components throw a named error
-rather than clamping or silently substituting. Every render prop except `speed` and the worker
-props (`worker`, `createWorker`) is forwarded to `BaseShaderComponent`.
+`micugl/effects` is a set of polished, prop-driven fullscreen components. Most ride
+`BaseShaderComponent` (the fast path, no FBO), own a local `speed` prop that is an in-shader
+animation multiplier (not the engine clock scale), and take an optional `audio` prop — the object
+`useAudioUniforms` returns — whose LEVEL uniform drives a reaction. **Ripple** is the exception: it
+rides `BasePingPongShaderComponent` and runs a real frame-to-frame feedback simulation, so it has no
+`speed` prop and captures differently (see below). Colors are `Vec3` arrays of `0..1` floats.
+Numbers must be finite and colors well-formed; the components throw a named error rather than
+clamping or silently substituting. Every render prop except `speed` and the worker props (`worker`,
+`createWorker`) is forwarded to the underlying component.
 
 ```tsx
-import { MeshGradient, Grain } from 'micugl/effects';
+import { MeshGradient, Grain, Ripple } from 'micugl/effects';
 ```
 
 ### MeshGradient
@@ -589,6 +592,51 @@ Audio reaction: the grain intensity scales with the audio level, so louder passa
 
 The `audio` prop must come from `useAudioUniforms` with its default uniform names; a custom
 `names.level` option makes the effect throw, since it reads the level by its default name.
+
+### Ripple
+
+An interactive water-ripple simulation. Unlike the other effects it rides
+`BasePingPongShaderComponent` with a declared frame-to-frame feedback accumulator: the height field
+integrates across frames in a float feedback buffer, so it is a real simulation, not a per-frame
+function of the clock. Pointer and touch input drop ripples wherever you press, and an ambient drip
+pulses from the center on a fixed period.
+
+```tsx
+<Ripple damping={0.99} mouseForce={0.5} color1={[0.1, 0.3, 0.1]} color2={[0.3, 0.2, 0.4]} />
+```
+
+Animated ambient drip with audio:
+
+```tsx
+const audio = useAudioUniforms({ type: 'mic' });
+<Ripple audio={audio} audioStrength={1.5} />;  // call audio.start() on a user gesture
+```
+
+| prop | type | default |
+|---|---|---|
+| `damping` | `number` (0..1, exclusive) | `0.99` |
+| `mouseForce` | `number` | `0.5` |
+| `color1` | `Vec3` | `[0.1, 0.3, 0.1]` |
+| `color2` | `Vec3` | `[0.3, 0.2, 0.4]` |
+| `iterations` | `number` (sim sub-steps/frame) | `2` |
+| `interactive` | `boolean` | `true` |
+| `audio` | `AudioUniformsResult` | none |
+| `audioStrength` | `number` | `1` |
+
+`damping` must sit strictly between 0 and 1: at `0` the field never decays (permanently hot), at
+`1` it never settles, so both throw rather than running away silently. Aesthetic values sit around
+`0.9`-`0.999`. `iterations` are intra-frame simulation sub-steps (1..8); more make a stiffer,
+faster-spreading wave. Audio reaction: the audio level scales only the bounded ambient-drip
+amplitude, never the simulation rate, so louder passages drip harder without speeding time up.
+
+Reduced motion: Ripple forwards `reducedMotion`/`saveData` to the engine like every other effect.
+Under the gate the ambient drip stops and the loop idles; ripples then advance only while you
+interact and hold their state when you stop, so nothing animates on its own.
+
+Capture: because the simulation accumulates across frames, `renderToBlob({ frame })` throws (an
+explicit frame number cannot reproduce an accumulating field). Use `renderToBlob({ seed, steps })`
+for a deterministic run from a seed, or `renderToBlob()` with no frame to capture the current live
+frame. `resetSimulation()` on the handle clears the field.
 
 ### Composing effects
 

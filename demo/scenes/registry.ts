@@ -17,6 +17,7 @@ import { PingPongSim } from './PingPongSim';
 import { getQueryString } from './query';
 import { ReducedMotion } from './ReducedMotion';
 import { RerenderStorm } from './RerenderStorm';
+import { RippleScene } from './Ripple';
 import { ShaderGraph } from './ShaderGraph';
 import { StaticIdle } from './StaticIdle';
 import { Transitions } from './Transitions';
@@ -28,6 +29,7 @@ import { WorkerJank } from './WorkerJank';
 export const scenes: Record<string, ComponentType> = {
     'rerender-storm': RerenderStorm,
     'pingpong-sim': PingPongSim,
+    'ripple': RippleScene,
     'static-idle': StaticIdle,
     'offscreen': Offscreen,
     'many-canvases': ManyCanvases,

@@ -40,7 +40,7 @@ const simulationShader = /* glsl */`
     newVelocity *= 0.99;
     float newHeight = height + newVelocity;
     
-    float t = u_time * 0.001;
+    float t = u_time;
     vec2 center = vec2(0.5 + 0.3 * sin(t), 0.5 + 0.3 * cos(t * 1.3));
     if (length(uv - center) < 0.03) {
       newHeight += 0.3;
