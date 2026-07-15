@@ -21,3 +21,10 @@ export { MeshGradient } from '@/effects/MeshGradient/MeshGradient';
 export type { MeshGradientNodeProps } from '@/effects/MeshGradient/meshGradientNode';
 export { meshGradientNode } from '@/effects/MeshGradient/meshGradientNode';
 export { meshGradientFragmentShader } from '@/effects/MeshGradient/meshGradientShaders';
+export type { RippleProps } from '@/effects/Ripple/Ripple';
+export { Ripple } from '@/effects/Ripple/Ripple';
+export {
+    rippleRenderFragmentShader,
+    rippleSimulationFragmentShader,
+    rippleVertexShader
+} from '@/effects/Ripple/rippleShaders';

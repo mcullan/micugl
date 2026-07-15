@@ -19,6 +19,7 @@ export interface BasePingPongShaderProps extends RenderControlProps {
     secondaryUniforms?: Record<string, UniformParam>;
     framebufferOptions?: FramebufferOptions;
     framebuffers?: Record<string, FramebufferOptions>;
+    feedback?: boolean;
     className?: string;
     style?: CSSProperties;
     renderWidth?: number;
@@ -46,6 +47,7 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
     secondaryUniforms,
     framebufferOptions,
     framebuffers: framebuffersOverride,
+    feedback,
     className = '',
     style,
     width,
@@ -89,6 +91,7 @@ const BasePingPongShaderComponentImpl = forwardRef<PingPongShaderHandle, BasePin
         renderOptions,
         customPasses,
         framebuffers: framebuffersOverride,
+        feedback,
         reducedMotion,
         saveData
     });

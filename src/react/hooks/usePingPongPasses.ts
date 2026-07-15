@@ -5,6 +5,7 @@ import { useUniformUpdaters } from '@/react/hooks/useUniformUpdaters';
 import type { CapturesAreNonReproducible } from '@/react/lib/captureLiveness';
 import { combineUniformDebugPorts, type UniformDebugPort } from '@/react/lib/liveUniformUpdaters';
 import {
+    buildFeedbackPasses,
     buildPasses,
     DEFAULT_FRAMEBUFFER_OPTIONS,
     DEFAULT_RENDER_OPTIONS,
@@ -25,6 +26,7 @@ interface PingPongPassesOptions {
     renderOptions?: PingPongRenderOptions;
     customPasses?: RenderPass[];
     framebuffers?: Record<string, FramebufferOptions>;
+    feedback?: boolean;
     reducedMotion?: MotionPolicy;
     saveData?: MotionPolicy;
 }
@@ -47,6 +49,7 @@ export const usePingPongPasses = ({
     renderOptions = DEFAULT_RENDER_OPTIONS,
     customPasses,
     framebuffers,
+    feedback = false,
     reducedMotion,
     saveData
 }: PingPongPassesOptions): PingPongPassesWithPort => {
@@ -67,6 +70,18 @@ export const usePingPongPasses = ({
         const override = overrideKey
             ? JSON.parse(overrideKey) as Record<string, FramebufferOptions>
             : undefined;
+        if (feedback) {
+            return buildFeedbackPasses(
+                programId,
+                secondaryProgramId,
+                iterations,
+                primary.updaters,
+                secondary.updaters,
+                framebufferOpts,
+                renderOpts,
+                override
+            );
+        }
         return buildPasses(
             programId,
             secondaryProgramId,
@@ -87,7 +102,8 @@ export const usePingPongPasses = ({
         framebufferKey,
         renderKey,
         customPasses,
-        overrideKey
+        overrideKey,
+        feedback
     ]);
 
     const port = useMemo(
