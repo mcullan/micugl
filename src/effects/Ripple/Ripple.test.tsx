@@ -402,3 +402,20 @@ describe('Ripple: prop validation throws on the public mount path before an engi
         expect(listEngines().length).toBe(before);
     });
 });
+
+describe('Ripple: iterations below 1 throws on the public mount path before an engine registers (T10)', () => {
+    it('rejects a mount with iterations = 0 and leaves no engine registered', async () => {
+        const before = listEngines().length;
+        await expect(mount(
+            <Ripple
+                iterations={0}
+                width={WIDTH}
+                height={HEIGHT}
+                useDevicePixelRatio={false}
+                reducedMotion='ignore'
+                saveData='ignore'
+            />
+        )).rejects.toThrow(/iterations must be at least 1/);
+        expect(listEngines().length).toBe(before);
+    });
+});

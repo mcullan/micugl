@@ -640,8 +640,9 @@ frame. `resetSimulation()` on the handle clears the field.
 
 ### Composing effects
 
-Each effect also ships a **node factory** for `ShaderGraph`: `meshGradientNode`, `grainNode`,
-`blurNode`, and `ditherNode`. A factory returns a `ShaderNode` you feed to another node or hand to
+`MeshGradient`, `Grain`, `Blur`, and `Dither` each ship a **node factory** for `ShaderGraph`:
+`meshGradientNode`, `grainNode`, `blurNode`, and `ditherNode` (`Ripple` is a feedback accumulator
+with no node in v1). A factory returns a `ShaderNode` you feed to another node or hand to
 `<ShaderGraph root={...} />`, so effects compose into one canvas with one GL context. Every factory
 takes an explicit `id` (graphs key their structure on node ids, so an auto-generated id would churn
 the plan) plus the node placement options (`width`, `height`, `textureOptions`, `renderOptions`)
